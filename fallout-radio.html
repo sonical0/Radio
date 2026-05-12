@@ -1,0 +1,537 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Fallout Radio</title>
+<link href="https://fonts.googleapis.com/css2?family=VT323&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --green: #39ff6a;
+    --green-dim: #1a8c3a;
+    --green-bright: #7fff9a;
+    --bg: #0a0f0a;
+    --bg2: #0f180f;
+    --bg3: #071007;
+    --border: #1f4a1f;
+  }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--green);
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 14px;
+    min-height: 100vh;
+  }
+  body::before {
+    content: '';
+    pointer-events: none;
+    position: fixed;
+    inset: 0;
+    background: repeating-linear-gradient(to bottom, transparent 0px, transparent 2px, rgba(0,0,0,0.12) 2px, rgba(0,0,0,0.12) 4px);
+    z-index: 9999;
+  }
+  @keyframes flicker { 0%,100%{opacity:1} 92%{opacity:1} 93%{opacity:0.94} 94%{opacity:1} }
+  body { animation: flicker 8s infinite; }
+
+  .pipboy { max-width: 780px; margin: 0 auto; padding-bottom: 40px; }
+
+  /* HEADER */
+  .header {
+    background: var(--bg3);
+    border-bottom: 2px solid var(--green-dim);
+    padding: 14px 20px 12px;
+    box-shadow: 0 4px 20px rgba(57,255,106,0.08);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .header-title {
+    font-family: 'VT323', monospace;
+    font-size: 38px;
+    letter-spacing: 4px;
+    color: var(--green-bright);
+    text-shadow: 0 0 14px rgba(57,255,106,0.6);
+  }
+  #clock { font-family: 'VT323', monospace; font-size: 22px; color: var(--green-dim); letter-spacing: 2px; }
+
+  /* NOW PLAYING */
+  .now-playing {
+    margin: 20px 20px 0;
+    border: 1px solid var(--green-dim);
+    background: var(--bg3);
+    padding: 14px 18px;
+  }
+  .np-row { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; }
+  .np-label { color: var(--green-dim); font-size: 12px; white-space: nowrap; letter-spacing: 1px; }
+  .np-station {
+    font-family: 'VT323', monospace;
+    font-size: 22px;
+    letter-spacing: 1px;
+    color: var(--green-bright);
+    text-shadow: 0 0 8px rgba(57,255,106,0.4);
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    flex: 1;
+  }
+  .np-badge {
+    font-size: 11px;
+    color: var(--green-dim);
+    border: 1px solid var(--border);
+    padding: 2px 8px;
+    letter-spacing: 1px;
+    flex-shrink: 0;
+  }
+  .np-song-row { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; overflow: hidden; }
+  .np-song-label { color: var(--green-dim); font-size: 11px; white-space: nowrap; }
+  .np-song-ticker {
+    flex: 1;
+    overflow: hidden;
+    position: relative;
+    height: 16px;
+  }
+  .np-song-inner {
+    font-size: 13px;
+    color: var(--green);
+    white-space: nowrap;
+    display: inline-block;
+  }
+  @keyframes ticker { 0%{transform:translateX(100%)} 100%{transform:translateX(-100%)} }
+  .np-song-inner.scrolling { animation: ticker 18s linear infinite; }
+
+  /* CONTROLS */
+  .controls-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .ctrl-btn {
+    background: none;
+    border: 1px solid var(--border);
+    color: var(--green);
+    font-family: 'VT323', monospace;
+    font-size: 17px;
+    padding: 5px 14px;
+    cursor: pointer;
+    letter-spacing: 1px;
+    transition: all 0.15s;
+  }
+  .ctrl-btn:hover { border-color: var(--green); color: var(--green-bright); }
+  .vol-row { display: flex; align-items: center; gap: 8px; margin-left: auto; }
+  .vol-label { color: var(--green-dim); font-size: 12px; }
+  input[type=range] {
+    -webkit-appearance: none;
+    width: 90px; height: 3px;
+    background: var(--border);
+    outline: none;
+    cursor: pointer;
+  }
+  input[type=range]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 13px; height: 13px;
+    background: var(--green);
+    border-radius: 50%;
+    cursor: pointer;
+    box-shadow: 0 0 5px var(--green);
+  }
+
+  /* STREAMING BAR */
+  .progress-wrap { margin: 0 20px; height: 3px; background: var(--border); overflow: hidden; }
+  .progress-bar { height: 100%; width: 0; background: var(--green); transition: width 0.3s; }
+  @keyframes stream-anim { 0%{background-position:0 0} 100%{background-position:40px 0} }
+  .progress-bar.streaming {
+    width: 100%;
+    background: repeating-linear-gradient(90deg, var(--green-dim) 0px, var(--green) 10px, var(--green-dim) 20px);
+    background-size: 40px 3px;
+    animation: stream-anim 1s linear infinite;
+  }
+
+  /* VISUALIZER */
+  .visualizer { margin: 0 20px; height: 30px; display: flex; align-items: flex-end; gap: 2px; padding: 0 2px; }
+  .vis-bar { flex: 1; background: var(--green-dim); min-height: 3px; border-radius: 1px; }
+  .vis-bar.active { background: var(--green); box-shadow: 0 0 4px var(--green); }
+
+  /* STATIONS */
+  .stations-wrap { margin: 16px 20px 0; }
+  .group-label {
+    font-family: 'VT323', monospace;
+    font-size: 15px;
+    color: var(--green-dim);
+    letter-spacing: 3px;
+    padding: 6px 0 4px 2px;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 4px;
+  }
+  .stations-group { margin-bottom: 8px; }
+
+  .station-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 9px 14px;
+    border: 1px solid var(--border);
+    margin-bottom: 3px;
+    cursor: pointer;
+    background: var(--bg3);
+    transition: border-color 0.15s, background 0.15s;
+  }
+  .station-item:hover { border-color: var(--green-dim); background: rgba(57,255,106,0.02); }
+  .station-item.playing { border-color: var(--green); background: rgba(57,255,106,0.05); }
+
+  .station-dot {
+    width: 9px; height: 9px;
+    border: 1px solid var(--green-dim);
+    border-radius: 50%;
+    flex-shrink: 0;
+    transition: all 0.3s;
+  }
+  .station-item.playing .station-dot {
+    background: var(--green);
+    box-shadow: 0 0 8px var(--green);
+    animation: pulse 1.2s infinite;
+  }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
+
+  .station-info { flex: 1; min-width: 0; }
+  .station-name { color: var(--green); font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .station-item.playing .station-name { color: var(--green-bright); }
+  .station-np { color: var(--green-dim); font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 2px; }
+  .station-item.playing .station-np { color: var(--green-dim); }
+
+  .station-status { font-size: 12px; color: var(--green-dim); letter-spacing: 1px; flex-shrink: 0; }
+  .station-item.playing .station-status { color: var(--green); }
+
+  /* ADD STATION */
+  .add-station-wrap {
+    margin: 16px 20px 0;
+    border: 1px dashed var(--border);
+    padding: 12px 16px;
+    background: var(--bg3);
+  }
+  .add-title {
+    font-family: 'VT323', monospace;
+    font-size: 16px;
+    color: var(--green-dim);
+    letter-spacing: 2px;
+    margin-bottom: 10px;
+  }
+  .add-row { display: flex; gap: 8px; flex-wrap: wrap; }
+  .add-input {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    color: var(--green);
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 13px;
+    padding: 6px 10px;
+    outline: none;
+    transition: border-color 0.15s;
+    flex: 1;
+    min-width: 120px;
+  }
+  .add-input::placeholder { color: var(--green-dim); opacity: 0.6; }
+  .add-input:focus { border-color: var(--green-dim); }
+  .add-btn {
+    background: none;
+    border: 1px solid var(--green-dim);
+    color: var(--green);
+    font-family: 'VT323', monospace;
+    font-size: 17px;
+    padding: 5px 16px;
+    cursor: pointer;
+    letter-spacing: 1px;
+    transition: all 0.15s;
+    white-space: nowrap;
+  }
+  .add-btn:hover { border-color: var(--green); color: var(--green-bright); }
+  .add-msg { font-size: 12px; margin-top: 6px; color: var(--green-dim); min-height: 14px; }
+  .add-msg.ok { color: var(--green); }
+  .add-msg.err { color: #ff6b6b; }
+
+  ::-webkit-scrollbar { width: 4px; }
+  ::-webkit-scrollbar-track { background: var(--bg); }
+  ::-webkit-scrollbar-thumb { background: var(--green-dim); }
+</style>
+</head>
+<body>
+<div class="pipboy">
+
+  <div class="header">
+    <div class="header-title">☢ FALLOUT RADIO</div>
+    <div id="clock"></div>
+  </div>
+
+  <div class="now-playing">
+    <div class="np-row">
+      <span class="np-label">STATION ►</span>
+      <span class="np-station" id="np-station">— SELECT A STATION —</span>
+      <span class="np-badge" id="np-badge"></span>
+    </div>
+    <div class="np-song-row">
+      <span class="np-song-label">NOW PLAYING ►</span>
+      <div class="np-song-ticker">
+        <span class="np-song-inner" id="np-song">—</span>
+      </div>
+    </div>
+    <div class="controls-row">
+      <button class="ctrl-btn" id="btn-play" onclick="togglePlay()">▶ PLAY</button>
+      <button class="ctrl-btn" onclick="stopRadio()">■ STOP</button>
+      <button class="ctrl-btn" onclick="prevStation()">◀◀ PREV</button>
+      <button class="ctrl-btn" onclick="nextStation()">NEXT ▶▶</button>
+      <div class="vol-row">
+        <span class="vol-label">VOL</span>
+        <input type="range" min="0" max="1" step="0.05" value="0.7" id="vol-slider" oninput="setVolume(this.value)">
+        <span class="vol-label" id="vol-pct">70%</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="progress-wrap"><div class="progress-bar" id="progress-bar"></div></div>
+  <div class="visualizer" id="visualizer"></div>
+  <div class="stations-wrap" id="stations-wrap"></div>
+
+  <div class="add-station-wrap">
+    <div class="add-title">── AJOUTER UNE STATION ──</div>
+    <div class="add-row">
+      <input class="add-input" id="add-name" placeholder="Nom (ex: Fallout 4 - Far Harbor Radio)" />
+      <input class="add-input" id="add-game" placeholder="Jeu (ex: FO4)" style="max-width:90px" />
+      <input class="add-input" id="add-url" placeholder="URL stream (.mp3, .ogg, .aac…)" />
+      <button class="add-btn" onclick="addStation()">+ AJOUTER</button>
+    </div>
+    <div class="add-msg" id="add-msg"></div>
+  </div>
+
+</div>
+<audio id="audio" preload="none"></audio>
+
+<script>
+// ═══════════════════════════════════════════════
+// STATIONS — URLs réelles via API AzuraCast
+// Pour ajouter une station : { game, name, url, apiId? }
+// apiId = ID AzuraCast pour récupérer le "Now Playing"
+// ═══════════════════════════════════════════════
+const STATIONS = [
+  { game:'FO3',  name:'Galaxy News Radio',   url:'https://stations.fallout.radio/listen/fallout_3_-_galaxy_news_radio/radio.mp3',         apiId:3  },
+  { game:'FO3',  name:'Enclave Radio',        url:'https://stations.fallout.radio/listen/fallout_3_-_enclave_radio/radio.mp3',              apiId:4  },
+  { game:'FO3',  name:"Agatha's Station",     url:'https://stations.fallout.radio/listen/fallout_3_-_agathas_station/radio.mp3',            apiId:11 },
+  { game:'FO3',  name:'Vault 101 PA System',  url:'https://stations.fallout.radio/listen/fallout_3_-_vault_101_pa_system/radio.mp3',        apiId:12 },
+  { game:'FONV', name:'Mojave Music Radio',   url:'https://stations.fallout.radio/listen/fallout_new_vegas_-_mojave_music_radio/radio.mp3', apiId:7  },
+  { game:'FONV', name:'Radio New Vegas',      url:'https://stations.fallout.radio/listen/fallout_new_vegas_-_radio_new_vegas/radio.mp3',    apiId:8  },
+  { game:'FONV', name:'Mysterious Broadcast', url:'https://stations.fallout.radio/listen/fallout_new_vegas_-_mysterious_broadcast/radio.mp3',apiId:13 },
+  { game:'FONV', name:'Black Mountain Radio', url:'https://stations.fallout.radio/listen/fallout_new_vegas_-_black_mountain_radio/radio.mp3',apiId:15 },
+  { game:'FO4',  name:'Diamond City Radio',   url:'https://stations.fallout.radio/listen/fallout_4_-_diamond_city_radio/radio.mp3',         apiId:10 },
+  { game:'FO4',  name:'Classical Radio',      url:'https://stations.fallout.radio/listen/fallout_4_-_classical_radio/radio.mp3',            apiId:16 },
+  { game:'FO76', name:'Pirate Radio',         url:'https://stations.fallout.radio/listen/fallout_76_-_pirate_radio/radio.mp3',              apiId:14 },
+];
+
+const API_BASE = 'https://stations.fallout.radio/api/nowplaying/';
+
+// ─── État ───
+let stations = [...STATIONS];
+let current = -1;
+let nowPlayingData = {};
+const audio = document.getElementById('audio');
+audio.volume = 0.7;
+
+// ─── Horloge ───
+function updateClock() {
+  const now = new Date();
+  let h = now.getHours(), m = now.getMinutes();
+  const ap = h >= 12 ? 'PM' : 'AM';
+  h = h % 12 || 12;
+  document.getElementById('clock').textContent = h + ':' + String(m).padStart(2,'0') + ' ' + ap;
+}
+updateClock(); setInterval(updateClock, 10000);
+
+// ─── Visualiseur ───
+const vis = document.getElementById('visualizer');
+for (let i = 0; i < 34; i++) {
+  const b = document.createElement('div'); b.className = 'vis-bar'; b.id = 'vb'+i; vis.appendChild(b);
+}
+let visInt = null;
+function startVis() {
+  stopVis();
+  visInt = setInterval(() => {
+    for (let i = 0; i < 34; i++) {
+      const b = document.getElementById('vb'+i);
+      b.style.height = (3 + Math.random() * 24) + 'px';
+      b.classList.add('active');
+    }
+  }, 110);
+}
+function stopVis() {
+  clearInterval(visInt);
+  for (let i = 0; i < 34; i++) {
+    const b = document.getElementById('vb'+i);
+    b.style.height = '3px'; b.classList.remove('active');
+  }
+}
+
+// ─── Now Playing API ───
+async function fetchNowPlaying(apiId) {
+  try {
+    const r = await fetch(API_BASE + apiId, { cache: 'no-store' });
+    const d = await r.json();
+    const song = d.now_playing?.song;
+    if (song) return [song.title, song.artist].filter(Boolean).join(' — ');
+  } catch {}
+  return null;
+}
+
+async function refreshNowPlaying() {
+  for (const [i, s] of stations.entries()) {
+    if (!s.apiId) continue;
+    const txt = await fetchNowPlaying(s.apiId);
+    if (txt) {
+      nowPlayingData[i] = txt;
+      const el = document.getElementById('snp-' + i);
+      if (el) el.textContent = txt;
+    }
+  }
+  // Mettre à jour le ticker si une station joue
+  if (current >= 0 && nowPlayingData[current]) {
+    setSongTicker(nowPlayingData[current]);
+  }
+}
+
+function setSongTicker(text) {
+  const el = document.getElementById('np-song');
+  el.textContent = text || '—';
+  // Animer le ticker seulement si le texte est long
+  if (text && text.length > 40) {
+    el.classList.add('scrolling');
+  } else {
+    el.classList.remove('scrolling');
+  }
+}
+
+// ─── Construction de la liste ───
+function buildStationList() {
+  const wrap = document.getElementById('stations-wrap');
+  wrap.innerHTML = '';
+  const groups = {};
+  stations.forEach((s, i) => {
+    if (!groups[s.game]) groups[s.game] = [];
+    groups[s.game].push({ ...s, idx: i });
+  });
+  Object.entries(groups).forEach(([game, list]) => {
+    const g = document.createElement('div');
+    g.className = 'stations-group';
+    g.innerHTML = `<div class="group-label">── ${game} ──</div>`;
+    list.forEach(s => {
+      const div = document.createElement('div');
+      div.className = 'station-item' + (s.idx === current ? ' playing' : '');
+      div.id = 'st-' + s.idx;
+      div.innerHTML = `
+        <div class="station-dot"></div>
+        <div class="station-info">
+          <div class="station-name">${s.name}</div>
+          <div class="station-np" id="snp-${s.idx}">${nowPlayingData[s.idx] || '...'}</div>
+        </div>
+        <span class="station-status" id="sst-${s.idx}">${s.idx === current ? '■ ON AIR' : '▶ TUNE IN'}</span>`;
+      div.onclick = () => playStation(s.idx);
+      g.appendChild(div);
+    });
+    wrap.appendChild(g);
+  });
+}
+
+// ─── Lecture ───
+function setUI(idx) {
+  // Reset ancien
+  if (current >= 0) {
+    document.getElementById('st-' + current)?.classList.remove('playing');
+    const oldSst = document.getElementById('sst-' + current);
+    if (oldSst) oldSst.textContent = '▶ TUNE IN';
+  }
+  current = idx;
+  if (idx < 0) {
+    document.getElementById('np-station').textContent = '— SELECT A STATION —';
+    document.getElementById('np-badge').textContent = '';
+    document.getElementById('btn-play').textContent = '▶ PLAY';
+    document.getElementById('progress-bar').className = 'progress-bar';
+    setSongTicker(null);
+    stopVis();
+    return;
+  }
+  const s = stations[idx];
+  document.getElementById('st-' + idx)?.classList.add('playing');
+  const sst = document.getElementById('sst-' + idx);
+  if (sst) sst.textContent = '■ ON AIR';
+  document.getElementById('np-station').textContent = s.name.toUpperCase();
+  document.getElementById('np-badge').textContent = s.game;
+  document.getElementById('btn-play').textContent = '❚❚ PAUSE';
+  document.getElementById('progress-bar').className = 'progress-bar streaming';
+  setSongTicker(nowPlayingData[idx] || '...');
+  startVis();
+}
+
+function playStation(idx) {
+  if (current === idx && !audio.paused) { togglePlay(); return; }
+  audio.pause();
+  audio.src = stations[idx].url;
+  audio.volume = document.getElementById('vol-slider').value;
+  setUI(idx);
+  audio.play().catch(() => {
+    document.getElementById('np-station').textContent = stations[idx].name.toUpperCase() + ' — UNAVAILABLE';
+    document.getElementById('progress-bar').className = 'progress-bar';
+    stopVis();
+  });
+}
+
+function togglePlay() {
+  if (current < 0) return;
+  if (audio.paused) {
+    audio.play();
+    document.getElementById('btn-play').textContent = '❚❚ PAUSE';
+    document.getElementById('progress-bar').className = 'progress-bar streaming';
+    const sst = document.getElementById('sst-' + current);
+    if (sst) sst.textContent = '■ ON AIR';
+    startVis();
+  } else {
+    audio.pause();
+    document.getElementById('btn-play').textContent = '▶ PLAY';
+    document.getElementById('progress-bar').className = 'progress-bar';
+    const sst = document.getElementById('sst-' + current);
+    if (sst) sst.textContent = '❚❚ PAUSED';
+    stopVis();
+  }
+}
+
+function stopRadio() { audio.pause(); audio.src = ''; setUI(-1); }
+function nextStation() { playStation((current + 1) % stations.length); }
+function prevStation() { playStation((current - 1 + stations.length) % stations.length); }
+function setVolume(v) {
+  audio.volume = v;
+  document.getElementById('vol-pct').textContent = Math.round(v * 100) + '%';
+}
+
+// ─── Ajout de station ───
+function addStation() {
+  const name = document.getElementById('add-name').value.trim();
+  const game = document.getElementById('add-game').value.trim().toUpperCase();
+  const url  = document.getElementById('add-url').value.trim();
+  const msg  = document.getElementById('add-msg');
+
+  if (!name || !game || !url) {
+    msg.textContent = '⚠ Tous les champs sont requis.'; msg.className = 'add-msg err'; return;
+  }
+  if (!url.startsWith('http')) {
+    msg.textContent = '⚠ URL invalide (doit commencer par http).'; msg.className = 'add-msg err'; return;
+  }
+
+  stations.push({ game, name, url, apiId: null });
+  buildStationList();
+
+  document.getElementById('add-name').value = '';
+  document.getElementById('add-game').value = '';
+  document.getElementById('add-url').value = '';
+  msg.textContent = '✓ Station "' + name + '" ajoutée.'; msg.className = 'add-msg ok';
+  setTimeout(() => { msg.textContent = ''; msg.className = 'add-msg'; }, 3000);
+}
+
+// ─── Init ───
+buildStationList();
+refreshNowPlaying();
+// Rafraîchir le "Now Playing" toutes les 30 secondes
+setInterval(refreshNowPlaying, 30000);
+</script>
+</body>
+</html>
