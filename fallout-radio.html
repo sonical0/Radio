@@ -323,8 +323,16 @@ const STATIONS = [
 
 const API_BASE = 'https://stations.fallout.radio/api/nowplaying/';
 
+// ─── Persistance stations custom ───
+function loadCustomStations() {
+  try { return JSON.parse(localStorage.getItem('customStations') || '[]'); } catch { return []; }
+}
+function saveCustomStations() {
+  localStorage.setItem('customStations', JSON.stringify(stations.slice(STATIONS.length)));
+}
+
 // ─── État ───
-let stations = [...STATIONS];
+let stations = [...STATIONS, ...loadCustomStations()];
 let current = -1;
 let nowPlayingData = {};
 const audio = document.getElementById('audio');
@@ -342,26 +350,20 @@ updateClock(); setInterval(updateClock, 10000);
 
 // ─── Visualiseur ───
 const vis = document.getElementById('visualizer');
+const visBars = [];
 for (let i = 0; i < 34; i++) {
-  const b = document.createElement('div'); b.className = 'vis-bar'; b.id = 'vb'+i; vis.appendChild(b);
+  const b = document.createElement('div'); b.className = 'vis-bar'; vis.appendChild(b); visBars.push(b);
 }
 let visInt = null;
 function startVis() {
   stopVis();
   visInt = setInterval(() => {
-    for (let i = 0; i < 34; i++) {
-      const b = document.getElementById('vb'+i);
-      b.style.height = (3 + Math.random() * 24) + 'px';
-      b.classList.add('active');
-    }
+    for (const b of visBars) { b.style.height = (3 + Math.random() * 24) + 'px'; b.classList.add('active'); }
   }, 110);
 }
 function stopVis() {
   clearInterval(visInt);
-  for (let i = 0; i < 34; i++) {
-    const b = document.getElementById('vb'+i);
-    b.style.height = '3px'; b.classList.remove('active');
-  }
+  for (const b of visBars) { b.style.height = '3px'; b.classList.remove('active'); }
 }
 
 // ─── Now Playing API ───
@@ -376,19 +378,20 @@ async function fetchNowPlaying(apiId) {
 }
 
 async function refreshNowPlaying() {
-  for (const [i, s] of stations.entries()) {
-    if (!s.apiId) continue;
-    const txt = await fetchNowPlaying(s.apiId);
-    if (txt) {
-      nowPlayingData[i] = txt;
-      const el = document.getElementById('snp-' + i);
-      if (el) el.textContent = txt;
+  const results = await Promise.allSettled(
+    stations.map((s, i) => s.apiId ? fetchNowPlaying(s.apiId).then(txt => ({ i, txt })) : Promise.resolve(null))
+  );
+  results.forEach(r => {
+    if (r.status === 'fulfilled' && r.value) {
+      const { i, txt } = r.value;
+      if (txt) {
+        nowPlayingData[i] = txt;
+        const el = document.getElementById('snp-' + i);
+        if (el) el.textContent = txt;
+      }
     }
-  }
-  // Mettre à jour le ticker si une station joue
-  if (current >= 0 && nowPlayingData[current]) {
-    setSongTicker(nowPlayingData[current]);
-  }
+  });
+  if (current >= 0 && nowPlayingData[current]) setSongTicker(nowPlayingData[current]);
 }
 
 function setSongTicker(text) {
@@ -414,18 +417,26 @@ function buildStationList() {
   Object.entries(groups).forEach(([game, list]) => {
     const g = document.createElement('div');
     g.className = 'stations-group';
-    g.innerHTML = `<div class="group-label">── ${game} ──</div>`;
+    const lbl = document.createElement('div');
+    lbl.className = 'group-label';
+    lbl.textContent = '── ' + game + ' ──';
+    g.appendChild(lbl);
     list.forEach(s => {
       const div = document.createElement('div');
       div.className = 'station-item' + (s.idx === current ? ' playing' : '');
       div.id = 'st-' + s.idx;
-      div.innerHTML = `
-        <div class="station-dot"></div>
-        <div class="station-info">
-          <div class="station-name">${s.name}</div>
-          <div class="station-np" id="snp-${s.idx}">${nowPlayingData[s.idx] || '...'}</div>
-        </div>
-        <span class="station-status" id="sst-${s.idx}">${s.idx === current ? '■ ON AIR' : '▶ TUNE IN'}</span>`;
+
+      const dot = document.createElement('div'); dot.className = 'station-dot';
+
+      const info = document.createElement('div'); info.className = 'station-info';
+      const nameEl = document.createElement('div'); nameEl.className = 'station-name'; nameEl.textContent = s.name;
+      const npEl = document.createElement('div'); npEl.className = 'station-np'; npEl.id = 'snp-' + s.idx; npEl.textContent = nowPlayingData[s.idx] || '...';
+      info.appendChild(nameEl); info.appendChild(npEl);
+
+      const status = document.createElement('span'); status.className = 'station-status'; status.id = 'sst-' + s.idx;
+      status.textContent = s.idx === current ? '■ ON AIR' : '▶ TUNE IN';
+
+      div.appendChild(dot); div.appendChild(info); div.appendChild(status);
       div.onclick = () => playStation(s.idx);
       g.appendChild(div);
     });
@@ -472,6 +483,10 @@ function playStation(idx) {
   audio.play().catch(() => {
     document.getElementById('np-station').textContent = stations[idx].name.toUpperCase() + ' — UNAVAILABLE';
     document.getElementById('progress-bar').className = 'progress-bar';
+    document.getElementById('btn-play').textContent = '▶ PLAY';
+    document.getElementById('st-' + idx)?.classList.remove('playing');
+    const sst = document.getElementById('sst-' + idx); if (sst) sst.textContent = '▶ TUNE IN';
+    current = -1;
     stopVis();
   });
 }
@@ -496,8 +511,8 @@ function togglePlay() {
 }
 
 function stopRadio() { audio.pause(); audio.src = ''; setUI(-1); }
-function nextStation() { playStation((current + 1) % stations.length); }
-function prevStation() { playStation((current - 1 + stations.length) % stations.length); }
+function nextStation() { if (stations.length) playStation((current + 1) % stations.length); }
+function prevStation() { if (stations.length) playStation((current - 1 + stations.length) % stations.length); }
 function setVolume(v) {
   audio.volume = v;
   document.getElementById('vol-pct').textContent = Math.round(v * 100) + '%';
@@ -518,6 +533,7 @@ function addStation() {
   }
 
   stations.push({ game, name, url, apiId: null });
+  saveCustomStations();
   buildStationList();
 
   document.getElementById('add-name').value = '';
