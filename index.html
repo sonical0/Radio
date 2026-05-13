@@ -305,7 +305,7 @@
     <div class="add-row">
       <input class="add-input" id="add-name" placeholder="Nom (ex: Fallout 4 - Far Harbor Radio)" />
       <input class="add-input" id="add-game" placeholder="Jeu (ex: FO4)" style="max-width:90px" />
-      <input class="add-input" id="add-url" placeholder="URL stream (.mp3, .ogg, .aac…)" />
+      <input class="add-input" id="add-url" placeholder="URL stream (.mp3, /stream, .m3u, .pls…)" />
       <button class="add-btn" onclick="addStation()">+ AJOUTER</button>
     </div>
     <div class="add-msg" id="add-msg"></div>
@@ -532,12 +532,41 @@ function deleteStation(idx) {
   buildStationList();
 }
 
+// ─── Résolution playlist M3U/PLS → URL directe ───
+async function resolveStreamUrl(url) {
+  const lower = url.toLowerCase();
+  // Tenter de récupérer via proxy CORS si nécessaire
+  let text;
+  try {
+    const r = await fetch(url, { headers: { 'Accept': 'audio/*, application/*, */*' } });
+    const ct = r.headers.get('content-type') || '';
+    // Si c'est de l'audio directement, pas besoin de parser
+    if (ct.startsWith('audio/') || ct.startsWith('video/')) return url;
+    text = await r.text();
+  } catch {
+    return url; // CORS ou réseau : tenter l'URL telle quelle
+  }
+
+  // PLS
+  if (lower.includes('.pls') || text.includes('[playlist]')) {
+    const m = text.match(/^File\d+=(.+)$/im);
+    if (m) return m[1].trim();
+  }
+  // M3U
+  if (lower.includes('.m3u') || text.startsWith('#EXTM3U') || text.startsWith('#EXTINF')) {
+    const lines = text.split('\n').map(l => l.trim()).filter(l => l && !l.startsWith('#'));
+    if (lines.length) return lines[0];
+  }
+  return url;
+}
+
 // ─── Ajout de station ───
-function addStation() {
+async function addStation() {
   const name = document.getElementById('add-name').value.trim();
   const game = document.getElementById('add-game').value.trim().toUpperCase();
   const url  = document.getElementById('add-url').value.trim();
   const msg  = document.getElementById('add-msg');
+  const btn  = document.querySelector('.add-btn');
 
   if (!name || !game || !url) {
     msg.textContent = '⚠ Tous les champs sont requis.'; msg.className = 'add-msg err'; return;
@@ -546,13 +575,19 @@ function addStation() {
     msg.textContent = '⚠ URL invalide (doit commencer par http).'; msg.className = 'add-msg err'; return;
   }
 
-  stations.push({ game, name, url, apiId: null });
+  btn.disabled = true;
+  msg.textContent = '⟳ Résolution du flux…'; msg.className = 'add-msg';
+
+  const resolved = await resolveStreamUrl(url);
+
+  stations.push({ game, name, url: resolved, apiId: null });
   saveCustomStations();
   buildStationList();
 
   document.getElementById('add-name').value = '';
   document.getElementById('add-game').value = '';
   document.getElementById('add-url').value = '';
+  btn.disabled = false;
   msg.textContent = '✓ Station "' + name + '" ajoutée.'; msg.className = 'add-msg ok';
   setTimeout(() => { msg.textContent = ''; msg.className = 'add-msg'; }, 3000);
 }
