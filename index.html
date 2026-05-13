@@ -245,6 +245,19 @@
   .add-msg.ok { color: var(--green); }
   .add-msg.err { color: #ff6b6b; }
 
+  .del-btn {
+    background: none;
+    border: 1px solid var(--border);
+    color: var(--green-dim);
+    font-family: 'VT323', monospace;
+    font-size: 16px;
+    padding: 2px 8px;
+    cursor: pointer;
+    flex-shrink: 0;
+    transition: all 0.15s;
+  }
+  .del-btn:hover { border-color: #ff6b6b; color: #ff6b6b; }
+
   ::-webkit-scrollbar { width: 4px; }
   ::-webkit-scrollbar-track { background: var(--bg); }
   ::-webkit-scrollbar-thumb { background: var(--green-dim); }
@@ -341,12 +354,11 @@ audio.volume = 0.7;
 // ─── Horloge ───
 function updateClock() {
   const now = new Date();
-  let h = now.getHours(), m = now.getMinutes();
-  const ap = h >= 12 ? 'PM' : 'AM';
-  h = h % 12 || 12;
-  document.getElementById('clock').textContent = h + ':' + String(m).padStart(2,'0') + ' ' + ap;
+  const h = String(now.getHours()).padStart(2,'0');
+  const m = String(now.getMinutes()).padStart(2,'0');
+  document.getElementById('clock').textContent = h + ':' + m;
 }
-updateClock(); setInterval(updateClock, 10000);
+updateClock(); setInterval(updateClock, 1000);
 
 // ─── Visualiseur ───
 const vis = document.getElementById('visualizer');
@@ -437,6 +449,13 @@ function buildStationList() {
       status.textContent = s.idx === current ? '■ ON AIR' : '▶ TUNE IN';
 
       div.appendChild(dot); div.appendChild(info); div.appendChild(status);
+      if (s.idx >= STATIONS.length) {
+        const del = document.createElement('button');
+        del.className = 'del-btn'; del.textContent = '✕';
+        del.title = 'Supprimer';
+        del.onclick = e => { e.stopPropagation(); deleteStation(s.idx); };
+        div.appendChild(del);
+      }
       div.onclick = () => playStation(s.idx);
       g.appendChild(div);
     });
@@ -481,19 +500,15 @@ function playStation(idx) {
   audio.volume = document.getElementById('vol-slider').value;
   setUI(idx);
   audio.play().catch(() => {
+    setUI(-1);
     document.getElementById('np-station').textContent = stations[idx].name.toUpperCase() + ' — UNAVAILABLE';
-    document.getElementById('progress-bar').className = 'progress-bar';
-    document.getElementById('btn-play').textContent = '▶ PLAY';
-    document.getElementById('st-' + idx)?.classList.remove('playing');
-    const sst = document.getElementById('sst-' + idx); if (sst) sst.textContent = '▶ TUNE IN';
-    current = -1;
-    stopVis();
   });
 }
 
 function togglePlay() {
   if (current < 0) return;
   if (audio.paused) {
+    audio.src = stations[current].url;
     audio.play();
     document.getElementById('btn-play').textContent = '❚❚ PAUSE';
     document.getElementById('progress-bar').className = 'progress-bar streaming';
@@ -516,6 +531,23 @@ function prevStation() { if (stations.length) playStation((current - 1 + station
 function setVolume(v) {
   audio.volume = v;
   document.getElementById('vol-pct').textContent = Math.round(v * 100) + '%';
+}
+
+// ─── Suppression de station custom ───
+function deleteStation(idx) {
+  if (current === idx) stopRadio();
+  else if (current > idx) current--;
+  stations.splice(idx, 1);
+  // Reconstruire nowPlayingData avec les nouveaux indices
+  const newData = {};
+  Object.entries(nowPlayingData).forEach(([k, v]) => {
+    const ki = parseInt(k);
+    if (ki < idx) newData[ki] = v;
+    else if (ki > idx) newData[ki - 1] = v;
+  });
+  nowPlayingData = newData;
+  saveCustomStations();
+  buildStationList();
 }
 
 // ─── Ajout de station ───
