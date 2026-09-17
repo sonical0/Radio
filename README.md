@@ -116,11 +116,18 @@ Further notes for contributors are in [CLAUDE.md](./CLAUDE.md); the full history
 Chrome, Edge, Firefox and Safari, desktop and mobile. HLS goes through hls.js everywhere
 except iOS, which plays it natively.
 
+## License
+
+[MIT](./LICENSE) — for this project's own code.
+
+Bundled third-party code keeps its own terms: `vendor/hls.light.min.js` is
+[hls.js](https://github.com/video-dev/hls.js) under Apache-2.0, with its notice in
+`vendor/hls.js-LICENSE.txt`.
+
 ## Credits
 
 - Stream and metadata API: [fallout.radio](https://fallout.radio/)
 - Station directory: [Radio-Browser](https://www.radio-browser.info/)
-- [hls.js](https://github.com/video-dev/hls.js) — Apache-2.0, vendored under `vendor/`
 - Fonts: [VT323](https://fonts.google.com/specimen/VT323) and
   [Share Tech Mono](https://fonts.google.com/specimen/Share+Tech+Mono), SIL Open Font License
 
