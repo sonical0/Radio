@@ -1,3 +1,5 @@
+**English** · [Français](./README.fr.md)
+
 # Fallout Radio
 
 A Pip-Boy-styled internet radio player for the browser. Ships the eleven Fallout in-game
