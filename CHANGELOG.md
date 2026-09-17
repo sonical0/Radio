@@ -8,6 +8,86 @@ Ordre : **entrée la plus récente en tête**. Plusieurs passes le même jour so
 suffixées `(2)`, `(3)`… la plus haute étant la plus récente (même convention que
 `TANDEM_LOG.md`).
 
+## 2026-09-17
+
+### Ajouté — HLS, métadonnées génériques, annuaire, groupes libres
+- **Flux HLS (`.m3u8`)** lisibles, via `hls.js` 1.7.3 build *light* (Apache-2.0) figé dans
+  `vendor/` et servi en local, jamais depuis un CDN : la page doit continuer à rendre et à
+  jouer à l'identique hors ligne et sur un réseau isolé. +377 Ko sur disque, +116 Ko sur le
+  réseau une fois gzippé. Seuls Safari et iOS lisent HLS nativement dans `<audio>`.
+- `attachStream()` / `detachStream()` deviennent le **point de passage unique** du flux : les
+  quatre endroits qui faisaient `audio.src = …` à la main (`playStation`, `togglePlay`,
+  `handleStreamDrop`, `stopRadio`) passent par là, sinon changer de station laisserait
+  l'instance hls.js précédente attachée et les deux flux se disputeraient l'élément.
+- **hls.js passe avant la lecture native** même quand celle-ci est annoncée :
+  `canPlayType('application/vnd.apple.mpegurl')` répond `"maybe"` sur des moteurs Chromium au
+  support partiel, ce qui ne vaut pas garantie — et hls.js remonte des erreurs exploitables
+  par `handleStreamDrop()`. Le chemin natif reste celui d'iOS, où MSE n'existe pas.
+- **Métadonnées génériques** : `apiId` (un entier, forcément relatif à l'instance AzuraCast de
+  fallout.radio) est remplacé par `meta: { type, url }`, avec deux familles reconnues —
+  AzuraCast et Icecast `status-json.xsl`.
+- **Détection automatique AzuraCast** : une URL `https://<hôte>/listen/<shortcode>/…` suffit,
+  `/api/nowplaying/<shortcode>` accepte le shortcode aussi bien que l'id numérique. Coller
+  l'URL d'un flux AzuraCast fait donc apparaître le titre en cours sans rien configurer.
+- **Annuaire Radio-Browser** intégré au panneau d'ajout : ~50 000 stations, sans clé d'API.
+  Recherche par nom, repli sur le tag quand le nom ne donne rien (« jazz » est un genre).
+- **Groupes libres** : `game` devient `group`, un libellé quelconque (un jeu, un genre, un
+  pays). Ancien nom encore lu, jamais réécrit. Regroupement insensible à la casse, `<datalist>`
+  des groupes existants dans le formulaire, mise en capitales déléguée au CSS.
+- Champ **« Métadonnées (optionnel) »** dans le formulaire, pour les flux qu'aucune détection
+  ne couvre. Le type est déduit de l'URL (`status-json.xsl` → Icecast, sinon AzuraCast).
+
+### Corrigé — une URL `.m3u8` créait une station morte
+`resolveStreamUrl()` traitait tout `.m3u` comme une playlist et gardait la première ligne non
+commentée. Un master HLS commence lui aussi par `#EXTM3U`, mais ses lignes sont des variantes
+ou des **segments de quelques secondes** : la station était créée, jouait dix secondes, puis
+mourait. Le test HLS (extension, `#EXT-X-`, type MIME `*mpegurl`) passe maintenant **avant** la
+branche M3U — et avant le raccourci « le type commence par `audio/` », puisqu'un master est
+servi en `audio/x-mpegurl`.
+
+### Corrigé — `stopRadio()` provoquait une erreur média
+`audio.src = ''` se résout en URL de la page, que le navigateur tente de décoder puis signale
+en `error` — donc en tentative de reconnexion. `detachStream()` fait `removeAttribute('src')`
+puis `load()`, et `setUI(-1)` passe avant le détachement.
+
+### Modifié
+- CSP : `media-src` accepte `blob:` et `data:`, `worker-src 'self' blob:` est ajouté. hls.js
+  attache un MediaSource via un blob URL, démultiplexe dans un worker construit depuis un blob,
+  et repasse par une URL `data:` au détachement (une violation CSP par changement de station
+  sinon). Même changement dans `index.html` et `nginx.conf`.
+- L'annuaire n'affiche pas les flux `http://` quand la page est servie en `https:` : c'est du
+  contenu mixte, la station serait ajoutée puis resterait muette. Il demande donc `RB_LIMIT × 4`
+  fiches et filtre avant d'en garder 15.
+- Plafond `MAX_META_POLL = 40` sur la sonde périodique : l'annuaire permet d'accumuler des
+  dizaines de stations, chaque tour partirait sinon en autant de requêtes. Au-delà, une station
+  n'est interrogée que lorsqu'on la sélectionne (`refreshOne`).
+- `normalizeStation()` / `serializeStation()` : tout ce qui entre dans `stations` (stations.json,
+  localStorage, import, annuaire) passe par une normalisation unique, et ce qui ressort est déjà
+  à la forme courante. Le champ `group` n'est plus obligatoire — sans lui, la station atterrit
+  dans `DIVERS` au lieu d'être refusée.
+- `Dockerfile` copie `vendor/`.
+
+### Vérifié (navigateur, flux réels)
+- FIP en HLS (`stream.radiofrance.fr/fip/fip_hifi.m3u8`) : lu via hls.js, `currentSrc` en
+  `blob:`, statut ON AIR, **zéro violation CSP**. Bascule HLS → MP3 puis stop : instance hls.js
+  détruite, aucune erreur média.
+- Détection auto : `demo.azuracast.com/listen/azuratest_radio/radio.mp3` ajouté sans champ
+  métadonnées → titre « Eve — Amaris » affiché.
+- Annuaire : « jazz » → 15 résultats, ajout classé par code pays.
+- Aller-retour export → import : `group`, `hls` et `meta` préservés. Import d'un export au
+  format hérité (`game` + `apiId`) : converti correctement.
+- Les 11 stations Fallout : 11/11 métadonnées, groupes et accessibilité de la liste inchangés.
+
+### Écarté
+- **Shoutcast v2** (`/stats?json=1`) : aucun en-tête CORS, inatteignable depuis un navigateur.
+- **Icecast `status-json.xsl` en détection automatique** : sur six serveurs publics testés, un
+  seul répondait encore (404, 403, ou page HTML de donation). Reste disponible en saisie manuelle.
+- **Podcasts / RSS** : les flux n'autorisent quasiment jamais CORS, il faudrait un proxy —
+  donc un serveur, que ce projet n'a pas.
+- **YouTube / Twitch** : iframe obligatoire, incompatible avec le modèle `<audio>`.
+- **Favicons de l'annuaire** : `img-src 'self' data:` les bloquerait, et élargir la CSP pour
+  des icônes ne vaut pas le coup.
+
 ## 2026-09-15 (3)
 
 ### Corrigé — accessibilité de la liste de stations

@@ -7,8 +7,11 @@
      ne lisent pas nginx.conf, qui ne s applique qu au conteneur Docker. Memes regles,
      moins ce qu un <meta> ne peut pas porter : frame-ancestors (header uniquement),
      X-Frame-Options et X-Content-Type-Options. connect-src/media-src restent larges,
-     les flux et l API AzuraCast etant sur des domaines tiers. -->
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; font-src 'self' data:; img-src 'self' data:; connect-src 'self' https: http:; media-src 'self' https: http:; object-src 'none'; base-uri 'none'">
+     les flux, l API AzuraCast et l annuaire Radio-Browser etant sur des domaines tiers.
+     blob: et data: dans media-src, blob: dans worker-src : hls.js attache un
+     MediaSource a <audio> via un blob URL, demultiplexe dans un worker construit
+     depuis un blob, et repasse par une URL data: au detachement. -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; font-src 'self' data:; img-src 'self' data:; connect-src 'self' https: http:; media-src 'self' blob: data: https: http:; worker-src 'self' blob:; object-src 'none'; base-uri 'none'">
 <meta name="referrer" content="no-referrer-when-downgrade">
 <title>Fallout Radio</title>
 <meta name="description" content="Lecteur radio Internet thème Fallout — stations Galaxy News Radio, Diamond City Radio, Radio New Vegas et plus, avec ajout de flux personnalisés.">
@@ -106,6 +109,9 @@
     flex: 1;
   }
   .np-badge {
+    /* Le groupe est saisi librement : la mise en capitales est décorative, la
+       casse tapée par l'utilisateur est conservée en mémoire et à l'export. */
+    text-transform: uppercase;
     font-size: 11px;
     color: var(--green-dim);
     border: 1px solid var(--border);
@@ -181,6 +187,7 @@
   /* STATIONS */
   .stations-wrap { margin: 16px 20px 0; }
   .group-label {
+    text-transform: uppercase;
     font-family: 'VT323', monospace;
     font-size: 15px;
     color: var(--green-dim);
@@ -300,6 +307,28 @@
   }
   .add-btn:hover { border-color: var(--green); color: var(--green-bright); }
   .add-msg { font-size: 12px; margin-top: 6px; color: var(--green-dim); min-height: 14px; }
+
+  /* ANNUAIRE */
+  .rb-results { margin-top: 8px; max-height: 320px; overflow-y: auto; }
+  .rb-results:empty { display: none; }
+  .rb-item {
+    display: flex; align-items: center; gap: 10px;
+    padding: 5px 6px; border-bottom: 1px solid var(--border);
+  }
+  .rb-item:last-child { border-bottom: none; }
+  .rb-info { flex: 1; min-width: 0; }
+  .rb-name {
+    font-size: 13px; color: var(--green);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .rb-meta { font-size: 11px; color: var(--green-dim); }
+  .rb-add {
+    background: none; border: 1px solid var(--border); color: var(--green);
+    font-family: 'VT323', monospace; font-size: 15px; padding: 2px 10px;
+    cursor: pointer; flex-shrink: 0; transition: all 0.15s;
+  }
+  .rb-add:hover, .rb-add:focus-visible { border-color: var(--green-dim); background: var(--bg2); }
+  .rb-status { font-size: 12px; color: var(--green-dim); padding: 4px 2px; }
   .add-msg.ok { color: var(--green); }
   .add-msg.err { color: #ff6b6b; }
 
@@ -383,11 +412,16 @@
     <div class="add-row">
       <label class="sr-only" for="add-name">Nom de la station</label>
       <input class="add-input" id="add-name" placeholder="Nom (ex: Fallout 4 - Far Harbor Radio)" />
-      <label class="sr-only" for="add-game">Jeu</label>
-      <input class="add-input" id="add-game" placeholder="Jeu (ex: FO4)" style="max-width:90px" />
+      <label class="sr-only" for="add-group">Groupe</label>
+      <input class="add-input" id="add-group" list="group-list" placeholder="Groupe (ex: FO4, JAZZ)" style="max-width:150px" />
+      <datalist id="group-list"></datalist>
       <label class="sr-only" for="add-url">URL du flux</label>
-      <input class="add-input" id="add-url" placeholder="URL stream (.mp3, /stream, .m3u, .pls…)" />
+      <input class="add-input" id="add-url" placeholder="URL stream (.mp3, .aac, .ogg, .m3u8, .m3u, .pls…)" />
       <button class="add-btn" onclick="addStation()">+ AJOUTER</button>
+    </div>
+    <div class="add-row" style="margin-top:8px;">
+      <label class="sr-only" for="add-meta">URL des métadonnées (optionnel)</label>
+      <input class="add-input" id="add-meta" placeholder="Métadonnées (optionnel) — AzuraCast /api/nowplaying/… ou Icecast /status-json.xsl" />
     </div>
     <div class="add-row" style="margin-top:8px;">
       <button class="add-btn" onclick="exportStations()">⇩ EXPORTER MES STATIONS</button>
@@ -395,6 +429,14 @@
       <input type="file" id="import-file" accept="application/json" style="display:none" onchange="importStations(this.files[0])">
     </div>
     <div class="add-msg" id="add-msg" aria-live="polite"></div>
+
+    <div class="add-title" style="margin-top:16px;">── ANNUAIRE RADIO-BROWSER ──</div>
+    <div class="add-row">
+      <label class="sr-only" for="rb-q">Chercher une radio dans l'annuaire</label>
+      <input class="add-input" id="rb-q" placeholder="Chercher une radio (nom, genre, pays…)" />
+      <button class="add-btn" onclick="searchDirectory()">⌕ CHERCHER</button>
+    </div>
+    <div class="rb-results" id="rb-results" aria-live="polite"></div>
   </div>
 
   <div class="shortcuts">
@@ -406,25 +448,107 @@
 </div>
 <audio id="audio" preload="none"></audio>
 
+<!-- hls.js 1.7.3, build "light", Apache-2.0 (vendor/hls.js-LICENSE.txt). Servi
+     depuis le dossier local et non depuis un CDN : la page doit rendre et jouer
+     à l'identique hors ligne et sur un réseau isolé. Nécessaire parce que seuls
+     Safari et iOS lisent HLS (.m3u8) nativement dans <audio>. -->
+<script src="vendor/hls.light.min.js"></script>
+
 <script>
 const API_BASE = 'https://stations.fallout.radio/api/nowplaying/';
+// Annuaire public : ~50 000 stations, sans clé d'API, en-tête CORS permissif.
+const RB_API = 'https://all.api.radio-browser.info/json/stations/search';
+const RB_LIMIT = 15;
+const DEFAULT_GROUP = 'DIVERS';
 
-// ─── Persistance stations custom ───
+// ─── Modèle de station ───
+// Forme interne : { group, name, url, hls, meta, gain, isCustom }.
+// `group` est un libellé libre (un jeu, un genre, un pays…) ; il s'appelait
+// `game` tant que l'appli ne servait que les radios Fallout — cet ancien nom
+// est encore lu (stations.json d'origine, exports, localStorage) mais jamais
+// réécrit. `meta` remplace l'ancien `apiId`, qui ne pouvait désigner qu'une
+// station de l'instance AzuraCast de fallout.radio.
 function isValidStation(s) {
   return !!s
     && typeof s.name === 'string' && s.name.trim()
-    && typeof s.game === 'string' && s.game.trim()
     && typeof s.url === 'string' && s.url.startsWith('http');
 }
+
+function stationGroup(s) {
+  const g = (s.group ?? s.game ?? '');
+  return (typeof g === 'string' && g.trim()) || DEFAULT_GROUP;
+}
+// Clé de regroupement insensible à la casse : « Jazz » et « JAZZ » saisis à deux
+// moments différents doivent tomber dans la même section, pas en créer deux.
+function groupKey(g) { return g.trim().toLocaleUpperCase(); }
+
+function isSafeHttpUrl(raw) {
+  try {
+    const u = new URL(raw);
+    return ['http:', 'https:'].includes(u.protocol) && !isPrivateHost(u.hostname);
+  } catch { return false; }
+}
+
+// HLS se reconnaît à l'extension .m3u8 ; le type MIME (`*mpegurl`) et le corps
+// (#EXT-X-…) servent de confirmation dans resolveStreamUrl().
+function isHlsUrl(url) { return /\.m3u8(\?|#|$)/i.test(url); }
+
+// Une URL AzuraCast a toujours la forme https://<hôte>/listen/<shortcode>/<mount>,
+// et /api/nowplaying/<shortcode> accepte le shortcode aussi bien que l'id numérique
+// (vérifié sur stations.fallout.radio et demo.azuracast.com). On en déduit donc
+// l'endpoint des métadonnées sans rien demander à l'utilisateur.
+function detectMeta(url) {
+  try {
+    const u = new URL(url);
+    const m = u.pathname.match(/^\/listen\/([^/]+)\//);
+    if (m) return { type: 'azuracast', url: u.origin + '/api/nowplaying/' + decodeURIComponent(m[1]) };
+  } catch {}
+  return null;
+}
+
+function normalizeMeta(s, url) {
+  if (s.meta && typeof s.meta === 'object' && isSafeHttpUrl(s.meta.url)) {
+    return { type: s.meta.type === 'icecast' ? 'icecast' : 'azuracast', url: s.meta.url };
+  }
+  if (s.apiId) return { type: 'azuracast', url: API_BASE + s.apiId };
+  return detectMeta(url);
+}
+
+// Point d'entrée unique : stations.json, localStorage, import de fichier et
+// annuaire produisent tous des objets de formes différentes, et rien ne doit
+// entrer dans `stations` sans être passé par ici.
+function normalizeStation(s, isCustom) {
+  const url = String(s.url).trim();
+  return {
+    group: stationGroup(s),
+    name: String(s.name).trim(),
+    url,
+    hls: s.hls === true || isHlsUrl(url),
+    meta: normalizeMeta(s, url),
+    gain: sanitizeGain(s.gain),
+    isCustom: !!isCustom
+  };
+}
+
+// Champs persistés : ni `isCustom` (redondant, reconstruit au chargement) ni les
+// clés héritées, pour que ce qui ressort de localStorage et d'un export soit déjà
+// à la forme courante.
+function serializeStation(s) {
+  return { group: s.group, name: s.name, url: s.url, hls: s.hls, meta: s.meta, gain: s.gain };
+}
+
+// ─── Persistance stations custom ───
 function loadCustomStations() {
   try {
     const parsed = JSON.parse(localStorage.getItem('customStations') || '[]');
     if (!Array.isArray(parsed)) return [];
-    return parsed.filter(isValidStation).map(s => ({ ...s, gain: sanitizeGain(s.gain) }));
+    return parsed.filter(isValidStation).map(s => normalizeStation(s, true));
   } catch { return []; }
 }
 function saveCustomStations() {
-  localStorage.setItem('customStations', JSON.stringify(stations.filter(s => s.isCustom)));
+  try {
+    localStorage.setItem('customStations', JSON.stringify(stations.filter(s => s.isCustom).map(serializeStation)));
+  } catch {}
 }
 
 // ─── Constantes ───
@@ -494,6 +618,56 @@ function applyStationGain(idx, g) {
   if (current === idx) audio.volume = effectiveVolume(idx);
 }
 
+// ─── Attache du flux à l'élément <audio> ───
+// Passage obligé : un flux HLS (.m3u8) n'est lu nativement que par Safari et iOS ;
+// partout ailleurs il faut hls.js, qui alimente le même élément <audio> via MSE.
+// Les quatre endroits qui faisaient « audio.src = … » à la main passent tous par
+// ici, sinon changer de station laisserait l'instance hls.js précédente attachée
+// et les deux flux se disputeraient l'élément.
+let hls = null;
+
+function canPlayHlsNatively() {
+  return !!audio.canPlayType('application/vnd.apple.mpegurl');
+}
+
+function hlsAvailable() {
+  return typeof Hls !== 'undefined' && Hls.isSupported();
+}
+
+function detachStream() {
+  if (hls) { hls.destroy(); hls = null; }
+  // removeAttribute + load() plutôt que src = '' : une chaîne vide se résout en
+  // URL de la page, que le navigateur tente de décoder puis signale en 'error'.
+  audio.removeAttribute('src');
+  audio.load();
+}
+
+// Retourne false si le flux est illisible par ce navigateur (HLS sans hls.js) —
+// l'appelant affiche alors un message au lieu de lancer une lecture muette.
+function attachStream(idx) {
+  const s = stations[idx];
+  if (hls) { hls.destroy(); hls = null; }
+  if (s.hls && hlsAvailable()) {
+    // hls.js passe avant la lecture native même quand celle-ci est annoncée :
+    // canPlayType('application/vnd.apple.mpegurl') répond « maybe » sur des
+    // moteurs Chromium dont le support HLS est partiel, et la réponse ne vaut
+    // donc pas garantie. hls.js, lui, remonte des erreurs exploitables. Le
+    // chemin natif reste celui d'iOS, où MSE n'existe pas.
+    hls = new Hls({ enableWorker: true, backBufferLength: 30 });
+    // hls.js gère seul les erreurs non fatales (trou de segment, 404 ponctuel) ;
+    // seul le fatal rejoint la logique de reconnexion commune.
+    hls.on(Hls.Events.ERROR, (_e, data) => { if (data.fatal) handleStreamDrop(); });
+    hls.loadSource(s.url);
+    hls.attachMedia(audio);
+  } else if (s.hls && !canPlayHlsNatively()) {
+    return false;
+  } else {
+    audio.src = s.url;
+  }
+  audio.volume = effectiveVolume(idx);
+  return true;
+}
+
 // ─── Détection flux mort / reconnexion ───
 let reconnectTimer = null;
 let reconnectAttempts = 0;
@@ -528,8 +702,7 @@ function handleStreamDrop() {
   reconnectTimer = setTimeout(() => {
     reconnecting = false;
     if (current < 0) return;
-    audio.src = stations[current].url;
-    audio.volume = effectiveVolume(current);
+    if (!attachStream(current)) return;
     audio.play().catch(handleStreamDrop);
   }, 2000);
 }
@@ -592,16 +765,61 @@ function stopVis() {
   for (const b of visBars) { b.style.height = '3px'; b.classList.remove('active'); }
 }
 
-// ─── Now Playing API ───
-async function fetchNowPlaying(apiId) {
+// ─── Now Playing ───
+// Deux familles de sources seulement, les seules qui envoient un en-tête CORS de
+// façon fiable : AzuraCast (/api/nowplaying/<id|shortcode>), et Icecast
+// (/status-json.xsl) quand l'opérateur ne l'a pas coupé — sur six serveurs
+// publics testés, un seul répondait encore. Shoutcast v2 (/stats?json=1)
+// n'envoie aucun en-tête CORS : inatteignable depuis un navigateur.
+async function fetchMeta(meta, streamUrl) {
   try {
-    const r = await fetch(API_BASE + apiId, { cache: 'no-store', signal: AbortSignal.timeout(8000) });
+    const r = await fetch(meta.url, { cache: 'no-store', signal: AbortSignal.timeout(8000) });
     if (!r.ok) return null;
     const d = await r.json();
-    const song = d.now_playing?.song;
-    if (song) return [song.title, song.artist].filter(Boolean).join(' — ');
+    return meta.type === 'icecast' ? parseIcecast(d, streamUrl) : parseAzuracast(d, streamUrl);
   } catch {}
   return null;
+}
+
+function parseAzuracast(d, streamUrl) {
+  // /api/nowplaying sans identifiant renvoie toutes les stations de l'instance :
+  // on retrouve la nôtre par son listen_url.
+  const entry = Array.isArray(d) ? (d.find(x => x?.station?.listen_url === streamUrl) || d[0]) : d;
+  const song = entry?.now_playing?.song;
+  if (!song) return null;
+  return [song.title, song.artist].filter(Boolean).join(' — ') || song.text || null;
+}
+
+function parseIcecast(d, streamUrl) {
+  // icestats.source est un objet quand le serveur n'a qu'un seul point de montage,
+  // un tableau dès qu'il en a plusieurs.
+  let src = d?.icestats?.source;
+  if (!src) return null;
+  if (!Array.isArray(src)) src = [src];
+  const m = src.find(s => s?.listenurl === streamUrl) || src[0];
+  return m ? (m.title || m.yp_currently_playing || null) || null : null;
+}
+
+// L'annuaire permet d'accumuler des dizaines de stations : sans plafond, chaque
+// tour de sonde partirait en autant de requêtes. Au-delà, une station n'est
+// interrogée que lorsqu'on la sélectionne (refreshOne, cf. playStation).
+const MAX_META_POLL = 40;
+
+function applyMeta(i, url, txt) {
+  if (!txt) return;
+  nowPlayingData[url] = txt;
+  const el = document.getElementById('snp-' + i);
+  if (el) el.textContent = txt;
+  if (i === current) {
+    setSongTicker(txt);
+    updateMediaSession();
+  }
+}
+
+async function refreshOne(idx) {
+  const s = stations[idx];
+  if (!s?.meta) return;
+  applyMeta(idx, s.url, await fetchMeta(s.meta, s.url));
 }
 
 let pollInFlight = false;
@@ -609,23 +827,20 @@ async function refreshNowPlaying() {
   if (document.hidden || pollInFlight) return;
   pollInFlight = true;
   try {
+    const targets = [];
+    stations.forEach((s, i) => { if (s.meta) targets.push({ s, i }); });
+    // La station écoutée est prioritaire : elle doit être sondée même si elle se
+    // trouve au-delà du plafond.
+    const polled = targets.slice(0, MAX_META_POLL);
+    if (current >= 0 && stations[current]?.meta && !polled.some(t => t.i === current)) {
+      polled.push({ s: stations[current], i: current });
+    }
     const results = await Promise.allSettled(
-      stations.map((s, i) => s.apiId ? fetchNowPlaying(s.apiId).then(txt => ({ i, url: s.url, txt })) : Promise.resolve(null))
+      polled.map(({ s, i }) => fetchMeta(s.meta, s.url).then(txt => ({ i, url: s.url, txt })))
     );
     results.forEach(r => {
-      if (r.status === 'fulfilled' && r.value) {
-        const { i, url, txt } = r.value;
-        if (txt) {
-          nowPlayingData[url] = txt;
-          const el = document.getElementById('snp-' + i);
-          if (el) el.textContent = txt;
-        }
-      }
+      if (r.status === 'fulfilled' && r.value) applyMeta(r.value.i, r.value.url, r.value.txt);
     });
-    if (current >= 0 && npFor(current)) {
-      setSongTicker(npFor(current));
-      updateMediaSession();
-    }
   } finally {
     pollInFlight = false;
   }
@@ -728,12 +943,16 @@ function buildGainControl(idx) {
 function buildStationList() {
   const wrap = document.getElementById('stations-wrap');
   wrap.innerHTML = '';
-  const groups = {};
+  // Map plutôt qu'objet littéral : la clé est saisie par l'utilisateur et
+  // pourrait s'appeler « constructor » ou « __proto__ ».
+  const groups = new Map();
   stations.forEach((s, i) => {
-    if (!groups[s.game]) groups[s.game] = [];
-    groups[s.game].push({ ...s, idx: i });
+    const key = groupKey(s.group);
+    if (!groups.has(key)) groups.set(key, { label: s.group, list: [] });
+    groups.get(key).list.push({ ...s, idx: i });
   });
-  Object.entries(groups).forEach(([game, list], gi) => {
+  refreshGroupDatalist(groups);
+  [...groups.values()].forEach(({ label: game, list }, gi) => {
     const g = document.createElement('section');
     g.className = 'stations-group';
     // La section est nommée par son titre : un lecteur d'écran annonce le jeu en
@@ -806,6 +1025,19 @@ function buildStationList() {
   });
 }
 
+// Propose les groupes existants dans le champ d'ajout : sans ça, chaque station
+// ajoutée à la main risque de créer une section de plus par faute de frappe.
+function refreshGroupDatalist(groups) {
+  const dl = document.getElementById('group-list');
+  if (!dl) return;
+  dl.innerHTML = '';
+  for (const { label } of groups.values()) {
+    const o = document.createElement('option');
+    o.value = label;
+    dl.appendChild(o);
+  }
+}
+
 // ─── Lecture ───
 // applyPlayingState()/applyPausedState() centralisent l'état visuel commun à
 // setUI(), togglePlay() et l'événement 'playing' — évite de dupliquer ces
@@ -846,7 +1078,7 @@ function updateMediaSession() {
   try {
     ms.metadata = new MediaMetadata({
       title: np || s.name,
-      artist: np ? s.name : s.game,
+      artist: np ? s.name : s.group,
       album: 'Fallout Radio',
       artwork: ARTWORK_SRC ? [{ src: ARTWORK_SRC, sizes: '512x512', type: 'image/svg+xml' }] : []
     });
@@ -888,7 +1120,7 @@ function setUI(idx) {
   newEl?.classList.add('playing');
   setStationPressed(idx, true);
   document.getElementById('np-station').textContent = s.name.toUpperCase();
-  document.getElementById('np-badge').textContent = s.game;
+  document.getElementById('np-badge').textContent = s.group;
   setSongTicker(npFor(idx) || '...');
   applyPlayingState();
 }
@@ -914,10 +1146,16 @@ function playStation(idx) {
   if (current === idx && !audio.paused) { togglePlay(); return; }
   clearReconnect();
   audio.pause();
-  audio.src = stations[idx].url;
-  audio.volume = effectiveVolume(idx);
+  if (!attachStream(idx)) {
+    setUI(-1);
+    document.getElementById('np-station').textContent = stations[idx].name.toUpperCase() + ' — HLS NON SUPPORTÉ';
+    return;
+  }
   try { localStorage.setItem('lastStationUrl', stations[idx].url); } catch {}
   setUI(idx);
+  // Une station hors du lot interrogé en boucle n'a jamais eu son titre : le
+  // demander à la volée dès qu'on l'écoute.
+  refreshOne(idx);
   audio.play().catch(() => {
     setUI(-1);
     document.getElementById('np-station').textContent = stations[idx].name.toUpperCase() + ' — UNAVAILABLE';
@@ -927,8 +1165,9 @@ function playStation(idx) {
 function togglePlay() {
   if (current < 0) return;
   if (audio.paused) {
-    audio.src = stations[current].url;
-    audio.volume = effectiveVolume(current);
+    // Ré-attacher plutôt que reprendre : sur un flux live, le tampon accumulé
+    // pendant la pause est déjà périmé.
+    if (!attachStream(current)) return;
     applyPlayingState();
     audio.play().catch(handleStreamDrop);
   } else {
@@ -938,7 +1177,7 @@ function togglePlay() {
   }
 }
 
-function stopRadio() { clearReconnect(); cancelSleepTimer(); audio.pause(); audio.src = ''; setUI(-1); }
+function stopRadio() { clearReconnect(); cancelSleepTimer(); audio.pause(); setUI(-1); detachStream(); }
 function nextStation() { if (stations.length) playStation((current + 1) % stations.length); }
 function prevStation() { if (stations.length) playStation((current - 1 + stations.length) % stations.length); }
 
@@ -1053,8 +1292,9 @@ function isPrivateHost(hostname) {
 }
 
 // ─── Résolution playlist M3U/PLS → URL directe ───
-// Retourne { url, verified } : verified=false si la vérification réseau a échoué
-// (CORS/timeout/erreur) — l'URL d'origine est alors tentée telle quelle, sans garantie.
+// Retourne { url, verified, hls } : verified=false si la vérification réseau a
+// échoué (CORS/timeout/erreur) — l'URL d'origine est alors tentée telle quelle,
+// sans garantie. hls=true marque un flux à confier à hls.js plutôt qu'à <audio>.
 async function resolveStreamUrl(url) {
   const lower = url.toLowerCase();
   let text;
@@ -1063,14 +1303,24 @@ async function resolveStreamUrl(url) {
       headers: { 'Accept': 'audio/*, application/*, */*' },
       signal: AbortSignal.timeout(6000)
     });
-    if (!r.ok) return { url, verified: false };
-    const ct = r.headers.get('content-type') || '';
+    if (!r.ok) return { url, verified: false, hls: isHlsUrl(lower) };
+    const ct = (r.headers.get('content-type') || '').toLowerCase();
+    // HLS d'abord : un master .m3u8 est servi en audio/x-mpegurl, donc le test
+    // « ça commence par audio/ » ci-dessous le prendrait pour un flux direct.
+    if (ct.includes('mpegurl') || isHlsUrl(lower)) return { url, verified: true, hls: true };
     // Si c'est de l'audio directement, pas besoin de parser
     if (ct.startsWith('audio/') || ct.startsWith('video/')) return { url, verified: true };
     text = await r.text();
   } catch {
-    return { url, verified: false }; // CORS/timeout/réseau : tenter l'URL telle quelle
+    // CORS/timeout/réseau : tenter l'URL telle quelle
+    return { url, verified: false, hls: isHlsUrl(lower) };
   }
+
+  // Un master HLS commence lui aussi par #EXTM3U : sans ce test il tombait dans
+  // la branche M3U ci-dessous, qui gardait la première ligne non commentée —
+  // c'est-à-dire une variante ou un segment de quelques secondes. La station
+  // était créée, jouait dix secondes, puis mourait.
+  if (/#EXT-X-/.test(text)) return { url, verified: true, hls: true };
 
   // Une entrée de playlist peut être relative à l'URL de la playlist, et elle doit
   // repasser par la même garde d'hôte que la saisie utilisateur : sinon une playlist
@@ -1105,13 +1355,20 @@ async function resolveStreamUrl(url) {
 // ─── Ajout de station ───
 async function addStation() {
   const name = document.getElementById('add-name').value.trim();
-  const game = document.getElementById('add-game').value.trim().toUpperCase();
+  const group = document.getElementById('add-group').value.trim();
   const url  = document.getElementById('add-url').value.trim();
+  const metaUrl = document.getElementById('add-meta').value.trim();
   const msg  = document.getElementById('add-msg');
   const btn  = document.querySelector('.add-btn');
 
-  if (!name || !game || !url) {
-    msg.textContent = '⚠ Tous les champs sont requis.'; msg.className = 'add-msg err'; return;
+  // Le groupe est facultatif depuis qu'il est libre : une station sans groupe
+  // atterrit dans DIVERS plutôt que d'être refusée.
+  if (!name || !url) {
+    msg.textContent = "⚠ Le nom et l'URL du flux sont requis."; msg.className = 'add-msg err'; return;
+  }
+  if (metaUrl && !isSafeHttpUrl(metaUrl)) {
+    msg.textContent = '⚠ URL de métadonnées invalide ou pointant vers un hôte local/privé.';
+    msg.className = 'add-msg err'; return;
   }
   let parsedUrl;
   try { parsedUrl = new URL(url); } catch {
@@ -1127,7 +1384,7 @@ async function addStation() {
   btn.disabled = true;
   msg.textContent = '⟳ Résolution du flux…'; msg.className = 'add-msg';
 
-  const { url: resolved, verified, blocked } = await resolveStreamUrl(url);
+  const { url: resolved, verified, blocked, hls } = await resolveStreamUrl(url);
 
   if (blocked) {
     btn.disabled = false;
@@ -1135,20 +1392,172 @@ async function addStation() {
     msg.className = 'add-msg err';
     return;
   }
+  if (hls && !canPlayHlsNatively() && !hlsAvailable()) {
+    btn.disabled = false;
+    msg.textContent = "⚠ Flux HLS (.m3u8) : ce navigateur ne sait pas le lire et hls.js n'a pas pu être chargé.";
+    msg.className = 'add-msg err';
+    return;
+  }
 
-  stations.push({ game, name, url: resolved, apiId: null, gain: 1, isCustom: true });
-  saveCustomStations();
-  buildStationList();
+  const meta = metaUrl ? { type: guessMetaType(metaUrl), url: metaUrl } : undefined;
+  if (!addToLibrary({ group, name, url: resolved, hls, meta })) {
+    btn.disabled = false;
+    msg.textContent = '⚠ Ce flux est déjà dans la liste.'; msg.className = 'add-msg err';
+    return;
+  }
 
   document.getElementById('add-name').value = '';
-  document.getElementById('add-game').value = '';
+  document.getElementById('add-group').value = '';
   document.getElementById('add-url').value = '';
+  document.getElementById('add-meta').value = '';
   btn.disabled = false;
-  msg.textContent = verified
-    ? '✓ Station "' + name + '" ajoutée.'
-    : '✓ Station "' + name + '" ajoutée (flux non vérifiable — CORS/réseau, à tester).';
+
+  const notes = [];
+  if (!verified) notes.push('flux non vérifiable — CORS/réseau, à tester');
+  if (hls) notes.push('HLS');
+  if (!meta && !detectMeta(resolved)) notes.push('sans métadonnées');
+  msg.textContent = '✓ Station "' + name + '" ajoutée' + (notes.length ? ' (' + notes.join(', ') + ')' : '') + '.';
   msg.className = 'add-msg ok';
-  setTimeout(() => { msg.textContent = ''; msg.className = 'add-msg'; }, 4000);
+  setTimeout(() => { msg.textContent = ''; msg.className = 'add-msg'; }, 5000);
+}
+
+// Icecast expose status-json.xsl, AzuraCast /api/nowplaying : l'URL suffit à
+// trancher, et AzuraCast reste le défaut puisqu'il est bien plus répandu.
+function guessMetaType(url) {
+  return /status-json\.xsl/i.test(url) ? 'icecast' : 'azuracast';
+}
+
+// Ajout effectif dans la bibliothèque, partagé par le formulaire, l'annuaire et
+// l'import : normalisation, dédoublonnage par URL, persistance, rendu.
+function addToLibrary(raw) {
+  if (stations.some(s => s.url === raw.url)) return false;
+  const s = normalizeStation(raw, true);
+  stations.push(s);
+  saveCustomStations();
+  buildStationList();
+  refreshOne(stations.length - 1);
+  return true;
+}
+
+// ─── Annuaire Radio-Browser ───
+// ~50 000 stations, sans clé d'API et avec un en-tête CORS permissif. L'annuaire
+// ne donne que la fiche (nom, pays, codec, URL du flux) : jamais le titre en
+// cours, que detectMeta() récupère ensuite quand l'hôte est un AzuraCast.
+let rbSeq = 0;
+
+async function searchDirectory() {
+  const q = document.getElementById('rb-q').value.trim();
+  const box = document.getElementById('rb-results');
+  if (!q) { box.textContent = ''; return; }
+
+  // Une recherche lente ne doit pas écraser le résultat d'une recherche lancée
+  // après elle : seul le dernier numéro de séquence a le droit d'écrire.
+  const seq = ++rbSeq;
+  box.textContent = '';
+  const status = document.createElement('div');
+  status.className = 'rb-status';
+  status.textContent = '⟳ Recherche…';
+  box.appendChild(status);
+
+  let list;
+  try {
+    // Le champ `name` ne cherche que dans les noms : « jazz » ou « classique »
+    // sont des genres, d'où le repli sur `tag` quand le nom ne donne rien.
+    list = await rbQuery({ name: q });
+    if (!list.length) list = await rbQuery({ tag: q });
+  } catch {
+    if (seq === rbSeq) status.textContent = '⚠ Annuaire injoignable.';
+    return;
+  }
+  if (seq !== rbSeq) return;
+
+  box.textContent = '';
+  if (!list.length) {
+    const none = document.createElement('div');
+    none.className = 'rb-status';
+    none.textContent = 'Aucun résultat pour « ' + q + ' ».';
+    box.appendChild(none);
+    return;
+  }
+  list.forEach(r => box.appendChild(buildDirectoryRow(r)));
+}
+
+async function rbQuery(params) {
+  const qs = new URLSearchParams({
+    ...params,
+    // On demande large puis on filtre : une bonne moitié des fiches de l'annuaire
+    // est éliminée ci-dessous, et couper à RB_LIMIT côté serveur laisserait
+    // souvent une poignée de résultats affichables.
+    limit: String(RB_LIMIT * 4),
+    hidebroken: 'true',
+    order: 'clickcount',
+    reverse: 'true'
+  });
+  const r = await fetch(RB_API + '?' + qs, { signal: AbortSignal.timeout(10000) });
+  if (!r.ok) throw new Error('HTTP ' + r.status);
+  const data = await r.json();
+  if (!Array.isArray(data)) return [];
+  return data.filter(s => s && s.name && isPlayableStreamUrl(s.url_resolved || s.url)).slice(0, RB_LIMIT);
+}
+
+// url_resolved suit les redirections et les playlists ; l'annuaire référence
+// aussi des hôtes privés, qu'isSafeHttpUrl() écarte. Le filtre de protocole en
+// plus : sur une page servie en https, un flux http:// est du contenu mixte, que
+// le navigateur bloque ou tente de forcer en https — la station serait ajoutée
+// puis resterait muette. Autant ne pas la proposer.
+function isPlayableStreamUrl(raw) {
+  if (!isSafeHttpUrl(raw)) return false;
+  return location.protocol !== 'https:' || raw.toLowerCase().startsWith('https:');
+}
+
+// Construit la ligne en DOM et non en innerHTML : ces champs sont remplis par
+// n'importe qui sur un annuaire ouvert en écriture.
+function buildDirectoryRow(r) {
+  const url = String(r.url_resolved || r.url).trim();
+  const row = document.createElement('div');
+  row.className = 'rb-item';
+
+  const info = document.createElement('div');
+  info.className = 'rb-info';
+  const nameEl = document.createElement('div');
+  nameEl.className = 'rb-name';
+  nameEl.textContent = r.name.trim();
+  const metaEl = document.createElement('div');
+  metaEl.className = 'rb-meta';
+  const bits = [
+    r.country || r.countrycode,
+    r.codec,
+    r.bitrate ? r.bitrate + ' kbps' : null,
+    isHlsUrl(url) ? 'HLS' : null,
+    String(r.tags || '').split(',').filter(Boolean).slice(0, 3).join(', ')
+  ].filter(Boolean);
+  metaEl.textContent = bits.join(' · ');
+  info.appendChild(nameEl);
+  info.appendChild(metaEl);
+
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.className = 'rb-add';
+  btn.textContent = '+';
+  btn.setAttribute('aria-label', 'Ajouter ' + r.name.trim());
+  btn.addEventListener('click', () => {
+    if (isHlsUrl(url) && !canPlayHlsNatively() && !hlsAvailable()) {
+      metaEl.textContent = '⚠ flux HLS illisible par ce navigateur';
+      return;
+    }
+    // Le champ « Groupe » sert de destination quand il est rempli ; sinon le
+    // pays fait un regroupement bien plus utile qu'un fourre-tout unique.
+    const typed = document.getElementById('add-group').value.trim();
+    const group = typed || (r.countrycode || '').toUpperCase() || DEFAULT_GROUP;
+    const ok = addToLibrary({ group, name: r.name.trim(), url, hls: isHlsUrl(url) });
+    btn.disabled = true;
+    btn.textContent = ok ? '✓' : '=';
+    btn.setAttribute('aria-label', (ok ? 'Ajoutée : ' : 'Déjà présente : ') + r.name.trim());
+  });
+
+  row.appendChild(info);
+  row.appendChild(btn);
+  return row;
 }
 
 // ─── Export / import des stations custom ───
@@ -1160,7 +1569,7 @@ function exportStations() {
     setTimeout(() => { msg.textContent = ''; msg.className = 'add-msg'; }, 3000);
     return;
   }
-  const blob = new Blob([JSON.stringify(custom, null, 2)], { type: 'application/json' });
+  const blob = new Blob([JSON.stringify(custom.map(serializeStation), null, 2)], { type: 'application/json' });
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
   a.download = 'fallout-radio-stations.json';
@@ -1181,17 +1590,14 @@ async function importStations(file) {
     const existingUrls = new Set(stations.map(s => s.url));
     let added = 0;
     valid.forEach(s => {
-      if (existingUrls.has(s.url)) return;
-      try {
-        const u = new URL(s.url);
-        if (!['http:', 'https:'].includes(u.protocol) || isPrivateHost(u.hostname)) return;
-      } catch { return; }
-      stations.push({ game: String(s.game).trim().toUpperCase(), name: String(s.name).trim(), url: s.url, apiId: null, gain: sanitizeGain(s.gain), isCustom: true });
+      if (existingUrls.has(s.url) || !isSafeHttpUrl(s.url)) return;
+      stations.push(normalizeStation(s, true));
       existingUrls.add(s.url);
       added++;
     });
     saveCustomStations();
     buildStationList();
+    if (added) refreshNowPlaying();
     msg.textContent = added ? ('✓ ' + added + ' station(s) importée(s).') : '⚠ Aucune nouvelle station (déjà présentes).';
     msg.className = added ? 'add-msg ok' : 'add-msg err';
   } catch {
@@ -1250,9 +1656,16 @@ document.addEventListener('keydown', e => {
     document.getElementById('np-station').textContent = '⚠ ERREUR CHARGEMENT stations.json';
   }
   stations = [
-    ...STATIONS.map(s => ({ ...s, isCustom: false })),
-    ...loadCustomStations().map(s => ({ ...s, isCustom: true }))
+    ...STATIONS.filter(isValidStation).map(s => normalizeStation(s, false)),
+    ...loadCustomStations()
   ];
+
+  // Entrée valide la recherche d'annuaire — le champ n'est pas dans un <form>,
+  // le navigateur ne le fait donc pas tout seul.
+  document.getElementById('rb-q').addEventListener('keydown', e => {
+    if (e.key === 'Enter') { e.preventDefault(); searchDirectory(); }
+  });
+
   buildStationList();
   restoreLastStation();
   updateSleepBtn();

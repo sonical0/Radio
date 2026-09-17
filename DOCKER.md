@@ -1,6 +1,6 @@
 # Docker
 
-The app is containerized via `Dockerfile` (`nginxinc/nginx-unprivileged:1.27-alpine` — runs as non-root `uid=101`, serving `index.html` and `stations.json`, with a custom `nginx.conf` adding gzip + security headers, and a `HEALTHCHECK`) and `docker-compose.yml` (maps container port 8080 to host port 8080, plus `read_only`/`tmpfs`/`cap_drop`/`no-new-privileges` hardening).
+The app is containerized via `Dockerfile` (`nginxinc/nginx-unprivileged:1.27-alpine` — runs as non-root `uid=101`, serving `index.html`, `stations.json` and `vendor/` (the pinned hls.js), with a custom `nginx.conf` adding gzip + security headers, and a `HEALTHCHECK`) and `docker-compose.yml` (maps container port 8080 to host port 8080, plus `read_only`/`tmpfs`/`cap_drop`/`no-new-privileges` hardening).
 
 ## Security headers
 
