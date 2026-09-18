@@ -8,7 +8,8 @@ import { BORDER, DIM, GREEN, GREEN_BRIGHT, RED } from './theme';
 type Props = {
   station: Station;
   active: boolean;
-  playing: boolean;
+  /** Libellé d état, décidé par l écran : lui seul sait si le flux est attaché. */
+  status: string;
   nowPlaying?: string;
   onSelect: (s: Station) => void;
   onPreviewGain: (url: string, gain: number) => void;
@@ -25,7 +26,7 @@ type Props = {
 function StationRowBase({
   station,
   active,
-  playing,
+  status,
   nowPlaying,
   onSelect,
   onPreviewGain,
@@ -33,7 +34,7 @@ function StationRowBase({
   onHide,
 }: Props) {
   return (
-    <View style={[s.row, active && (playing ? s.rowPlaying : s.rowSelected)]}>
+    <View style={[s.row, active && (status === 'ON AIR' ? s.rowPlaying : s.rowSelected)]}>
       <Pressable
         style={s.main}
         onPress={() => onSelect(station)}
@@ -68,7 +69,7 @@ function StationRowBase({
       </Pressable>
 
       <View style={s.side}>
-        <Text style={s.status}>{active ? (playing ? 'ON AIR' : 'PAUSE') : 'TUNE IN'}</Text>
+        <Text style={s.status}>{status}</Text>
         <Pressable
           onPress={() => onHide(station.url)}
           accessibilityRole="button"

@@ -32,8 +32,15 @@ export function setupPlayer(): void {
     android: { wakeMode: 'network' },
   });
   // Les commandes distantes se configurent à part de setupPlayer en v5.
+  // Next/Previous sont exposées : la notification permet de zapper de station
+  // sans revenir dans l'appli, et le natif relaie l'appui via un évènement.
   TrackPlayer.setCommands({
-    capabilities: [PlayerCommand.PlayPause, PlayerCommand.Stop],
+    capabilities: [
+      PlayerCommand.PlayPause,
+      PlayerCommand.Stop,
+      PlayerCommand.Next,
+      PlayerCommand.Previous,
+    ],
     handling: 'native',
   });
   ready = true;
@@ -72,4 +79,35 @@ export function togglePlay(playing: boolean): void {
 export function stop(): void {
   TrackPlayer.stop();
   TrackPlayer.clear();
+}
+
+/**
+ * Relance le flux après une coupure. Sur le site, il fallait réattacher la
+ * source à la main et compter les tentatives ; ici le natif sait reprendre, on
+ * ne garde que la politique (combien de fois, à quel rythme), dans usePlayback.
+ */
+export function retry(): void {
+  TrackPlayer.retry();
+}
+
+// ─── Minuterie de veille ───
+// Les paliers du site, en minutes. 0 = éteinte.
+export const SLEEP_STEPS_MIN = [0, 15, 30, 60, 90];
+const FADE_OUT_SECONDS = 20;
+
+/** Arme la minuterie, ou l'annule si `minutes` vaut 0. */
+export function setSleepTimer(minutes: number): void {
+  if (!minutes) {
+    TrackPlayer.cancelSleepTimer();
+    return;
+  }
+  // Le fondu est natif : il n'y a plus à interpoler le volume nous-mêmes, et
+  // surtout plus à réparer le volume laissé bas quand l'utilisateur annule en
+  // plein fondu — cancelSleepTimer() le restaure.
+  TrackPlayer.sleepAfterTime(minutes * 60, { fadeOutSeconds: FADE_OUT_SECONDS });
+}
+
+export function sleepRemainingSeconds(): number | null {
+  const t = TrackPlayer.getSleepTimer();
+  return t && t.type === 'time' ? t.remainingSeconds : null;
 }

@@ -1,40 +1,32 @@
-// Jalon 2 : la bibliothèque. Liste groupée, gain par station, corbeille, ajout
-// manuel, import/export, le tout persisté.
-// L'habillage Pip-Boy (scanline, flicker, ticker, polices VT323) reste à faire,
-// comme le sondage des titres de toutes les stations — ici seule la station
-// écoutée est sondée.
+// Jalon 3 : le confort de lecture par-dessus la bibliothèque.
+// Volume maître et sourdine, suivant/précédent (qui sautent les masquées),
+// dernière station mémorisée, minuterie de veille avec fondu, reconnexion sur
+// flux coupé, et le titre en cours de toutes les stations et non plus seulement
+// de celle qu'on écoute.
+// Reste à faire : l'habillage Pip-Boy, l'annuaire Radio-Browser, les raccourcis
+// clavier de la cible web.
 
-import { useIsPlaying } from '@rntp/player';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import {
-  ActivityIndicator,
-  SafeAreaView,
-  SectionList,
-  StatusBar,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native';
+import { ActivityIndicator, SafeAreaView, SectionList, StatusBar, StyleSheet, Text, View } from 'react-native';
 
-import { fetchMeta } from './src/model/meta';
 import type { Station } from './src/model/station';
-import { playStation, setVolume, setupPlayer, stop, togglePlay } from './src/player/player';
+import { useNowPlaying } from './src/model/useNowPlaying';
+import { setupPlayer } from './src/player/player';
+import { usePlayback } from './src/player/usePlayback';
 import { groupStations, knownGroups } from './src/store/library';
 import { useLibrary } from './src/store/useLibrary';
 import { AddStation } from './src/ui/AddStation';
+import { NowPlaying } from './src/ui/NowPlaying';
 import { StationRow } from './src/ui/StationRow';
 import { Trash } from './src/ui/Trash';
-import { BG, DIM, GREEN, t } from './src/ui/theme';
-
-const MASTER_VOLUME = 0.7;
+import { BG, GREEN, t } from './src/ui/theme';
 
 export default function App() {
   const lib = useLibrary();
+  const play = usePlayback(lib.stations);
+  const { titles, refreshOne } = useNowPlaying(lib.stations, play.currentUrl);
   const [ready, setReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [currentUrl, setCurrentUrl] = useState<string | null>(null);
-  const [nowPlaying, setNowPlaying] = useState<string | null>(null);
-  const playing = useIsPlaying();
 
   // setupPlayer() est synchrone en v5 (appels natifs via JSI), mais toujours à
   // n'appeler qu'au premier plan côté Android.
@@ -47,64 +39,35 @@ export default function App() {
     }
   }, []);
 
-  const current = useMemo(
-    () => lib.stations.find((s) => s.url === currentUrl) ?? null,
-    [lib.stations, currentUrl],
-  );
-
-  // Le gain se règle pendant la lecture : le volume effectif suit le curseur de
-  // la station écoutée, sinon le réglage ne s'entendrait qu'au prochain zapping.
-  useEffect(() => {
-    if (current) setVolume(current, MASTER_VOLUME);
-  }, [current]);
-
-  // Titre en cours, pour la station écoutée seulement tant que le sondage
-  // groupé (40 stations par tour sur le site) n'est pas porté.
-  useEffect(() => {
-    const meta = current?.meta;
-    const url = current?.url;
-    if (!meta || !url) {
-      setNowPlaying(null);
-      return;
-    }
-    let alive = true;
-    const poll = async () => {
-      const txt = await fetchMeta(meta, url);
-      if (alive) setNowPlaying(txt);
-    };
-    poll();
-    const id = setInterval(poll, 30000);
-    return () => {
-      alive = false;
-      clearInterval(id);
-    };
-  }, [current?.url]);
-
   const onSelect = useCallback(
     (s: Station) => {
-      if (currentUrl === s.url) {
-        togglePlay(playing);
-        return;
-      }
-      setCurrentUrl(s.url);
-      playStation(s, MASTER_VOLUME);
+      play.select(s);
+      // Une station au-delà du plafond de sondage n'a pas de titre : on va le
+      // chercher pour elle seule au moment où on la choisit.
+      if (!titles[s.url]) void refreshOne(s.url);
     },
-    [currentUrl, playing],
+    [play, refreshOne, titles],
   );
-
-  const onStop = useCallback(() => {
-    stop();
-    setCurrentUrl(null);
-  }, []);
 
   // Masquer la station écoutée l'arrête : elle sort de la liste, la laisser
   // jouer depuis la corbeille n'aurait aucun sens.
   const onHide = useCallback(
     (url: string) => {
-      if (currentUrl === url) onStop();
+      if (play.currentUrl === url) play.stop();
       lib.hide(url);
     },
-    [currentUrl, lib, onStop],
+    [lib, play],
+  );
+
+  const rowStatus = useCallback(
+    (url: string) => {
+      if (url !== play.currentUrl) return 'TUNE IN';
+      if (play.playing) return 'ON AIR';
+      // Rien n'est attaché tant qu'on n'a pas appuyé sur lecture : après une
+      // restauration, la station est sélectionnée, pas en pause.
+      return play.streamState === 'idle' ? 'TUNE IN' : 'PAUSE';
+    },
+    [play.currentUrl, play.playing, play.streamState],
   );
 
   const sections = useMemo(() => groupStations(lib.stations), [lib.stations]);
@@ -118,14 +81,24 @@ export default function App() {
 
       {error ? <Text style={[t.msgErr, s.pad]}>⚠ {error}</Text> : null}
 
-      <View style={s.np}>
-        <Text style={s.npStation} numberOfLines={1}>
-          {current ? current.name : '— SELECT A STATION —'}
-        </Text>
-        <Text style={s.npSong} numberOfLines={1} accessibilityLiveRegion="polite">
-          {current ? (nowPlaying ?? '...') : ' '}
-        </Text>
-      </View>
+      <NowPlaying
+        station={play.current}
+        title={play.current ? (titles[play.current.url] ?? null) : null}
+        playing={play.playing}
+        streamState={play.streamState}
+        master={play.master}
+        muted={play.muted}
+        sleepMinutes={play.sleepMinutes}
+        sleepLeft={play.sleepLeft}
+        onToggle={play.toggle}
+        onStop={play.stop}
+        onNext={play.next}
+        onPrevious={play.previous}
+        onChangeMaster={play.changeMaster}
+        onCommitMaster={play.commitMaster}
+        onToggleMute={play.toggleMute}
+        onCycleSleep={play.cycleSleep}
+      />
 
       {lib.loading || !ready ? (
         <ActivityIndicator color={GREEN} style={s.loader} />
@@ -138,9 +111,9 @@ export default function App() {
           renderItem={({ item }) => (
             <StationRow
               station={item}
-              active={item.url === currentUrl}
-              playing={playing}
-              nowPlaying={item.url === currentUrl ? (nowPlaying ?? undefined) : undefined}
+              active={item.url === play.currentUrl}
+              status={rowStatus(item.url)}
+              nowPlaying={titles[item.url]}
               onSelect={onSelect}
               onPreviewGain={lib.previewGain}
               onCommitGain={lib.commitGain}
@@ -167,9 +140,6 @@ export default function App() {
 
 const s = StyleSheet.create({
   pad: { paddingHorizontal: 16 },
-  np: { borderWidth: 1, borderColor: DIM, margin: 16, marginBottom: 8, padding: 12 },
-  npStation: { color: GREEN, fontSize: 15, letterSpacing: 2 },
-  npSong: { color: DIM, fontSize: 11, marginTop: 4 },
   loader: { marginTop: 32 },
   footerSpace: { height: 28 },
 });

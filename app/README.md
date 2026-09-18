@@ -2,17 +2,21 @@
 
 Portage mobile du site, sur la branche `react-native/dev`. Le site en HTML pur reste sur `main` et n'est pas touché : on ajoute une cible, on ne migre pas.
 
-## État : jalons 1 et 2 atteints
+## État : jalons 1 à 3 atteints
 
-**Jalon 1 — la lecture.** Vérifié sur émulateur Android (Pixel 8a, API 36) et dans le navigateur : les stations jouent, la lecture **continue quand l app passe en arrière-plan**, avec une notification média (`FOREGROUND_SERVICE`, `category=transport`) et les contrôles de l écran verrouillé. Le titre y vient des métadonnées **ICY lues dans le flux** par le natif. Côté web, `navigator.mediaSession` est renseigné.
+**Jalon 1 — la lecture.** Les stations jouent, la lecture **continue quand l app passe en arrière-plan**, avec notification média et contrôles de l écran verrouillé. Le titre y vient des métadonnées **ICY lues dans le flux** par le natif. Côté web, `navigator.mediaSession` est renseigné.
 
-**Jalon 2 — la bibliothèque.** Liste groupée par `group`, curseur de gain sur chaque ligne (stations livrées comprises), corbeille dépliable, ajout manuel, import/export, le tout persisté par AsyncStorage sous les mêmes clés que le site (`customStations`, `builtinStationPrefs`).
+**Jalon 2 — la bibliothèque.** Liste groupée, gain par station (stations livrées comprises), corbeille, ajout manuel avec résolution de flux, import/export, le tout persisté sous les mêmes clés que le site.
 
-Vérifié geste par geste sur l émulateur, avec un arrêt forcé entre chaque pour prouver la persistance : masquer une station livrée, la retrouver dans la corbeille après redémarrage, la restaurer ; ajouter une station par son URL AzuraCast (`demo.azuracast.com`) — la résolution de flux passe, `detectMeta()` déduit l endpoint sans configuration et le titre « Ex Nihilo — Lokan » s affiche ; la jouer ; la masquer ; la supprimer définitivement depuis la corbeille, option que les stations livrées n ont pas.
+**Jalon 3 — le confort de lecture.** Titre en cours de **toutes** les stations (jusqu à 40 par tour, sondage suspendu quand l appli n est pas à l écran), volume maître et sourdine persistés, suivant/précédent qui sautent les masquées et répondent aussi aux boutons de la notification, dernière station re-sélectionnée au lancement sans démarrer le son, minuterie de veille avec fondu, et reconnexion sur flux coupé.
 
-**Non vérifié :** les dialogues d import/export (feuille de partage Android et sélecteur de fichier) n ont pas été exercés — automatiser ces boîtes système sur émulateur ne prouve pas grand-chose. Le code est là, il reste à l essayer à la main.
+Vérifié sur émulateur, réseau réellement coupé pour l occasion : la coupure affiche « ⟳ TAMPON… », les trois tentatives de reconnexion s enchaînent, puis le lecteur renonce sur « ⚠ FLUX INTERROMPU » — la politique du site — et un appui sur lecture répare. Volume et dernière station survivent à un arrêt forcé.
 
-Pas encore porté, par ordre d utilité : le sondage des titres de **toutes** les stations (seule celle qu on écoute est sondée, contre 40 par tour sur le site), le volume maître et la sourdine, suivant/précédent, la dernière station mémorisée, la minuterie de veille (`sleepAfterTime` la fournit en natif), la reconnexion sur flux coupé (`retry()` et les évènements `PlaybackError`), l annuaire Radio-Browser, les raccourcis clavier, et tout l habillage Pip-Boy.
+Deux défauts trouvés en testant, tous deux corrigés : une station restaurée s affichait « PAUSE » alors que rien n était chargé, et surtout **lecture ne la jouait pas** — le lecteur n a de média attaché qu après un `setMediaItem`, ce que la restauration ne fait volontairement pas.
+
+**Non vérifié :** les dialogues d import/export (feuille de partage, sélecteur de fichier), et la cible web depuis le jalon 2 — seulement sa compilation.
+
+Pas encore porté : l annuaire Radio-Browser, les raccourcis clavier de la cible web, et tout l habillage Pip-Boy (scanline, flicker, ticker, polices VT323, visualiseur).
 
 ## Lancer
 
