@@ -9,9 +9,10 @@ type Props = {
   onAdd: (raw: { name: string; group: string; url: string; metaUrl?: string }) => Promise<Outcome>;
   onExport: () => Promise<Outcome>;
   onImport: () => Promise<Outcome>;
+  onFieldFocus: () => void;
 };
 
-export function AddStation({ groups, onAdd, onExport, onImport }: Props) {
+export function AddStation({ groups, onAdd, onExport, onImport, onFieldFocus }: Props) {
   const { p: p, t } = useTheme();
   const s = useMemo(() => makeStyles(p), [p]);
 
@@ -56,6 +57,7 @@ export function AddStation({ groups, onAdd, onExport, onImport }: Props) {
           onChangeText={setName}
           placeholder="Nom (ex : Fallout 4 — Far Harbor)"
           placeholderTextColor={p.dim}
+          onFocus={onFieldFocus}
           accessibilityLabel="Nom de la station"
         />
         <TextInput
@@ -64,6 +66,7 @@ export function AddStation({ groups, onAdd, onExport, onImport }: Props) {
           onChangeText={setGroup}
           placeholder={groups.length ? `Groupe (ex : ${groups[0]})` : 'Groupe (facultatif)'}
           placeholderTextColor={p.dim}
+          onFocus={onFieldFocus}
           accessibilityLabel="Groupe"
         />
         <TextInput
@@ -74,6 +77,7 @@ export function AddStation({ groups, onAdd, onExport, onImport }: Props) {
           placeholderTextColor={p.dim}
           autoCapitalize="none"
           keyboardType="url"
+          onFocus={onFieldFocus}
           accessibilityLabel="URL du flux"
         />
         <TextInput
@@ -84,6 +88,7 @@ export function AddStation({ groups, onAdd, onExport, onImport }: Props) {
           placeholderTextColor={p.dim}
           autoCapitalize="none"
           keyboardType="url"
+          onFocus={onFieldFocus}
           accessibilityLabel="URL des métadonnées, facultative"
         />
 
@@ -93,7 +98,8 @@ export function AddStation({ groups, onAdd, onExport, onImport }: Props) {
             disabled={busy}
             onPress={() => run(() => onAdd({ name, group, url, metaUrl }), true)}
             accessibilityRole="button"
-            accessibilityLabel="Ajouter la station">
+            onFocus={onFieldFocus}
+          accessibilityLabel="Ajouter la station">
             <Text style={[t.btnText, busy && t.btnOff]}>+ AJOUTER</Text>
           </Pressable>
           <Pressable
@@ -101,7 +107,8 @@ export function AddStation({ groups, onAdd, onExport, onImport }: Props) {
             disabled={busy}
             onPress={() => run(onExport)}
             accessibilityRole="button"
-            accessibilityLabel="Exporter mes stations">
+            onFocus={onFieldFocus}
+          accessibilityLabel="Exporter mes stations">
             <Text style={[t.btnText, busy && t.btnOff]}>⇩ EXPORTER</Text>
           </Pressable>
           <Pressable
@@ -109,7 +116,8 @@ export function AddStation({ groups, onAdd, onExport, onImport }: Props) {
             disabled={busy}
             onPress={() => run(onImport)}
             accessibilityRole="button"
-            accessibilityLabel="Importer des stations">
+            onFocus={onFieldFocus}
+          accessibilityLabel="Importer des stations">
             <Text style={[t.btnText, busy && t.btnOff]}>⇧ IMPORTER</Text>
           </Pressable>
           {busy ? <ActivityIndicator color={p.base} /> : null}

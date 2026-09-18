@@ -7,9 +7,10 @@ import { type Palette, useTheme } from './theme';
 
 type Props = {
   onAdd: (raw: { name: string; group: string; url: string }) => Promise<Outcome>;
+  onFieldFocus: () => void;
 };
 
-export function Directory({ onAdd }: Props) {
+export function Directory({ onAdd, onFieldFocus }: Props) {
   const { p: p, t } = useTheme();
   const s = useMemo(() => makeStyles(p), [p]);
 
@@ -66,6 +67,7 @@ export function Directory({ onAdd }: Props) {
             placeholder="Chercher une radio (nom, genre, pays…)"
             placeholderTextColor={p.dim}
             autoCapitalize="none"
+            onFocus={onFieldFocus}
             accessibilityLabel="Rechercher dans l'annuaire"
           />
           <Pressable

@@ -4,8 +4,19 @@
 // site est atteinte.
 
 import { useFonts } from 'expo-font';
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, Platform, Pressable, SectionList, StatusBar, StyleSheet, Text, View } from 'react-native';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  ActivityIndicator,
+  Keyboard,
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  SectionList,
+  StatusBar,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 
 import type { Station } from './src/model/station';
@@ -39,6 +50,22 @@ function Radio() {
   const { p, t } = useTheme();
   const s = useMemo(() => makeStyles(p), [p]);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  // Hauteur du clavier. Android 15 impose le bord-à-bord, et dans ce mode
+  // adjustResize ne redimensionne plus la fenêtre : c est à l appli de faire
+  // de la place, sinon le champ saisi reste sous le clavier.
+  const [keyboard, setKeyboard] = useState(0);
+  const listRef = useRef<SectionList<Station>>(null);
+  // Les champs de saisie vivent tous dans le pied de liste : amener la liste
+  // à son terme place donc le champ visé juste au-dessus du clavier, une fois
+  // la marge de sa hauteur appliquée. Le délai laisse ce rendu se faire.
+  const onFieldFocus = useCallback(() => {
+    setTimeout(() => listRef.current?.getScrollResponder()?.scrollToEnd({ animated: true }), 120);
+  }, []);
+  useEffect(() => {
+    const show = Keyboard.addListener('keyboardDidShow', (e) => setKeyboard(e.endCoordinates.height));
+    const hide = Keyboard.addListener('keyboardDidHide', () => setKeyboard(0));
+    return () => { show.remove(); hide.remove(); };
+  }, []);
   const lib = useLibrary();
   const play = usePlayback(lib.stations);
   const { titles, refreshOne } = useNowPlaying(lib.stations, play.currentUrl);
@@ -96,6 +123,9 @@ function Radio() {
   return (
     <SafeAreaProvider>
       <Crt>
+        <KeyboardAvoidingView
+          style={t.screen}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <SafeAreaView style={t.screen} edges={['top', 'bottom']}>
         <StatusBar barStyle="light-content" backgroundColor={p.bg} />
 
@@ -140,9 +170,14 @@ function Radio() {
           <ActivityIndicator color={p.base} style={s.loader} />
         ) : (
           <SectionList
+            ref={listRef}
             sections={sections}
             keyExtractor={(item) => item.url}
             stickySectionHeadersEnabled={false}
+            // Sans ça, le premier appui ne sert qu à fermer le clavier et le
+            // bouton visé ne reçoit rien.
+            keyboardShouldPersistTaps="handled"
+            contentContainerStyle={{ paddingBottom: keyboard }}
             renderSectionHeader={({ section }) => (
               <Text style={t.sectionLabel}>{'── ' + section.title + ' ──'}</Text>
             )}
@@ -166,8 +201,9 @@ function Radio() {
                   onAdd={lib.addStation}
                   onExport={lib.exportStations}
                   onImport={lib.importStations}
+                  onFieldFocus={onFieldFocus}
                 />
-                <Directory onAdd={lib.addStation} />
+                <Directory onAdd={lib.addStation} onFieldFocus={onFieldFocus} />
                 {/* Les raccourcis n existent que sur la cible web : ne pas les
                     annoncer sur un téléphone, qui n a pas de clavier. */}
                 {Platform.OS === 'web' ? (
@@ -181,6 +217,7 @@ function Radio() {
           />
         )}
         </SafeAreaView>
+        </KeyboardAvoidingView>
       </Crt>
     </SafeAreaProvider>
   );
