@@ -8,6 +8,31 @@ Ordre : **entrée la plus récente en tête**. Plusieurs passes le même jour so
 suffixées `(2)`, `(3)`… la plus haute étant la plus récente (même convention que
 `TANDEM_LOG.md`).
 
+## 2026-09-18
+
+### Changé — gain et masquage pour toutes les stations, corbeille
+- **Le curseur de gain n'est plus réservé aux stations custom.** Chaque ligne en porte un,
+  y compris les onze stations de `stations.json`. Le fichier n'est pas réécrit : l'écart
+  est stocké à part, dans `localStorage.builtinStationPrefs`, indexé par URL de flux —
+  la seule clé stable, l'ordre du fichier pouvant changer d'une version à l'autre.
+  **Seuls les écarts sont persistés** : ramener un gain à sa valeur d'origine efface
+  l'entrée au lieu d'y figer une valeur, donc une future modification de `stations.json`
+  reste visible pour l'utilisateur qui n'y avait pas touché.
+- **Le ✕ masque au lieu de supprimer**, pour toutes les stations. Une station masquée reste
+  dans le tableau `stations` (les index, et donc `current` et les id DOM `st-N`, ne se
+  décalent plus à chaque masquage) mais sort de la liste, du sondage des métadonnées, de
+  l'export et de la navigation ←/→ (`stepStation()`).
+- **Corbeille dépliable** en bas de la liste, affichée seulement quand elle n'est pas vide :
+  chaque station masquée y est restaurable une par une. Son état d'ouverture est mémorisé
+  (`trashOpen`), sinon elle se replierait à chaque restauration, qui re-rend la liste.
+- **La suppression définitive n'existe que dans la corbeille, et seulement pour les stations
+  custom** : une station livrée est relue dans `stations.json` au prochain chargement, la
+  « supprimer » n'aurait de sens que jusqu'au rechargement.
+- **Ré-ajouter une station masquée la réaffiche** au lieu d'échouer en doublon invisible —
+  vrai pour le formulaire, l'annuaire et l'import de fichier.
+- Masquer la station en cours de lecture l'arrête (`stopRadio()`), et la dernière station
+  mémorisée n'est pas restaurée si elle a été masquée entre-temps.
+
 ## 2026-09-17
 
 ### Ajouté — HLS, métadonnées génériques, annuaire, groupes libres

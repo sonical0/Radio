@@ -28,7 +28,10 @@ No build step, no package manager, no framework. Serve the folder and it runs.
   or genre and add a station in one click.
 - **Your own groupings.** A group is a free label — a game, a genre, a country — not a fixed
   list.
-- **Per-station gain**, so a loud stream stops blowing your ears off when you switch to it.
+- **Per-station gain**, so a loud stream stops blowing your ears off when you switch to it —
+  on the built-in stations too, without touching `stations.json`.
+- **Hide any station you don't listen to**, built-in ones included. Hiding is reversible: a
+  "hidden stations" drawer at the bottom of the list brings them back one by one.
 - **Sleep timer** with a slow fade-out, **media keys** and lock-screen controls via the Media
   Session API, **keyboard shortcuts**, and automatic reconnection when a stream drops.
 - **Import / export** your custom stations as JSON.

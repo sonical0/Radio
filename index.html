@@ -352,6 +352,47 @@
   }
   .del-btn:hover { border-color: #ff6b6b; color: #ff6b6b; }
 
+  /* CORBEILLE */
+  .trash { margin: 12px 0 4px; border-top: 1px solid var(--border); padding-top: 4px; }
+  .trash-summary {
+    cursor: pointer;
+    font-family: 'VT323', monospace;
+    font-size: 15px;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    color: var(--green-dim);
+    padding: 4px 2px;
+    list-style: none;
+  }
+  .trash-summary::-webkit-details-marker { display: none; }
+  .trash-summary:hover { color: var(--green); }
+  .trash-summary:focus-visible { outline: 1px solid var(--green); outline-offset: 2px; }
+  .trash-list { list-style: none; margin: 4px 0 0; padding: 0; }
+  .trash-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 5px 8px;
+    border: 1px solid var(--border);
+    margin-bottom: 4px;
+  }
+  .trash-name { flex: 1; min-width: 0; color: var(--green-dim); font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .trash-group { color: var(--green-dim); opacity: 0.7; font-size: 10px; letter-spacing: 1px; flex-shrink: 0; }
+  .trash-btn {
+    background: none;
+    border: 1px solid var(--border);
+    color: var(--green-dim);
+    font-family: 'VT323', monospace;
+    font-size: 14px;
+    letter-spacing: 1px;
+    padding: 2px 8px;
+    cursor: pointer;
+    flex-shrink: 0;
+    transition: all 0.15s;
+  }
+  .trash-btn:hover { border-color: var(--green); color: var(--green-bright); }
+  .trash-btn.danger:hover { border-color: #ff6b6b; color: #ff6b6b; }
+
   /* RACCOURCIS */
   .shortcuts { margin: 14px 20px 0; font-size: 11px; color: var(--green-dim); letter-spacing: 1px; line-height: 1.8; }
   .shortcuts kbd {
@@ -526,6 +567,10 @@ function normalizeStation(s, isCustom) {
     hls: s.hls === true || isHlsUrl(url),
     meta: normalizeMeta(s, url),
     gain: sanitizeGain(s.gain),
+    // Masquée = retirée de la liste mais conservée dans `stations` : la corbeille
+    // doit pouvoir la rendre, et garder l'entrée en place évite de décaler les
+    // index (`current`, les id DOM `st-N`) à chaque masquage.
+    hidden: s.hidden === true,
     isCustom: !!isCustom
   };
 }
@@ -534,7 +579,11 @@ function normalizeStation(s, isCustom) {
 // clés héritées, pour que ce qui ressort de localStorage et d'un export soit déjà
 // à la forme courante.
 function serializeStation(s) {
-  return { group: s.group, name: s.name, url: s.url, hls: s.hls, meta: s.meta, gain: s.gain };
+  const out = { group: s.group, name: s.name, url: s.url, hls: s.hls, meta: s.meta, gain: s.gain };
+  // Écrit seulement quand il est vrai : un export ne contient que des stations
+  // visibles, autant ne pas y traîner un `hidden: false` sur chaque entrée.
+  if (s.hidden) out.hidden = true;
+  return out;
 }
 
 // ─── Persistance stations custom ───
@@ -549,6 +598,55 @@ function saveCustomStations() {
   try {
     localStorage.setItem('customStations', JSON.stringify(stations.filter(s => s.isCustom).map(serializeStation)));
   } catch {}
+}
+
+// ─── Persistance des retouches sur les stations livrées ───
+// stations.json reste la référence et n'est jamais réécrit : ce que l'utilisateur
+// change dessus (gain, masquage) vit à côté, indexé par URL de flux — la seule
+// clé stable, puisque l'ordre du fichier peut changer d'une version à l'autre.
+// On n'écrit que les écarts au fichier, pour qu'une station revenue à son état
+// d'origine disparaisse du stockage au lieu d'y figer une valeur.
+const BUILTIN_PREFS_KEY = 'builtinStationPrefs';
+// Gains d'origine, relevés au chargement de stations.json.
+let builtinDefaultGain = new Map();
+
+function loadBuiltinPrefs() {
+  // Map et non l'objet brut : les clés viennent du stockage et pourraient
+  // s'appeler « __proto__ », qu'un accès par index résoudrait sur Object.prototype.
+  try {
+    const parsed = JSON.parse(localStorage.getItem(BUILTIN_PREFS_KEY) || '{}');
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return new Map();
+    return new Map(Object.entries(parsed).filter(([, v]) => v && typeof v === 'object'));
+  } catch { return new Map(); }
+}
+
+function saveBuiltinPrefs() {
+  const out = {};
+  for (const s of stations) {
+    if (s.isCustom) continue;
+    const p = {};
+    if (s.gain !== (builtinDefaultGain.get(s.url) ?? 1)) p.gain = s.gain;
+    if (s.hidden) p.hidden = true;
+    if (Object.keys(p).length) out[s.url] = p;
+  }
+  try { localStorage.setItem(BUILTIN_PREFS_KEY, JSON.stringify(out)); } catch {}
+}
+
+// Applique les retouches aux stations livrées fraîchement normalisées.
+function applyBuiltinPrefs(list) {
+  const prefs = loadBuiltinPrefs();
+  for (const s of list) {
+    const p = prefs.get(s.url);
+    if (!p) continue;
+    if (p.gain !== undefined) s.gain = sanitizeGain(p.gain);
+    if (p.hidden === true) s.hidden = true;
+  }
+  return list;
+}
+
+// Une station custom et une station livrée ne se persistent pas au même endroit.
+function persistStation(idx) {
+  if (stations[idx]?.isCustom) saveCustomStations(); else saveBuiltinPrefs();
 }
 
 // ─── Constantes ───
@@ -828,7 +926,7 @@ async function refreshNowPlaying() {
   pollInFlight = true;
   try {
     const targets = [];
-    stations.forEach((s, i) => { if (s.meta) targets.push({ s, i }); });
+    stations.forEach((s, i) => { if (s.meta && !s.hidden) targets.push({ s, i }); });
     // La station écoutée est prioritaire : elle doit être sondée même si elle se
     // trouve au-delà du plafond.
     const polled = targets.slice(0, MAX_META_POLL);
@@ -898,7 +996,9 @@ function setStationPressed(idx, pressed) {
   document.getElementById('stb-' + idx)?.setAttribute('aria-pressed', pressed ? 'true' : 'false');
 }
 
-// ─── Curseur de gain (stations custom) ───
+// ─── Curseur de gain (toutes stations) ───
+// Pour une station livrée, le geste ne touche pas stations.json : l'écart est
+// stocké à part par saveBuiltinPrefs() et « Restaurer » le fait disparaître.
 function buildGainControl(idx) {
   const wrap = document.createElement('div');
   wrap.className = 'station-gain';
@@ -927,7 +1027,7 @@ function buildGainControl(idx) {
   });
   // Une écriture localStorage par pixel de glissement serait gâchée : on persiste
   // sur 'change', c'est-à-dire une seule fois, à la fin du geste.
-  slider.addEventListener('change', saveCustomStations);
+  slider.addEventListener('change', () => persistStation(idx));
 
   // Plus besoin de stopPropagation : le gestionnaire de lecture est sur le bouton
   // de nom, pas sur le <li>, et ce contrôle passe au-dessus de sa zone de clic
@@ -947,6 +1047,7 @@ function buildStationList() {
   // pourrait s'appeler « constructor » ou « __proto__ ».
   const groups = new Map();
   stations.forEach((s, i) => {
+    if (s.hidden) return;
     const key = groupKey(s.group);
     if (!groups.has(key)) groups.set(key, { label: s.group, list: [] });
     groups.get(key).list.push({ ...s, idx: i });
@@ -998,7 +1099,7 @@ function buildStationList() {
 
       const npEl = document.createElement('div'); npEl.className = 'station-np'; npEl.id = 'snp-' + s.idx; npEl.textContent = nowPlayingData[s.url] || '...';
       info.appendChild(nameBtn); info.appendChild(npEl);
-      if (s.isCustom) info.appendChild(buildGainControl(s.idx));
+      info.appendChild(buildGainControl(s.idx));
 
       // Redondance visuelle de aria-pressed : masqué aux lecteurs d'écran.
       const status = document.createElement('span');
@@ -1009,20 +1110,88 @@ function buildStationList() {
       renderStatus(status, s.idx === current ? (audio.paused ? 'tune' : 'onair') : 'tune');
 
       li.appendChild(dot); li.appendChild(info); li.appendChild(status);
-      if (s.isCustom) {
-        const del = document.createElement('button');
-        del.type = 'button';
-        del.className = 'del-btn'; del.textContent = '✕';
-        del.title = 'Supprimer';
-        del.setAttribute('aria-label', 'Supprimer ' + s.name);
-        del.addEventListener('click', () => deleteStation(s.idx));
-        li.appendChild(del);
-      }
+
+      const del = document.createElement('button');
+      del.type = 'button';
+      del.className = 'del-btn'; del.textContent = '✕';
+      del.title = 'Masquer (récupérable dans la corbeille)';
+      del.setAttribute('aria-label', 'Masquer ' + s.name);
+      del.addEventListener('click', () => hideStation(s.idx));
+      li.appendChild(del);
+
       ul.appendChild(li);
     });
     g.appendChild(ul);
     wrap.appendChild(g);
   });
+  buildTrashSection(wrap);
+}
+
+// La corbeille se referme à chaque re-rendu de la liste, or restaurer une station
+// en re-rend une : sans mémoriser l'état d'ouverture, elle se replierait sous le
+// curseur après chaque restauration.
+let trashOpen = false;
+
+function buildTrashSection(wrap) {
+  const hiddenList = [];
+  stations.forEach((s, i) => { if (s.hidden) hiddenList.push({ ...s, idx: i }); });
+  if (!hiddenList.length) return;
+
+  const det = document.createElement('details');
+  det.className = 'trash';
+  det.open = trashOpen;
+  det.addEventListener('toggle', () => { trashOpen = det.open; });
+
+  const sum = document.createElement('summary');
+  sum.className = 'trash-summary';
+  // Les tirets reprennent la ligne des titres de groupe (VT323 n'a pas de glyphe
+  // de corbeille : un emoji s'y afficherait en carré vide).
+  const dashL = document.createElement('span'); dashL.setAttribute('aria-hidden', 'true'); dashL.textContent = '── ';
+  const dashR = document.createElement('span'); dashR.setAttribute('aria-hidden', 'true'); dashR.textContent = ' ──';
+  sum.appendChild(dashL);
+  sum.appendChild(document.createTextNode('Stations masquées (' + hiddenList.length + ')'));
+  sum.appendChild(dashR);
+  det.appendChild(sum);
+
+  const ul = document.createElement('ul');
+  ul.className = 'trash-list';
+  hiddenList.forEach(s => {
+    const li = document.createElement('li');
+    li.className = 'trash-item';
+
+    const name = document.createElement('span');
+    name.className = 'trash-name';
+    name.textContent = s.name;
+
+    const grp = document.createElement('span');
+    grp.className = 'trash-group';
+    grp.textContent = s.group;
+
+    const restore = document.createElement('button');
+    restore.type = 'button';
+    restore.className = 'trash-btn';
+    restore.textContent = '↺ Restaurer';
+    restore.setAttribute('aria-label', 'Restaurer ' + s.name);
+    restore.addEventListener('click', () => restoreStation(s.idx));
+
+    li.appendChild(name); li.appendChild(grp); li.appendChild(restore);
+
+    // Seules les custom peuvent disparaître pour de bon : une station livrée est
+    // relue dans stations.json au prochain chargement.
+    if (s.isCustom) {
+      const purge = document.createElement('button');
+      purge.type = 'button';
+      purge.className = 'trash-btn danger';
+      purge.textContent = '✕ Supprimer';
+      purge.title = 'Supprimer définitivement';
+      purge.setAttribute('aria-label', 'Supprimer définitivement ' + s.name);
+      purge.addEventListener('click', () => purgeStation(s.idx));
+      li.appendChild(purge);
+    }
+    ul.appendChild(li);
+  });
+  det.appendChild(ul);
+  wrap.appendChild(det);
 }
 
 // Propose les groupes existants dans le champ d'ajout : sans ça, chaque station
@@ -1132,7 +1301,7 @@ function restoreLastStation() {
   let url;
   try { url = localStorage.getItem('lastStationUrl'); } catch { return; }
   if (!url) return;
-  const idx = stations.findIndex(s => s.url === url);
+  const idx = stations.findIndex(s => s.url === url && !s.hidden);
   if (idx < 0) return;
   setUI(idx);
   applyPausedState('▶ PLAY', 'tune');
@@ -1178,8 +1347,17 @@ function togglePlay() {
 }
 
 function stopRadio() { clearReconnect(); cancelSleepTimer(); audio.pause(); setUI(-1); detachStream(); }
-function nextStation() { if (stations.length) playStation((current + 1) % stations.length); }
-function prevStation() { if (stations.length) playStation((current - 1 + stations.length) % stations.length); }
+// Parcourt dans l'ordre de `stations` en sautant les masquées : elles restent
+// dans le tableau (la corbeille en vit), mais ← et → ne doivent pas y tomber.
+function stepStation(dir) {
+  const n = stations.length;
+  for (let k = 1; k <= n; k++) {
+    const i = ((current + dir * k) % n + n) % n;
+    if (!stations[i].hidden) { playStation(i); return; }
+  }
+}
+function nextStation() { stepStation(1); }
+function prevStation() { stepStation(-1); }
 
 function updateMuteBtn() {
   const btn = document.getElementById('btn-mute');
@@ -1263,14 +1441,40 @@ function onSleepTick() {
   }
 }
 
-// ─── Suppression de station custom ───
-function deleteStation(idx) {
+// ─── Corbeille : masquer, restaurer, supprimer définitivement ───
+// Le ✕ d'une ligne masque, il ne supprime pas : une station livrée doit pouvoir
+// revenir sans vider le localStorage, et une station custom masquée par erreur
+// emporterait son URL et son gain avec elle. La suppression définitive n'existe
+// donc que depuis la corbeille, et seulement pour les stations custom — une
+// station livrée est toujours dans stations.json, la « supprimer » n'aurait de
+// sens que jusqu'au prochain rechargement.
+function hideStation(idx) {
+  const s = stations[idx];
+  if (!s || s.hidden) return;
+  if (current === idx) stopRadio();
+  s.hidden = true;
+  persistStation(idx);
+  buildStationList();
+}
+
+function restoreStation(idx) {
+  const s = stations[idx];
+  if (!s || !s.hidden) return;
+  s.hidden = false;
+  persistStation(idx);
+  buildStationList();
+  refreshOne(idx);
+}
+
+function purgeStation(idx) {
+  const s = stations[idx];
+  if (!s || !s.isCustom) return;
   if (current === idx) stopRadio();
   else if (current > idx) current--;
   const [removed] = stations.splice(idx, 1);
   // nowPlayingData étant indexé par URL, il n'y a rien à réindexer — juste à nettoyer
   // l'entrée devenue orpheline (sauf si une autre station partage la même URL).
-  if (removed && !stations.some(s => s.url === removed.url)) delete nowPlayingData[removed.url];
+  if (removed && !stations.some(s2 => s2.url === removed.url)) delete nowPlayingData[removed.url];
   saveCustomStations();
   buildStationList();
 }
@@ -1430,7 +1634,14 @@ function guessMetaType(url) {
 // Ajout effectif dans la bibliothèque, partagé par le formulaire, l'annuaire et
 // l'import : normalisation, dédoublonnage par URL, persistance, rendu.
 function addToLibrary(raw) {
-  if (stations.some(s => s.url === raw.url)) return false;
+  // Une station masquée occupe toujours son URL : la ré-ajouter doit la faire
+  // réapparaître, sinon l'ajout échoue sur un doublon que l'utilisateur ne voit pas.
+  const dup = stations.findIndex(s => s.url === raw.url);
+  if (dup >= 0) {
+    if (!stations[dup].hidden) return false;
+    restoreStation(dup);
+    return true;
+  }
   const s = normalizeStation(raw, true);
   stations.push(s);
   saveCustomStations();
@@ -1563,7 +1774,7 @@ function buildDirectoryRow(r) {
 // ─── Export / import des stations custom ───
 function exportStations() {
   const msg = document.getElementById('add-msg');
-  const custom = stations.filter(s => s.isCustom);
+  const custom = stations.filter(s => s.isCustom && !s.hidden);
   if (!custom.length) {
     msg.textContent = '⚠ Aucune station custom à exporter.'; msg.className = 'add-msg err';
     setTimeout(() => { msg.textContent = ''; msg.className = 'add-msg'; }, 3000);
@@ -1587,12 +1798,21 @@ async function importStations(file) {
     const list = Array.isArray(data) ? data : [data];
     const valid = list.filter(isValidStation);
     if (!valid.length) throw new Error('empty');
-    const existingUrls = new Set(stations.map(s => s.url));
+    const existingUrls = new Map(stations.map((s, i) => [s.url, i]));
     let added = 0;
     valid.forEach(s => {
-      if (existingUrls.has(s.url) || !isSafeHttpUrl(s.url)) return;
+      if (!isSafeHttpUrl(s.url)) return;
+      if (existingUrls.has(s.url)) {
+        // Même raison que dans addToLibrary : un doublon masqué est réaffiché.
+        const at = existingUrls.get(s.url);
+        if (!stations[at].hidden) return;
+        stations[at].hidden = false;
+        persistStation(at);
+        added++;
+        return;
+      }
       stations.push(normalizeStation(s, true));
-      existingUrls.add(s.url);
+      existingUrls.set(s.url, stations.length - 1);
       added++;
     });
     saveCustomStations();
@@ -1655,8 +1875,12 @@ document.addEventListener('keydown', e => {
     STATIONS = [];
     document.getElementById('np-station').textContent = '⚠ ERREUR CHARGEMENT stations.json';
   }
+  const builtins = STATIONS.filter(isValidStation).map(s => normalizeStation(s, false));
+  // Relevé avant toute retouche : saveBuiltinPrefs() ne persiste que les écarts
+  // à stations.json, il lui faut la valeur du fichier.
+  builtinDefaultGain = new Map(builtins.map(s => [s.url, s.gain]));
   stations = [
-    ...STATIONS.filter(isValidStation).map(s => normalizeStation(s, false)),
+    ...applyBuiltinPrefs(builtins),
     ...loadCustomStations()
   ];
 

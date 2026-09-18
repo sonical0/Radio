@@ -28,7 +28,9 @@ Pas d'étape de build, pas de gestionnaire de paquets, pas de framework. On sert
 - **Tes propres regroupements.** Un groupe est un libellé libre — un jeu, un genre, un
   pays — et non une liste figée.
 - **Gain par station**, pour qu'un flux plus fort que les autres ne t'arrache pas les
-  oreilles au changement.
+  oreilles au changement — sur les stations livrées aussi, sans toucher à `stations.json`.
+- **Masque les stations que tu n'écoutes pas**, y compris celles livrées avec le site. Le
+  masquage est réversible : une corbeille dépliable en bas de liste les rend une par une.
 - **Minuterie de veille** avec fondu progressif, **touches multimédia** et contrôles depuis
   l'écran verrouillé (Media Session API), **raccourcis clavier**, et reconnexion automatique
   quand un flux tombe.
