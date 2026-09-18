@@ -28,6 +28,19 @@ npm run android    # appareil ou émulateur ; nécessite un dev build, pas Expo 
 
 **`src/data/stations.json` est une copie de `stations.json` de la racine.** Metro ne sort pas de `app/`, et un lien symbolique ne survit ni à Windows ni à la synchro. Les deux fichiers doivent être modifiés ensemble tant qu'on n'a pas décidé lequel fait foi. À trancher avant le jalon 3.
 
+## Build Android : deux obstacles, un corrigé, un à installer
+
+**Corrigé, et figé dans .** RNTP 4.1.2 ne compile pas avec le Kotlin d'Expo 57 :  n'accepte plus de , et deux appels de  lui en passent un. Le correctif garde la sémantique d'origine (null reste null, plutôt qu'un bundle vide) et vit dans , réappliqué par  au . **Ne pas supprimer ce script** : sans lui, un Unknown command: "install"
+
+
+Did you mean one of these?
+  npm install # Install a package
+  npm uninstall # Remove a package
+To see a list of supported npm commands, run:
+  npm help casse le build Android en silence.
+
+**À installer une fois sur le poste.** React Native 0.86 demande **CMake 3.30.5** ; seule la 3.22.1 était présente, et AGP retombe dessus sans rien dire. Le lien natif échoue alors sur des symboles  absents (, …), dans  comme dans . Ça ne se corrige pas dans le dépôt : Android Studio → SDK Manager → SDK Tools → *Show Package Details* → cocher **CMake 3.30.5**. Le NDK, lui, est bon (27.1.12297006, la version attendue).
+
 ## Ce que le natif change par rapport au site
 
 Deux verrous du navigateur tombent, et c'est ce qui justifie le portage :
