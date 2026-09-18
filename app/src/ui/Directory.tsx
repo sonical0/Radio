@@ -25,9 +25,21 @@ export function Directory({ onAdd, onFieldFocus }: Props) {
   // après elle : seul le dernier numéro de séquence a le droit d'écrire.
   const seq = useRef(0);
 
+  const clear = useCallback(() => {
+    // Repartir de zéro : la liste, le message et la mémoire des ajouts. Sans
+    // ça, une recherche restait affichée jusqu à la suivante, sans moyen de la
+    // faire disparaître.
+    seq.current += 1;
+    setQuery('');
+    setHits(null);
+    setMsg('');
+    setAdded({});
+  }, []);
+
   const run = useCallback(async () => {
     const q = query.trim();
-    if (!q) return;
+    // Chercher à vide vide la liste, comme sur le site.
+    if (!q) { clear(); return; }
     const mine = ++seq.current;
     setBusy(true);
     setMsg('⟳ Recherche…');
@@ -41,7 +53,7 @@ export function Directory({ onAdd, onFieldFocus }: Props) {
     } finally {
       if (mine === seq.current) setBusy(false);
     }
-  }, [query]);
+  }, [query, clear]);
 
   const add = useCallback(
     async (hit: DirectoryHit) => {
@@ -78,6 +90,15 @@ export function Directory({ onAdd, onFieldFocus }: Props) {
             accessibilityLabel="Chercher">
             <Text style={[t.btnText, busy && t.btnOff]}>⌕ CHERCHER</Text>
           </Pressable>
+          {hits || msg ? (
+            <Pressable
+              style={t.btn}
+              onPress={clear}
+              accessibilityRole="button"
+              accessibilityLabel="Effacer les résultats">
+              <Text style={t.btnText}>✕</Text>
+            </Pressable>
+          ) : null}
           {busy ? <ActivityIndicator color={p.base} /> : null}
         </View>
 
