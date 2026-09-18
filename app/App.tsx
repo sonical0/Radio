@@ -100,7 +100,7 @@ function Radio() {
         <StatusBar barStyle="light-content" backgroundColor={p.bg} />
 
         <View style={t.header}>
-          <Text style={t.title}>FALLOUT RADIO</Text>
+          <Text style={t.title} numberOfLines={1}>FALLOUT RADIO</Text>
           <View style={s.headerRight}>
             <Pressable
               onPress={() => setSettingsOpen(true)}
@@ -200,5 +200,5 @@ const makeStyles = (p: Palette) =>
     opacity: 0.8,
   },
   footerSpace: { height: 28 },
-    headerRight: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+    headerRight: { flexDirection: 'row', alignItems: 'center', gap: 10, flexShrink: 0 },
   });

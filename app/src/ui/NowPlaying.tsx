@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import Slider from '@react-native-community/slider';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import type { Station } from '../model/station';
 import type { StreamState } from '../player/usePlayback';
@@ -119,6 +119,11 @@ export function NowPlaying(np: Props) {
         </Pressable>
       </View>
 
+      {/* Le volume général n'a pas lieu d'être sur un téléphone : les touches
+          physiques le font déjà, et un second réglage en série avec le premier
+          ne fait que compliquer le dosage. Le gain par station, lui, reste : il
+          règle l'équilibre entre stations, pas le niveau de sortie. */}
+      {Platform.OS === 'web' ? (
       <View style={s.volRow}>
         <Pressable
           onPress={np.onToggleMute}
@@ -144,6 +149,7 @@ export function NowPlaying(np: Props) {
         />
         <Text style={s.volVal}>{Math.round((np.muted ? 0 : np.master) * 100)}%</Text>
       </View>
+      ) : null}
 
       <Visualizer active={np.playing} />
     </View>

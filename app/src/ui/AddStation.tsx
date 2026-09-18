@@ -20,6 +20,10 @@ export function AddStation({ groups, onAdd, onExport, onImport }: Props) {
   const [url, setUrl] = useState('');
   const [metaUrl, setMetaUrl] = useState('');
   const [busy, setBusy] = useState(false);
+  // Repliée par défaut : sur un téléphone, quatre champs et trois boutons
+  // repoussent l'annuaire hors de l'écran alors qu'on ajoute rarement une
+  // station à la main. Même traitement que la corbeille.
+  const [open, setOpen] = useState(false);
   const [msg, setMsg] = useState<Outcome | null>(null);
 
   const run = async (fn: () => Promise<Outcome>, clear = false) => {
@@ -37,7 +41,14 @@ export function AddStation({ groups, onAdd, onExport, onImport }: Props) {
 
   return (
     <View style={s.wrap}>
-      <Text style={t.sectionLabel}>Ajouter une station</Text>
+      <Pressable
+        onPress={() => setOpen((o) => !o)}
+        accessibilityRole="button"
+        accessibilityState={{ expanded: open }}
+        accessibilityLabel="Ajouter une station">
+        <Text style={t.sectionLabel}>{(open ? '▾ ' : '▸ ') + 'Ajouter une station'}</Text>
+      </Pressable>
+      {open ? (
       <View style={s.body}>
         <TextInput
           style={t.input}
@@ -112,6 +123,7 @@ export function AddStation({ groups, onAdd, onExport, onImport }: Props) {
           {msg?.message ?? ' '}
         </Text>
       </View>
+      ) : null}
     </View>
   );
 }

@@ -102,6 +102,9 @@ export function makeShared(p: Palette) {
       paddingVertical: 10,
     },
     title: {
+      // Rétractable : sur un écran étroit, c est le titre qui cède, pas
+      // l heure, qui se retrouvait coupée au bord.
+      flexShrink: 1,
       color: p.base,
       fontFamily: FONT_DISPLAY,
       fontSize: 30,
@@ -110,7 +113,7 @@ export function makeShared(p: Palette) {
       // rognées sur Android comme sur le web.
       lineHeight: 34,
     },
-    clock: { color: p.dim, fontFamily: FONT_DISPLAY, fontSize: 24, letterSpacing: 2, lineHeight: 28 },
+    clock: { flexShrink: 0, color: p.dim, fontFamily: FONT_DISPLAY, fontSize: 24, letterSpacing: 2, lineHeight: 28 },
 
     sectionLabel: {
       color: p.dim,

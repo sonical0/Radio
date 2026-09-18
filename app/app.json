@@ -19,10 +19,9 @@
     "android": {
       "package": "dev.sonical.falloutradio",
       "adaptiveIcon": {
-        "backgroundColor": "#0a0f0a",
         "foregroundImage": "./assets/android-icon-foreground.png",
-        "backgroundImage": "./assets/android-icon-background.png",
-        "monochromeImage": "./assets/android-icon-monochrome.png"
+        "monochromeImage": "./assets/android-icon-foreground.png",
+        "backgroundColor": "#0a0f0a"
       },
       "predictiveBackGestureEnabled": false,
       "permissions": [

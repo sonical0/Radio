@@ -3,6 +3,7 @@
 
 import TrackPlayer, { Event, PlaybackState, useIsPlaying } from '@rntp/player';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { Platform } from 'react-native';
 
 import type { Station } from '../model/station';
 import {
@@ -24,7 +25,10 @@ import {
 /** Ce que la ligne « now playing » affiche en plus du titre. */
 export type StreamState = 'idle' | 'buffering' | 'playing' | 'reconnecting' | 'dropped';
 
-const DEFAULT_VOLUME = 0.7;
+// Sur téléphone, le volume général est celui du système : l'appli sort à plein
+// niveau et laisse les touches physiques faire leur travail. Sur le web, où la
+// page n'a pas de bouton de volume, le réglage existe et vaut 0,7 par défaut.
+const DEFAULT_VOLUME = Platform.OS === 'web' ? 0.7 : 1;
 // Mêmes valeurs que sur le site : trois tentatives espacées de deux secondes
 // avant de renoncer et de le dire.
 const MAX_RECONNECT = 3;
@@ -57,6 +61,7 @@ export function usePlayback(stations: Station[]) {
 
   // ─── Reprise de l'état ───
   useEffect(() => {
+    if (Platform.OS !== 'web') return;
     (async () => {
       const v = parseFloat((await readString(KEY_VOLUME)) ?? '');
       if (isFinite(v) && v >= 0 && v <= 1) {
