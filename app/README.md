@@ -2,7 +2,7 @@
 
 Portage mobile du site, sur la branche `react-native/dev`. Le site en HTML pur reste sur `main` et n'est pas touché : on ajoute une cible, on ne migre pas.
 
-## État : jalons 1 à 3 atteints
+## État : jalons 1 à 4 atteints
 
 **Jalon 1 — la lecture.** Les stations jouent, la lecture **continue quand l app passe en arrière-plan**, avec notification média et contrôles de l écran verrouillé. Le titre y vient des métadonnées **ICY lues dans le flux** par le natif. Côté web, `navigator.mediaSession` est renseigné.
 
@@ -16,7 +16,11 @@ Deux défauts trouvés en testant, tous deux corrigés : une station restaurée 
 
 **Non vérifié :** les dialogues d import/export (feuille de partage, sélecteur de fichier), et la cible web depuis le jalon 2 — seulement sa compilation.
 
-Pas encore porté : l annuaire Radio-Browser, les raccourcis clavier de la cible web, et tout l habillage Pip-Boy (scanline, flicker, ticker, polices VT323, visualiseur).
+**Jalon 4 — l annuaire Radio-Browser.** Recherche par nom puis repli sur le tag quand le nom ne donne rien (« jazz » est un genre, pas une station), résultats triés par popularité, fiche affichant pays · codec · débit · tags, et ajout en un appui. Le pays sert de groupe par défaut : une recherche ramène des stations de dix pays, un fourre-tout unique n aiderait personne. Les flux `http://` sont écartés — contenu mixte bloqué par le navigateur côté web, trafic en clair refusé par Android depuis l API 28 : même règle, deux raisons.
+
+Vérifié sur l émulateur de bout en bout : recherche « jazz », ajout de *Jazz 24*, la station entre dans la bibliothèque sous un groupe « US », survit à un redémarrage et joue.
+
+Pas encore porté : les raccourcis clavier de la cible web, et tout l habillage Pip-Boy (scanline, flicker, ticker, polices VT323, visualiseur).
 
 ## Lancer
 

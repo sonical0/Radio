@@ -16,6 +16,7 @@ import { usePlayback } from './src/player/usePlayback';
 import { groupStations, knownGroups } from './src/store/library';
 import { useLibrary } from './src/store/useLibrary';
 import { AddStation } from './src/ui/AddStation';
+import { Directory } from './src/ui/Directory';
 import { NowPlaying } from './src/ui/NowPlaying';
 import { StationRow } from './src/ui/StationRow';
 import { Trash } from './src/ui/Trash';
@@ -129,6 +130,7 @@ export default function App() {
                 onExport={lib.exportStations}
                 onImport={lib.importStations}
               />
+              <Directory onAdd={lib.addStation} />
               <View style={s.footerSpace} />
             </View>
           }
