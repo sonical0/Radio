@@ -55,6 +55,18 @@ Everything lives in `index.html` as three inline sections:
    - `exportStations()` / `importStations()` — download/upload custom stations as JSON, with schema + host validation on import.
    - Visualizer — 34 `div.vis-bar` elements driven by a `setInterval` with random heights when playing; `startVis()` / `stopVis()`. Heights are decorative, not real FFT data (see "Adding a Built-in Station" for why Web Audio is off-limits here). Paused while the tab is hidden.
 
+## Screen Colour
+
+Four palettes ship: green (the default), amber, blue and white. They are plain `:root[data-theme="…"]` blocks redefining the variables the whole sheet already uses, so nothing else in the CSS knows a theme exists. The variables keep their `--green-*` names in every palette — renaming them would touch the entire sheet and a variable's name is not what anyone sees.
+
+`--accent-rgb` carries the main hue as components. Six `rgba()` were hardcoded (title glow, header shadow, hovered and playing row backgrounds) and a hex variable cannot serve those; without it they would have stayed green on an amber screen. If you add a translucent accent anywhere, use `rgba(var(--accent-rgb), …)` or it will not follow the theme.
+
+The choice is stored in `localStorage.themePalette` — the same key the React Native app uses — and applied by a short script in `<head>`, not by the main script at the end of the body: otherwise the page paints green before switching. Green is represented by the *absence* of `data-theme`, so a page that has never been set carries no attribute and no override.
+
+Each palette's `--green-dim` sits between 5.5 and 8.0:1 against its own `--bg3`, matching the green's 5.9:1. Check a new palette against that before adding it — the dim tone is what the secondary text uses everywhere.
+
+While the settings dialog is open the global keyboard shortcuts stand down and only Escape is handled; stopping the radio by typing "s" in a dialog would be a nasty surprise.
+
 ## Adding a Built-in Station
 
 Add an entry to `stations.json` (not the JS — `STATIONS` is loaded from this file at runtime):

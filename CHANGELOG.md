@@ -8,6 +8,32 @@ Ordre : **entrée la plus récente en tête**. Plusieurs passes le même jour so
 suffixées `(2)`, `(3)`… la plus haute étant la plus récente (même convention que
 `TANDEM_LOG.md`).
 
+## 2026-09-18 (2)
+
+### Ajouté — la couleur de l'écran se choisit
+- **Bouton ⚙ à gauche de l'horloge**, ouvrant un panneau « RÉGLAGES » où l'on choisit parmi
+  les quatre écrans de Pip-Boy : **vert** (inchangé), **ambre**, **bleu**, **blanc**. Le choix
+  est retenu dans `localStorage.themePalette` — même clé que l'application mobile, qui a reçu
+  la fonctionnalité en premier.
+- **Trois blocs `:root[data-theme="…"]`** redéfinissent les variables existantes. Les noms
+  restent `--green-*` même en ambre : les renommer toucherait toute la feuille pour aucun
+  gain, et le nom d'une variable n'est pas ce que l'utilisateur voit.
+- **Nouvelle variable `--accent-rgb`**, la teinte principale en composantes. Six `rgba()`
+  étaient écrits en dur (`rgba(57,255,106,…)`) pour les halos du titre, l'ombre de l'en-tête
+  et les fonds de ligne survolée : une couleur hexadécimale ne peut pas les servir, et sans
+  cette variable ils seraient restés verts sur fond ambre.
+- **Le thème est appliqué avant le premier rendu**, par un court script en `<head>` — sinon la
+  page s'afficherait en vert le temps du chargement avant de virer.
+- **Contraste mesuré, pas choisi à l'œil** : chaque palette garde son `--green-dim` entre
+  5,5 et 8,0 : 1 sur son propre `--bg3`, au niveau du vert d'origine (5,9 : 1). Le texte
+  secondaire reste lisible quelle que soit la couleur.
+- Panneau accessible : `role="dialog"`, options en `role="radio"` avec `aria-checked`, focus
+  porté sur l'option cochée à l'ouverture et rendu au bouton ⚙ à la fermeture. Chaque option
+  est affichée dans sa teinte **et** nommée — une couleur seule ne dit rien à qui ne la
+  distingue pas.
+- **Échap referme**, et tant que le panneau est ouvert les raccourcis globaux se taisent :
+  taper « s » dans une boîte de dialogue ne doit pas couper la radio.
+
 ## 2026-09-18
 
 ### Changé — gain et masquage pour toutes les stations, corbeille

@@ -28,6 +28,7 @@ No build step, no package manager, no framework. Serve the folder and it runs.
   or genre and add a station in one click.
 - **Your own groupings.** A group is a free label — a game, a genre, a country — not a fixed
   list.
+- **Four Pip-Boy screen colours** — green, amber, blue or white, from the gear button next to the clock. The choice sticks.
 - **Per-station gain**, so a loud stream stops blowing your ears off when you switch to it —
   on the built-in stations too, without touching `stations.json`.
 - **Hide any station you don't listen to**, built-in ones included. Hiding is reversible: a

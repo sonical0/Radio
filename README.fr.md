@@ -27,6 +27,7 @@ Pas d'étape de build, pas de gestionnaire de paquets, pas de framework. On sert
   nom ou par genre, et ajoute une station en un clic.
 - **Tes propres regroupements.** Un groupe est un libellé libre — un jeu, un genre, un
   pays — et non une liste figée.
+- **Quatre couleurs d écran Pip-Boy** — vert, ambre, bleu ou blanc, par le bouton ⚙ à côté de l horloge. Le choix est retenu.
 - **Gain par station**, pour qu'un flux plus fort que les autres ne t'arrache pas les
   oreilles au changement — sur les stations livrées aussi, sans toucher à `stations.json`.
 - **Masque les stations que tu n'écoutes pas**, y compris celles livrées avec le site. Le
