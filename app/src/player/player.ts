@@ -46,8 +46,19 @@ export function setupPlayer(): void {
   ready = true;
 }
 
+/**
+ * Toute opération passe par là. Les effets de usePlayback se déclenchent avant
+ * celui qui configure le lecteur (les hooks appelés en premier posent leurs
+ * effets en premier), et la v5 refuse tout appel avant setupPlayer() — sur le
+ * web elle lève, ce que le natif laissait passer en silence. Plutôt que de
+ * dépendre d un ordre de montage, chaque fonction s assure elle-même.
+ */
+function ensure(): void {
+  if (!ready) setupPlayer();
+}
 /** Charge une station et lance la lecture. */
 export function playStation(s: Station, master: number): void {
+  ensure();
   TrackPlayer.setMediaItem({
     mediaId: s.url,
     url: s.url,
@@ -67,16 +78,19 @@ export function playStation(s: Station, master: number): void {
  * amplifier au-delà du maximum.
  */
 export function setVolume(s: Station | null, master: number): void {
+  ensure();
   const g = s ? s.gain : 1;
   TrackPlayer.setVolume(Math.max(0, Math.min(1, master * g)));
 }
 
 export function togglePlay(playing: boolean): void {
+  ensure();
   if (playing) TrackPlayer.pause();
   else TrackPlayer.play();
 }
 
 export function stop(): void {
+  ensure();
   TrackPlayer.stop();
   TrackPlayer.clear();
 }
@@ -87,6 +101,7 @@ export function stop(): void {
  * ne garde que la politique (combien de fois, à quel rythme), dans usePlayback.
  */
 export function retry(): void {
+  ensure();
   TrackPlayer.retry();
 }
 
@@ -97,6 +112,7 @@ const FADE_OUT_SECONDS = 20;
 
 /** Arme la minuterie, ou l'annule si `minutes` vaut 0. */
 export function setSleepTimer(minutes: number): void {
+  ensure();
   if (!minutes) {
     TrackPlayer.cancelSleepTimer();
     return;

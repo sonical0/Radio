@@ -35,18 +35,19 @@ function StationRowBase({
 }: Props) {
   return (
     <View style={[s.row, active && (status === 'ON AIR' ? s.rowPlaying : s.rowSelected)]}>
-      <Pressable
-        style={s.main}
-        onPress={() => onSelect(station)}
-        accessibilityRole="button"
-        accessibilityState={{ selected: active }}
-        accessibilityLabel={station.name}>
-        <Text style={[s.name, active && s.nameActive]} numberOfLines={1}>
-          {station.name}
-        </Text>
-        <Text style={s.np} numberOfLines={1}>
-          {nowPlaying ?? '...'}
-        </Text>
+      <View style={s.main}>
+        <Pressable
+          onPress={() => onSelect(station)}
+          accessibilityRole="button"
+          accessibilityState={{ selected: active }}
+          accessibilityLabel={station.name}>
+          <Text style={[s.name, active && s.nameActive]} numberOfLines={1}>
+            {station.name}
+          </Text>
+          <Text style={s.np} numberOfLines={1}>
+            {nowPlaying ?? '...'}
+          </Text>
+        </Pressable>
         <View style={s.gainRow}>
           <Text style={s.gainLabel}>GAIN</Text>
           <Slider
@@ -66,7 +67,7 @@ function StationRowBase({
           />
           <Text style={s.gainVal}>{Math.round(station.gain * 100)}%</Text>
         </View>
-      </Pressable>
+      </View>
 
       <View style={s.side}>
         <Text style={s.status}>{status}</Text>
