@@ -412,6 +412,17 @@
     flex: 1;
     min-width: 120px;
   }
+  /* Le formulaire d'ajout se replie, comme la corbeille : quatre champs et
+     trois boutons repoussent l'annuaire hors de l'écran pour un geste rare.
+     L'annuaire, lui, reste hors du <details> — ce sont deux choses distinctes
+     malgré leur cadre commun. */
+  .add-fold > summary { cursor: pointer; list-style: none; }
+  .add-fold > summary::-webkit-details-marker { display: none; }
+  .add-fold > summary::before { content: '▸ '; }
+  .add-fold[open] > summary::before { content: '▾ '; }
+  .add-fold > summary:hover { color: var(--green); }
+  .add-fold > summary:focus-visible { outline: 2px solid var(--green); outline-offset: 2px; }
+
   .add-input::placeholder { color: var(--green-dim); opacity: 0.6; }
   .add-input:focus { border-color: var(--green-dim); }
   .add-btn {
@@ -583,7 +594,8 @@
   <div class="stations-wrap" id="stations-wrap"></div>
 
   <div class="add-station-wrap">
-    <div class="add-title">── AJOUTER UNE STATION ──</div>
+    <details class="add-fold">
+      <summary class="add-title">── AJOUTER UNE STATION ──</summary>
     <div class="add-row">
       <label class="sr-only" for="add-name">Nom de la station</label>
       <input class="add-input" id="add-name" placeholder="Nom (ex: Fallout 4 - Far Harbor Radio)" />
@@ -604,6 +616,7 @@
       <input type="file" id="import-file" accept="application/json" style="display:none" onchange="importStations(this.files[0])">
     </div>
     <div class="add-msg" id="add-msg" aria-live="polite"></div>
+    </details>
 
     <div class="add-title" style="margin-top:16px;">── ANNUAIRE RADIO-BROWSER ──</div>
     <div class="add-row">

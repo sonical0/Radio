@@ -8,6 +8,16 @@ Ordre : **entrée la plus récente en tête**. Plusieurs passes le même jour so
 suffixées `(2)`, `(3)`… la plus haute étant la plus récente (même convention que
 `TANDEM_LOG.md`).
 
+## 2026-09-18 (3)
+
+### Changé — « Ajouter une station » se replie
+- Le formulaire d ajout est passé en `<details>`, replié par défaut, comme la corbeille :
+  quatre champs et trois boutons repoussaient l annuaire hors de l écran pour un geste rare.
+- **L annuaire reste hors du `<details>`** : les deux partagent un cadre mais ne sont pas la
+  même chose, et replier l ajout ne doit pas emporter la recherche.
+- Le chevron ▸/▾ vient d un `::before` sur le `<summary>`, et le marqueur natif est masqué
+  (`list-style: none`) pour garder la ligne de tirets du reste de l interface.
+
 ## 2026-09-18 (2)
 
 ### Ajouté — la couleur de l'écran se choisit
