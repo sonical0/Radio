@@ -13,7 +13,7 @@ import {
   Text,
   View,
 } from 'react-native';
-import { useIsPlaying } from 'react-native-track-player';
+import { useIsPlaying } from '@rntp/player';
 
 import rawStations from './src/data/stations.json';
 import { fetchMeta } from './src/model/meta';
@@ -31,12 +31,17 @@ export default function App() {
   const [error, setError] = useState<string | null>(null);
   const [current, setCurrent] = useState<Station | null>(null);
   const [nowPlaying, setNowPlaying] = useState<string | null>(null);
-  const { playing } = useIsPlaying();
+  const playing = useIsPlaying();
 
+  // setupPlayer() est synchrone en v5 (appels natifs via JSI) : plus de promesse
+  // à attendre, mais toujours à n'appeler qu'au premier plan côté Android.
   useEffect(() => {
-    setupPlayer()
-      .then(() => setReady(true))
-      .catch((e) => setError(String(e?.message ?? e)));
+    try {
+      setupPlayer();
+      setReady(true);
+    } catch (e) {
+      setError(String((e as Error)?.message ?? e));
+    }
   }, []);
 
   // Le titre en cours, uniquement pour la station écoutée tant que la liste n'est
@@ -59,17 +64,17 @@ export default function App() {
     };
   }, [current]);
 
-  const onSelect = async (s: Station) => {
+  const onSelect = (s: Station) => {
     if (current?.url === s.url) {
-      await togglePlay(!!playing);
+      togglePlay(playing);
       return;
     }
     setCurrent(s);
-    await playStation(s, MASTER_VOLUME);
+    playStation(s, MASTER_VOLUME);
   };
 
-  const onStop = async () => {
-    await stop();
+  const onStop = () => {
+    stop();
     setCurrent(null);
   };
 
@@ -91,7 +96,7 @@ export default function App() {
             disabled={!current}
             accessibilityRole="button"
             accessibilityLabel={playing ? 'Pause' : 'Lecture'}
-            onPress={() => togglePlay(!!playing)}>
+            onPress={() => togglePlay(playing)}>
             <Text style={[styles.btnText, !current && styles.btnOff]}>
               {playing ? '❚❚ PAUSE' : '▶ PLAY'}
             </Text>

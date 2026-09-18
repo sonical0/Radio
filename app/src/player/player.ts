@@ -1,77 +1,75 @@
-// Pilotage de TrackPlayer. Une seule piste dans la file à la fois : une radio
-// n'est pas une playlist, et garder la file à une entrée évite d'avoir à gérer
-// des index en plus de ceux de la liste de stations.
+// Pilotage de TrackPlayer (@rntp/player v5), pour le téléphone comme pour le
+// navigateur — la v5 embarque une implémentation web (WebTrackPlayer, shaka),
+// même si son README ne l'annonce pas.
+//
+// Une seule piste dans la file à la fois : une radio n'est pas une playlist, et
+// garder la file à une entrée évite de gérer des index en plus de ceux de la
+// liste de stations.
 
-import TrackPlayer, {
-  AndroidAudioContentType,
-  AppKilledPlaybackBehavior,
-  Capability,
-  IOSCategory,
-  IOSCategoryMode,
-} from 'react-native-track-player';
+import TrackPlayer, { PlayerCommand } from '@rntp/player';
 import type { Station } from '../model/station';
 
 let ready = false;
 
 /**
- * setupPlayer() ne doit être appelé qu'une fois, et sur Android seulement quand
- * l'appli est au premier plan (le service de lecture ne peut pas démarrer en
- * arrière-plan). L'appel est donc idempotent et fait au montage de l'écran.
+ * À n'appeler qu'une fois, et sur Android seulement quand l'appli est au premier
+ * plan — le service de lecture ne peut pas démarrer en arrière-plan. L'appel est
+ * donc idempotent et fait au montage de l'écran.
+ *
+ * Les commandes distantes sont traitées en 'native' : la notification, l'écran
+ * verrouillé et les touches du casque répondent même quand le runtime JS ne
+ * tourne plus, ce qui est précisément ce qu'on est venu chercher.
  */
-export async function setupPlayer(): Promise<void> {
+export function setupPlayer(): void {
   if (ready) return;
-  await TrackPlayer.setupPlayer({
-    autoHandleInterruptions: true,
-    androidAudioContentType: AndroidAudioContentType.Music,
-    iosCategory: IOSCategory.Playback,
-    iosCategoryMode: IOSCategoryMode.Default,
+  TrackPlayer.setupPlayer({
+    contentType: 'music',
+    handleAudioBecomingNoisy: true,
+    // Les flux Icecast/AzuraCast portent leurs titres en ICY : le natif les lit
+    // sans requête HTTP. Le sondage /api/nowplaying reste le chemin principal,
+    // les deux se complètent (l'un donne la pochette, l'autre l'instantané).
+    autoUpdateMetadataFromStream: true,
+    android: { wakeMode: 'network' },
   });
-  await TrackPlayer.updateOptions({
-    android: {
-      // Le flux s'arrête avec l'appli plutôt que de survivre en notification
-      // fantôme : on écoute une radio, pas un livre audio qu'on reprend.
-      appKilledPlaybackBehavior: AppKilledPlaybackBehavior.StopPlaybackAndRemoveNotification,
-    },
-    capabilities: [Capability.Play, Capability.Pause, Capability.Stop],
-    compactCapabilities: [Capability.Play, Capability.Pause],
-    notificationCapabilities: [Capability.Play, Capability.Pause, Capability.Stop],
-    progressUpdateEventInterval: 0,
+  // Les commandes distantes se configurent à part de setupPlayer en v5.
+  TrackPlayer.setCommands({
+    capabilities: [PlayerCommand.PlayPause, PlayerCommand.Stop],
+    handling: 'native',
   });
   ready = true;
 }
 
-/**
- * Charge une station et lance la lecture. `isLiveStream` retire la barre de
- * progression de la notification : un direct n'a ni durée ni position.
- */
-export async function playStation(s: Station, master: number): Promise<void> {
-  await TrackPlayer.reset();
-  await TrackPlayer.add({
-    id: s.url,
+/** Charge une station et lance la lecture. */
+export function playStation(s: Station, master: number): void {
+  TrackPlayer.setMediaItem({
+    mediaId: s.url,
     url: s.url,
     title: s.name,
     artist: s.group,
-    isLiveStream: true,
+    // Un direct n'est ni mis en cache ni préchargé, et la notification n'affiche
+    // pas de barre de progression.
+    isLive: true,
   });
-  await setVolume(s, master);
-  await TrackPlayer.play();
+  setVolume(s, master);
+  TrackPlayer.play();
 }
 
 /**
- * Le gain par station se réapplique à chaque changement, exactement comme sur le
- * site : volume maître × gain, borné à [0, 1]. Une station trop forte est
- * baissée, jamais l'inverse — on ne peut pas amplifier au-delà du maximum.
+ * Gain par station, même règle que sur le site : volume maître × gain, borné à
+ * [0, 1]. Une station trop forte est baissée, jamais l'inverse — on ne peut pas
+ * amplifier au-delà du maximum.
  */
-export async function setVolume(s: Station | null, master: number): Promise<void> {
+export function setVolume(s: Station | null, master: number): void {
   const g = s ? s.gain : 1;
-  await TrackPlayer.setVolume(Math.max(0, Math.min(1, master * g)));
+  TrackPlayer.setVolume(Math.max(0, Math.min(1, master * g)));
 }
 
-export async function togglePlay(playing: boolean): Promise<void> {
-  return playing ? TrackPlayer.pause() : TrackPlayer.play();
+export function togglePlay(playing: boolean): void {
+  if (playing) TrackPlayer.pause();
+  else TrackPlayer.play();
 }
 
-export async function stop(): Promise<void> {
-  await TrackPlayer.stop();
-  await TrackPlayer.reset();
+export function stop(): void {
+  TrackPlayer.stop();
+  TrackPlayer.clear();
 }
