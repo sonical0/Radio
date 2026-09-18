@@ -36,7 +36,8 @@
     },
     "plugins": [
       "expo-sharing",
-      "expo-font"
+      "expo-font",
+      "./plugins/withReleaseSigning"
     ]
   }
 }

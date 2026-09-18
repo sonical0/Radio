@@ -36,6 +36,29 @@ npm run android    # appareil ou émulateur ; dev build, pas Expo Go
 
 `npm run ios` demande un Mac. EAS Build permettrait de s'en passer le jour où ça compte.
 
+## Build release (APK signé)
+
+```bash
+cd android && ./gradlew assembleRelease
+```
+
+La signature est injectée par `plugins/withReleaseSigning.js`, un plugin de configuration : `expo prebuild` régénère `android/`, donc tout réglage écrit à la main dedans disparaîtrait à la passe suivante. Le plugin lit `keystore/credentials.properties` et pousse les valeurs dans `gradle.properties`.
+
+**Le dossier `keystore/` est hors dépôt, et doit le rester.** Il contient le trousseau et son mot de passe. Android n'accepte une mise à jour que signée par la même clé : perdre ce fichier, c'est ne plus pouvoir mettre à jour l'app installée — il faudrait la désinstaller et repartir de zéro, en perdant les stations ajoutées. À sauvegarder ailleurs que sur ce seul disque.
+
+### Le piège Windows : 260 caractères
+
+Le build release échoue avec `ninja: error: mkdir(...): No such file or directory` sur un chemin interminable. CMake reflète le chemin source complet dans l'arborescence de ses fichiers objets, et le seul mot `RelWithDebInfo` suffit à faire déborder la limite de Windows. Le build debug, lui, passe : son dossier s'appelle `Debug`.
+
+**Activer `LongPathsEnabled` dans le registre ne suffit pas** — vérifié : le drapeau n'agit que sur les programmes qui se déclarent *long path aware*, et ninja ne l'est pas. La parade retenue est de compiler depuis une copie à chemin court :
+
+```powershell
+robocopy "<projet>\app" C:\RB /E /XD "<projet>\app\.git" "<projet>\app\android\build" "<projet>\app\android\.gradle" "<projet>\app\android\app\build"
+cd C:\RB\android ; ./gradlew assembleRelease
+```
+
+Exclure les dossiers par **chemin absolu**. Un `/XD build` tout court emporte aussi les `node_modules/*/build`, où les modules Expo rangent leur JS compilé — la copie paraît complète et le build échoue plus loin, sans rapport apparent.
+
 ## Décisions à connaître avant de toucher aux dépendances
 
 **Le lecteur est `@rntp/player` v5, pas `react-native-track-player` v4.** La v4 ne tourne pas sur la nouvelle architecture : elle compile (au prix de correctifs Kotlin), passe le parsing TurboModule (au prix de 37 autres), puis meurt à l'exécution sur `RuntimeException: You should not use ReactNativeHost directly in the New Architecture` — son `MusicService` repose sur `HeadlessJsTaskService`, qui n'existe plus. Ce n'est pas rattrapable par un patch, c'est le mécanisme même du service de lecture. Ne pas y revenir.
