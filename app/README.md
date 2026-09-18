@@ -2,18 +2,17 @@
 
 Portage mobile du site, sur la branche `react-native/dev`. Le site en HTML pur reste sur `main` et n'est pas touché : on ajoute une cible, on ne migre pas.
 
-## État : jalon 1 atteint — le son d'abord
+## État : jalons 1 et 2 atteints
 
-Vérifié sur émulateur Android (Pixel 8a, API 36) et dans le navigateur :
+**Jalon 1 — la lecture.** Vérifié sur émulateur Android (Pixel 8a, API 36) et dans le navigateur : les stations jouent, la lecture **continue quand l app passe en arrière-plan**, avec une notification média (`FOREGROUND_SERVICE`, `category=transport`) et les contrôles de l écran verrouillé. Le titre y vient des métadonnées **ICY lues dans le flux** par le natif. Côté web, `navigator.mediaSession` est renseigné.
 
-- les 11 stations de `stations.json` se chargent et jouent ;
-- la lecture **continue quand l'appli passe en arrière-plan**, avec une notification média (`FOREGROUND_SERVICE`, `category=transport`) et les contrôles de l'écran verrouillé ;
-- le titre en cours s'affiche par deux chemins complémentaires : le sondage `/api/nowplaying` (30 s, porté du site) et les métadonnées **ICY lues dans le flux** par le natif, qui alimentent la notification système ;
-- côté web, `navigator.mediaSession` est renseigné : la lecture passe par l'implémentation web de la bibliothèque.
+**Jalon 2 — la bibliothèque.** Liste groupée par `group`, curseur de gain sur chaque ligne (stations livrées comprises), corbeille dépliable, ajout manuel, import/export, le tout persisté par AsyncStorage sous les mêmes clés que le site (`customStations`, `builtinStationPrefs`).
 
-L'interface est volontairement minimale — l'habillage Pip-Boy (scanline, flicker, ticker, polices VT323) est le jalon suivant, maintenant que la lecture est prouvée.
+Vérifié geste par geste sur l émulateur, avec un arrêt forcé entre chaque pour prouver la persistance : masquer une station livrée, la retrouver dans la corbeille après redémarrage, la restaurer ; ajouter une station par son URL AzuraCast (`demo.azuracast.com`) — la résolution de flux passe, `detectMeta()` déduit l endpoint sans configuration et le titre « Ex Nihilo — Lokan » s affiche ; la jouer ; la masquer ; la supprimer définitivement depuis la corbeille, option que les stations livrées n ont pas.
 
-Pas encore porté : liste groupée, corbeille, gain réglable par station, annuaire Radio-Browser, minuterie de veille, import/export, stations custom.
+**Non vérifié :** les dialogues d import/export (feuille de partage Android et sélecteur de fichier) n ont pas été exercés — automatiser ces boîtes système sur émulateur ne prouve pas grand-chose. Le code est là, il reste à l essayer à la main.
+
+Pas encore porté, par ordre d utilité : le sondage des titres de **toutes** les stations (seule celle qu on écoute est sondée, contre 40 par tour sur le site), le volume maître et la sourdine, suivant/précédent, la dernière station mémorisée, la minuterie de veille (`sleepAfterTime` la fournit en natif), la reconnexion sur flux coupé (`retry()` et les évènements `PlaybackError`), l annuaire Radio-Browser, les raccourcis clavier, et tout l habillage Pip-Boy.
 
 ## Lancer
 

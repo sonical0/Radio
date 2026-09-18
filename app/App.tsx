@@ -1,40 +1,43 @@
-// Jalon 1 : faire sortir du son, en arrière-plan, avec les contrôles système.
-// L'habillage Pip-Boy (scanline, flicker, ticker, polices VT323) vient ensuite —
-// ici, juste assez de vert sur noir pour ne pas tester dans le blanc.
+// Jalon 2 : la bibliothèque. Liste groupée, gain par station, corbeille, ajout
+// manuel, import/export, le tout persisté.
+// L'habillage Pip-Boy (scanline, flicker, ticker, polices VT323) reste à faire,
+// comme le sondage des titres de toutes les stations — ici seule la station
+// écoutée est sondée.
 
-import { useEffect, useState } from 'react';
+import { useIsPlaying } from '@rntp/player';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
-  FlatList,
-  Pressable,
   SafeAreaView,
+  SectionList,
   StatusBar,
   StyleSheet,
   Text,
   View,
 } from 'react-native';
-import { useIsPlaying } from '@rntp/player';
 
-import rawStations from './src/data/stations.json';
 import { fetchMeta } from './src/model/meta';
-import { isValidStation, normalizeStation, type Station } from './src/model/station';
-import { playStation, setupPlayer, stop, togglePlay } from './src/player/player';
+import type { Station } from './src/model/station';
+import { playStation, setVolume, setupPlayer, stop, togglePlay } from './src/player/player';
+import { groupStations, knownGroups } from './src/store/library';
+import { useLibrary } from './src/store/useLibrary';
+import { AddStation } from './src/ui/AddStation';
+import { StationRow } from './src/ui/StationRow';
+import { Trash } from './src/ui/Trash';
+import { BG, DIM, GREEN, t } from './src/ui/theme';
 
 const MASTER_VOLUME = 0.7;
 
-const STATIONS: Station[] = (rawStations as unknown[])
-  .filter(isValidStation)
-  .map((s) => normalizeStation(s, false));
-
 export default function App() {
+  const lib = useLibrary();
   const [ready, setReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [current, setCurrent] = useState<Station | null>(null);
+  const [currentUrl, setCurrentUrl] = useState<string | null>(null);
   const [nowPlaying, setNowPlaying] = useState<string | null>(null);
   const playing = useIsPlaying();
 
-  // setupPlayer() est synchrone en v5 (appels natifs via JSI) : plus de promesse
-  // à attendre, mais toujours à n'appeler qu'au premier plan côté Android.
+  // setupPlayer() est synchrone en v5 (appels natifs via JSI), mais toujours à
+  // n'appeler qu'au premier plan côté Android.
   useEffect(() => {
     try {
       setupPlayer();
@@ -44,16 +47,29 @@ export default function App() {
     }
   }, []);
 
-  // Le titre en cours, uniquement pour la station écoutée tant que la liste n'est
-  // pas là : le sondage des 11 stations à la fois viendra avec elle.
+  const current = useMemo(
+    () => lib.stations.find((s) => s.url === currentUrl) ?? null,
+    [lib.stations, currentUrl],
+  );
+
+  // Le gain se règle pendant la lecture : le volume effectif suit le curseur de
+  // la station écoutée, sinon le réglage ne s'entendrait qu'au prochain zapping.
   useEffect(() => {
-    if (!current?.meta) {
+    if (current) setVolume(current, MASTER_VOLUME);
+  }, [current]);
+
+  // Titre en cours, pour la station écoutée seulement tant que le sondage
+  // groupé (40 stations par tour sur le site) n'est pas porté.
+  useEffect(() => {
+    const meta = current?.meta;
+    const url = current?.url;
+    if (!meta || !url) {
       setNowPlaying(null);
       return;
     }
     let alive = true;
     const poll = async () => {
-      const txt = await fetchMeta(current.meta!, current.url);
+      const txt = await fetchMeta(meta, url);
       if (alive) setNowPlaying(txt);
     };
     poll();
@@ -62,114 +78,98 @@ export default function App() {
       alive = false;
       clearInterval(id);
     };
-  }, [current]);
+  }, [current?.url]);
 
-  const onSelect = (s: Station) => {
-    if (current?.url === s.url) {
-      togglePlay(playing);
-      return;
-    }
-    setCurrent(s);
-    playStation(s, MASTER_VOLUME);
-  };
+  const onSelect = useCallback(
+    (s: Station) => {
+      if (currentUrl === s.url) {
+        togglePlay(playing);
+        return;
+      }
+      setCurrentUrl(s.url);
+      playStation(s, MASTER_VOLUME);
+    },
+    [currentUrl, playing],
+  );
 
-  const onStop = () => {
+  const onStop = useCallback(() => {
     stop();
-    setCurrent(null);
-  };
+    setCurrentUrl(null);
+  }, []);
+
+  // Masquer la station écoutée l'arrête : elle sort de la liste, la laisser
+  // jouer depuis la corbeille n'aurait aucun sens.
+  const onHide = useCallback(
+    (url: string) => {
+      if (currentUrl === url) onStop();
+      lib.hide(url);
+    },
+    [currentUrl, lib, onStop],
+  );
+
+  const sections = useMemo(() => groupStations(lib.stations), [lib.stations]);
+  const hidden = useMemo(() => lib.stations.filter((x) => x.hidden), [lib.stations]);
+  const groups = useMemo(() => knownGroups(lib.stations), [lib.stations]);
 
   return (
-    <SafeAreaView style={styles.screen}>
-      <StatusBar barStyle="light-content" backgroundColor="#0a0f0a" />
-      <Text style={styles.title}>FALLOUT RADIO</Text>
+    <SafeAreaView style={t.screen}>
+      <StatusBar barStyle="light-content" backgroundColor={BG} />
+      <Text style={t.title}>FALLOUT RADIO</Text>
 
-      {error ? <Text style={styles.error}>⚠ {error}</Text> : null}
+      {error ? <Text style={[t.msgErr, s.pad]}>⚠ {error}</Text> : null}
 
-      <View style={styles.np}>
-        <Text style={styles.npStation}>{current ? current.name : '— SELECT A STATION —'}</Text>
-        <Text style={styles.npSong} numberOfLines={1} accessibilityLiveRegion="polite">
-          {current ? nowPlaying ?? '...' : ' '}
+      <View style={s.np}>
+        <Text style={s.npStation} numberOfLines={1}>
+          {current ? current.name : '— SELECT A STATION —'}
         </Text>
-        <View style={styles.controls}>
-          <Pressable
-            style={styles.btn}
-            disabled={!current}
-            accessibilityRole="button"
-            accessibilityLabel={playing ? 'Pause' : 'Lecture'}
-            onPress={() => togglePlay(playing)}>
-            <Text style={[styles.btnText, !current && styles.btnOff]}>
-              {playing ? '❚❚ PAUSE' : '▶ PLAY'}
-            </Text>
-          </Pressable>
-          <Pressable
-            style={styles.btn}
-            disabled={!current}
-            accessibilityRole="button"
-            accessibilityLabel="Arrêter"
-            onPress={onStop}>
-            <Text style={[styles.btnText, !current && styles.btnOff]}>■ STOP</Text>
-          </Pressable>
-        </View>
+        <Text style={s.npSong} numberOfLines={1} accessibilityLiveRegion="polite">
+          {current ? (nowPlaying ?? '...') : ' '}
+        </Text>
       </View>
 
-      {!ready && !error ? (
-        <ActivityIndicator color="#39ff6a" style={styles.loader} />
+      {lib.loading || !ready ? (
+        <ActivityIndicator color={GREEN} style={s.loader} />
       ) : (
-        <FlatList
-          data={STATIONS}
-          keyExtractor={(s) => s.url}
-          renderItem={({ item }) => {
-            const active = current?.url === item.url;
-            return (
-              <Pressable
-                style={[styles.row, active && styles.rowActive]}
-                onPress={() => onSelect(item)}
-                // Sans ces deux props, RN Web rend un <div> muet : le site web, lui,
-                // expose un vrai <button aria-pressed>. On ne perd pas la passe
-                // d'accessibilité du 15/09 en changeant de socle.
-                accessibilityRole="button"
-                accessibilityState={{ selected: active, busy: active && !playing }}
-                accessibilityLabel={item.name + ', ' + item.group}>
-                <Text style={styles.group}>{item.group}</Text>
-                <Text style={[styles.name, active && styles.nameActive]}>{item.name}</Text>
-                <Text style={styles.status}>{active ? (playing ? 'ON AIR' : 'PAUSE') : 'TUNE IN'}</Text>
-              </Pressable>
-            );
-          }}
+        <SectionList
+          sections={sections}
+          keyExtractor={(item) => item.url}
+          stickySectionHeadersEnabled={false}
+          renderSectionHeader={({ section }) => <Text style={t.sectionLabel}>{section.title}</Text>}
+          renderItem={({ item }) => (
+            <StationRow
+              station={item}
+              active={item.url === currentUrl}
+              playing={playing}
+              nowPlaying={item.url === currentUrl ? (nowPlaying ?? undefined) : undefined}
+              onSelect={onSelect}
+              onPreviewGain={lib.previewGain}
+              onCommitGain={lib.commitGain}
+              onHide={onHide}
+            />
+          )}
+          ListFooterComponent={
+            <View>
+              <Trash hidden={hidden} onRestore={lib.restore} onPurge={lib.purge} />
+              <AddStation
+                groups={groups}
+                onAdd={lib.addStation}
+                onExport={lib.exportStations}
+                onImport={lib.importStations}
+              />
+              <View style={s.footerSpace} />
+            </View>
+          }
         />
       )}
     </SafeAreaView>
   );
 }
 
-const GREEN = '#39ff6a';
-const DIM = '#1f7a3a';
-
-const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: '#0a0f0a', paddingHorizontal: 16, paddingTop: 24 },
-  title: { color: GREEN, fontSize: 24, letterSpacing: 4, marginBottom: 12 },
-  error: { color: '#ff6b6b', marginBottom: 8 },
-  np: { borderWidth: 1, borderColor: DIM, padding: 12, marginBottom: 16 },
-  npStation: { color: GREEN, fontSize: 16, letterSpacing: 2 },
-  npSong: { color: DIM, fontSize: 12, marginTop: 4 },
-  controls: { flexDirection: 'row', gap: 8, marginTop: 12 },
-  btn: { borderWidth: 1, borderColor: DIM, paddingVertical: 6, paddingHorizontal: 14 },
-  btnText: { color: GREEN, letterSpacing: 1 },
-  btnOff: { color: DIM },
+const s = StyleSheet.create({
+  pad: { paddingHorizontal: 16 },
+  np: { borderWidth: 1, borderColor: DIM, margin: 16, marginBottom: 8, padding: 12 },
+  npStation: { color: GREEN, fontSize: 15, letterSpacing: 2 },
+  npSong: { color: DIM, fontSize: 11, marginTop: 4 },
   loader: { marginTop: 32 },
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    borderWidth: 1,
-    borderColor: '#14301c',
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    marginBottom: 6,
-  },
-  rowActive: { borderColor: GREEN },
-  group: { color: DIM, fontSize: 10, width: 42, letterSpacing: 1 },
-  name: { color: '#8fffb0', flex: 1 },
-  nameActive: { color: GREEN },
-  status: { color: DIM, fontSize: 10, letterSpacing: 1 },
+  footerSpace: { height: 28 },
 });
