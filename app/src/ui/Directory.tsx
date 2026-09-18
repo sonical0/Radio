@@ -1,15 +1,18 @@
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { searchDirectory, type DirectoryHit } from '../net/directory';
 import type { Outcome } from '../store/useLibrary';
-import { BORDER, DIM, GREEN, GREEN_BRIGHT, t } from './theme';
+import { type Palette, useTheme } from './theme';
 
 type Props = {
   onAdd: (raw: { name: string; group: string; url: string }) => Promise<Outcome>;
 };
 
 export function Directory({ onAdd }: Props) {
+  const { p: p, t } = useTheme();
+  const s = useMemo(() => makeStyles(p), [p]);
+
   const [query, setQuery] = useState('');
   const [hits, setHits] = useState<DirectoryHit[] | null>(null);
   const [busy, setBusy] = useState(false);
@@ -61,7 +64,7 @@ export function Directory({ onAdd }: Props) {
             onSubmitEditing={run}
             returnKeyType="search"
             placeholder="Chercher une radio (nom, genre, pays…)"
-            placeholderTextColor={DIM}
+            placeholderTextColor={p.dim}
             autoCapitalize="none"
             accessibilityLabel="Rechercher dans l'annuaire"
           />
@@ -73,7 +76,7 @@ export function Directory({ onAdd }: Props) {
             accessibilityLabel="Chercher">
             <Text style={[t.btnText, busy && t.btnOff]}>⌕ CHERCHER</Text>
           </Pressable>
-          {busy ? <ActivityIndicator color={GREEN} /> : null}
+          {busy ? <ActivityIndicator color={p.base} /> : null}
         </View>
 
         {msg ? (
@@ -113,8 +116,9 @@ export function Directory({ onAdd }: Props) {
   );
 }
 
-const s = StyleSheet.create({
-  wrap: { borderTopWidth: 1, borderTopColor: BORDER, marginTop: 12 },
+const makeStyles = (p: Palette) =>
+  StyleSheet.create({
+  wrap: { borderTopWidth: 1, borderTopColor: p.border, marginTop: 12 },
   body: { paddingHorizontal: 16, paddingTop: 8 },
   searchRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 8 },
   field: { flex: 1 },
@@ -123,12 +127,12 @@ const s = StyleSheet.create({
     alignItems: 'center',
     gap: 8,
     borderWidth: 1,
-    borderColor: BORDER,
+    borderColor: p.border,
     paddingHorizontal: 10,
     paddingVertical: 6,
     marginTop: 6,
   },
   info: { flex: 1, minWidth: 0 },
-  name: { color: GREEN_BRIGHT, fontSize: 13 },
-  detail: { color: DIM, fontSize: 10, marginTop: 2 },
+  name: { color: p.bright, fontSize: 13 },
+  detail: { color: p.dim, fontSize: 10, marginTop: 2 },
 });

@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import Slider from '@react-native-community/slider';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
@@ -5,16 +6,7 @@ import type { Station } from '../model/station';
 import type { StreamState } from '../player/usePlayback';
 import { Ticker } from './Ticker';
 import { Visualizer } from './Visualizer';
-import {
-  BG2,
-  BORDER,
-  FONT_BODY,
-  FONT_DISPLAY,
-  GREEN,
-  GREEN_DIM,
-  RED,
-  t,
-} from './theme';
+import { FONT_BODY, FONT_DISPLAY, type Palette, useTheme } from './theme';
 
 type Props = {
   station: Station | null;
@@ -52,16 +44,19 @@ function sleepLabel(minutes: number, left: number | null): string {
   return `⏱ ${m}:${String(s).padStart(2, '0')}`;
 }
 
-export function NowPlaying(p: Props) {
-  const status = STREAM_LABEL[p.streamState];
-  const disabled = !p.station;
+export function NowPlaying(np: Props) {
+  const { p, t } = useTheme();
+  const s = useMemo(() => makeStyles(p), [p]);
+
+  const status = STREAM_LABEL[np.streamState];
+  const disabled = !np.station;
 
   return (
     <View style={s.wrap}>
       <View style={s.headRow}>
         <Text style={s.label}>STATION ▸</Text>
         <Text style={s.station} numberOfLines={1}>
-          {p.station ? p.station.name : '— SELECT A STATION —'}
+          {np.station ? np.station.name : '— SELECT A STATION —'}
         </Text>
       </View>
 
@@ -75,7 +70,7 @@ export function NowPlaying(p: Props) {
           // Le ticker mesure sa boîte pour savoir s il doit défiler : sans
           // largeur, il se mesurerait à zéro et son overflow le masquerait.
           <View style={s.tickerBox}>
-            <Ticker text={p.station ? (p.title ?? '...') : '—'} style={s.song} />
+            <Ticker text={np.station ? (np.title ?? '...') : '—'} style={s.song} />
           </View>
         )}
       </View>
@@ -84,7 +79,7 @@ export function NowPlaying(p: Props) {
         <Pressable
           style={t.btn}
           disabled={disabled}
-          onPress={p.onPrevious}
+          onPress={np.onPrevious}
           accessibilityRole="button"
           accessibilityLabel="Station précédente">
           <Text style={[t.btnText, disabled && t.btnOff]}>◀◀ PREV</Text>
@@ -92,15 +87,15 @@ export function NowPlaying(p: Props) {
         <Pressable
           style={t.btn}
           disabled={disabled}
-          onPress={p.onToggle}
+          onPress={np.onToggle}
           accessibilityRole="button"
-          accessibilityLabel={p.playing ? 'Pause' : 'Lecture'}>
-          <Text style={[t.btnText, disabled && t.btnOff]}>{p.playing ? '❚❚ PAUSE' : '▶ PLAY'}</Text>
+          accessibilityLabel={np.playing ? 'Pause' : 'Lecture'}>
+          <Text style={[t.btnText, disabled && t.btnOff]}>{np.playing ? '❚❚ PAUSE' : '▶ PLAY'}</Text>
         </Pressable>
         <Pressable
           style={t.btn}
           disabled={disabled}
-          onPress={p.onStop}
+          onPress={np.onStop}
           accessibilityRole="button"
           accessibilityLabel="Arrêter">
           <Text style={[t.btnText, disabled && t.btnOff]}>■ STOP</Text>
@@ -108,30 +103,30 @@ export function NowPlaying(p: Props) {
         <Pressable
           style={t.btn}
           disabled={disabled}
-          onPress={p.onNext}
+          onPress={np.onNext}
           accessibilityRole="button"
           accessibilityLabel="Station suivante">
           <Text style={[t.btnText, disabled && t.btnOff]}>NEXT ▶▶</Text>
         </Pressable>
         <Pressable
-          style={[t.btn, p.sleepMinutes ? s.armed : null]}
-          onPress={p.onCycleSleep}
+          style={[t.btn, np.sleepMinutes ? s.armed : null]}
+          onPress={np.onCycleSleep}
           accessibilityRole="button"
           accessibilityLabel={
-            p.sleepMinutes ? `Minuterie de veille, ${p.sleepMinutes} minutes` : 'Minuterie de veille'
+            np.sleepMinutes ? `Minuterie de veille, ${np.sleepMinutes} minutes` : 'Minuterie de veille'
           }>
-          <Text style={t.btnText}>{sleepLabel(p.sleepMinutes, p.sleepLeft)}</Text>
+          <Text style={t.btnText}>{sleepLabel(np.sleepMinutes, np.sleepLeft)}</Text>
         </Pressable>
       </View>
 
       <View style={s.volRow}>
         <Pressable
-          onPress={p.onToggleMute}
+          onPress={np.onToggleMute}
           accessibilityRole="button"
-          accessibilityState={{ checked: p.muted }}
-          accessibilityLabel={p.muted ? 'Rétablir le son' : 'Couper le son'}
+          accessibilityState={{ checked: np.muted }}
+          accessibilityLabel={np.muted ? 'Rétablir le son' : 'Couper le son'}
           style={t.btn}>
-          <Text style={[t.btnText, p.muted && s.mutedTxt]}>{p.muted ? '🔇' : '🔊'}</Text>
+          <Text style={[t.btnText, np.muted && s.mutedTxt]}>{np.muted ? '🔇' : '🔊'}</Text>
         </Pressable>
         <Text style={s.volLabel}>VOL</Text>
         <Slider
@@ -139,27 +134,28 @@ export function NowPlaying(p: Props) {
           minimumValue={0}
           maximumValue={1}
           step={0.01}
-          value={p.master}
-          minimumTrackTintColor={p.muted ? GREEN_DIM : GREEN}
-          maximumTrackTintColor={BORDER}
-          thumbTintColor={p.muted ? GREEN_DIM : GREEN}
-          onValueChange={p.onChangeMaster}
-          onSlidingComplete={p.onCommitMaster}
+          value={np.master}
+          minimumTrackTintColor={np.muted ? p.dim : p.base}
+          maximumTrackTintColor={p.border}
+          thumbTintColor={np.muted ? p.dim : p.base}
+          onValueChange={np.onChangeMaster}
+          onSlidingComplete={np.onCommitMaster}
           accessibilityLabel="Volume général"
         />
-        <Text style={s.volVal}>{Math.round((p.muted ? 0 : p.master) * 100)}%</Text>
+        <Text style={s.volVal}>{Math.round((np.muted ? 0 : np.master) * 100)}%</Text>
       </View>
 
-      <Visualizer active={p.playing} />
+      <Visualizer active={np.playing} />
     </View>
   );
 }
 
-const s = StyleSheet.create({
+const makeStyles = (p: Palette) =>
+  StyleSheet.create({
   wrap: {
     borderWidth: 1,
-    borderColor: GREEN_DIM,
-    backgroundColor: BG2,
+    borderColor: p.dim,
+    backgroundColor: p.bg2,
     margin: 16,
     marginBottom: 8,
     paddingHorizontal: 12,
@@ -167,22 +163,22 @@ const s = StyleSheet.create({
   },
   headRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 },
   tickerBox: { flex: 1, minWidth: 0 },
-  label: { color: GREEN_DIM, fontFamily: FONT_DISPLAY, fontSize: 14, letterSpacing: 2, lineHeight: 17 },
+  label: { color: p.dim, fontFamily: FONT_DISPLAY, fontSize: 14, letterSpacing: 2, lineHeight: 17 },
   station: {
     flex: 1,
-    color: GREEN,
+    color: p.base,
     fontFamily: FONT_DISPLAY,
     fontSize: 22,
     letterSpacing: 2,
     lineHeight: 26,
   },
-  song: { color: GREEN, fontFamily: FONT_BODY, fontSize: 12 },
-  status: { flex: 1, color: GREEN, fontFamily: FONT_BODY, fontSize: 12 },
+  song: { color: p.base, fontFamily: FONT_BODY, fontSize: 12 },
+  status: { flex: 1, color: p.base, fontFamily: FONT_BODY, fontSize: 12 },
   controls: { flexDirection: 'row', gap: 6, marginTop: 8, flexWrap: 'wrap' },
-  armed: { borderColor: GREEN },
+  armed: { borderColor: p.base },
   volRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 10 },
-  volLabel: { color: GREEN_DIM, fontFamily: FONT_DISPLAY, fontSize: 14, letterSpacing: 2 },
+  volLabel: { color: p.dim, fontFamily: FONT_DISPLAY, fontSize: 14, letterSpacing: 2 },
   slider: { flex: 1, height: 28 },
-  volVal: { color: GREEN_DIM, fontFamily: FONT_BODY, fontSize: 11, minWidth: 36, textAlign: 'right' },
-  mutedTxt: { color: RED },
+  volVal: { color: p.dim, fontFamily: FONT_BODY, fontSize: 11, minWidth: 36, textAlign: 'right' },
+  mutedTxt: { color: p.red },
 });

@@ -1,7 +1,7 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { AppState, StyleSheet, View } from 'react-native';
 
-import { BORDER, GREEN, GREEN_DIM } from './theme';
+import { type Palette, useTheme } from './theme';
 
 const BAR_COUNT = 34;
 const UPDATE_MS = 110;
@@ -18,6 +18,9 @@ const MAX_H = 27;
  * vise la parité, on garde le même rendu des deux côtés.
  */
 export function Visualizer({ active }: { active: boolean }) {
+  const { p: p } = useTheme();
+  const s = useMemo(() => makeStyles(p), [p]);
+
   const [heights, setHeights] = useState<number[]>(() => Array(BAR_COUNT).fill(MIN_H));
   const timer = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -57,7 +60,8 @@ export function Visualizer({ active }: { active: boolean }) {
   );
 }
 
-const s = StyleSheet.create({
+const makeStyles = (p: Palette) =>
+  StyleSheet.create({
   wrap: {
     flexDirection: 'row',
     alignItems: 'flex-end',
@@ -67,8 +71,6 @@ const s = StyleSheet.create({
     marginTop: 8,
     paddingHorizontal: 2,
   },
-  bar: { flex: 1, minHeight: MIN_H, borderRadius: 1, backgroundColor: BORDER },
-  barActive: { backgroundColor: GREEN_DIM },
+  bar: { flex: 1, minHeight: MIN_H, borderRadius: 1, backgroundColor: p.border },
+  barActive: { backgroundColor: p.dim },
 });
-
-export const VISUALIZER_ACCENT = GREEN;

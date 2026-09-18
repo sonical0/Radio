@@ -1,7 +1,7 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Animated, Easing, StyleSheet, View, type LayoutChangeEvent, type TextStyle } from 'react-native';
 
-import { FONT_BODY, GREEN_BRIGHT } from './theme';
+import { FONT_BODY, type Palette, useTheme } from './theme';
 
 const DURATION_MS = 18000;
 const HEIGHT = 16;
@@ -16,6 +16,9 @@ const HEIGHT = 16;
  * suspension, ce qui rendrait la mesure du débordement impossible.
  */
 export function Ticker({ text, style }: { text: string; style?: TextStyle }) {
+  const { p: p } = useTheme();
+  const s = useMemo(() => makeStyles(p), [p]);
+
   const [boxWidth, setBoxWidth] = useState(0);
   const [textWidth, setTextWidth] = useState(0);
   const x = useRef(new Animated.Value(0)).current;
@@ -51,12 +54,13 @@ export function Ticker({ text, style }: { text: string; style?: TextStyle }) {
   );
 }
 
-const s = StyleSheet.create({
+const makeStyles = (p: Palette) =>
+  StyleSheet.create({
   box: { height: HEIGHT, overflow: 'hidden', justifyContent: 'center' },
   text: {
     position: 'absolute',
     left: 0,
-    color: GREEN_BRIGHT,
+    color: p.bright,
     fontFamily: FONT_BODY,
     fontSize: 12,
   },

@@ -1,8 +1,8 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import type { Outcome } from '../store/useLibrary';
-import { BORDER, DIM, GREEN, t } from './theme';
+import { type Palette, useTheme } from './theme';
 
 type Props = {
   groups: string[];
@@ -12,6 +12,9 @@ type Props = {
 };
 
 export function AddStation({ groups, onAdd, onExport, onImport }: Props) {
+  const { p: p, t } = useTheme();
+  const s = useMemo(() => makeStyles(p), [p]);
+
   const [name, setName] = useState('');
   const [group, setGroup] = useState('');
   const [url, setUrl] = useState('');
@@ -41,7 +44,7 @@ export function AddStation({ groups, onAdd, onExport, onImport }: Props) {
           value={name}
           onChangeText={setName}
           placeholder="Nom (ex : Fallout 4 — Far Harbor)"
-          placeholderTextColor={DIM}
+          placeholderTextColor={p.dim}
           accessibilityLabel="Nom de la station"
         />
         <TextInput
@@ -49,7 +52,7 @@ export function AddStation({ groups, onAdd, onExport, onImport }: Props) {
           value={group}
           onChangeText={setGroup}
           placeholder={groups.length ? `Groupe (ex : ${groups[0]})` : 'Groupe (facultatif)'}
-          placeholderTextColor={DIM}
+          placeholderTextColor={p.dim}
           accessibilityLabel="Groupe"
         />
         <TextInput
@@ -57,7 +60,7 @@ export function AddStation({ groups, onAdd, onExport, onImport }: Props) {
           value={url}
           onChangeText={setUrl}
           placeholder="URL stream (.mp3, .aac, .m3u, .pls, .m3u8)"
-          placeholderTextColor={DIM}
+          placeholderTextColor={p.dim}
           autoCapitalize="none"
           keyboardType="url"
           accessibilityLabel="URL du flux"
@@ -67,7 +70,7 @@ export function AddStation({ groups, onAdd, onExport, onImport }: Props) {
           value={metaUrl}
           onChangeText={setMetaUrl}
           placeholder="Métadonnées (optionnel) — /api/nowplaying/… ou /status-json.xsl"
-          placeholderTextColor={DIM}
+          placeholderTextColor={p.dim}
           autoCapitalize="none"
           keyboardType="url"
           accessibilityLabel="URL des métadonnées, facultative"
@@ -98,7 +101,7 @@ export function AddStation({ groups, onAdd, onExport, onImport }: Props) {
             accessibilityLabel="Importer des stations">
             <Text style={[t.btnText, busy && t.btnOff]}>⇧ IMPORTER</Text>
           </Pressable>
-          {busy ? <ActivityIndicator color={GREEN} /> : null}
+          {busy ? <ActivityIndicator color={p.base} /> : null}
         </View>
 
         {/* Le message est une région vivante : l'ajout est asynchrone (la playlist
@@ -113,8 +116,9 @@ export function AddStation({ groups, onAdd, onExport, onImport }: Props) {
   );
 }
 
-const s = StyleSheet.create({
-  wrap: { borderTopWidth: 1, borderTopColor: BORDER, marginTop: 12 },
+const makeStyles = (p: Palette) =>
+  StyleSheet.create({
+  wrap: { borderTopWidth: 1, borderTopColor: p.border, marginTop: 12 },
   body: { paddingHorizontal: 16, paddingTop: 8 },
   actions: { flexDirection: 'row', gap: 8, alignItems: 'center', marginTop: 2, marginBottom: 6 },
 });

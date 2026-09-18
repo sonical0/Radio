@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { AppState, Text } from 'react-native';
 
-import { t } from './theme';
+import { useTheme } from './theme';
 
 function now(): string {
   const d = new Date();
@@ -12,6 +12,7 @@ function now(): string {
 
 /** L'horloge de l'en-tête. Arrêtée quand l'appli n'est pas à l'écran. */
 export function Clock() {
+  const { t } = useTheme();
   const [time, setTime] = useState(now);
 
   useEffect(() => {

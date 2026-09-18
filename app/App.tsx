@@ -5,7 +5,7 @@
 
 import { useFonts } from 'expo-font';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, Platform, SectionList, StatusBar, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Platform, Pressable, SectionList, StatusBar, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 
 import type { Station } from './src/model/station';
@@ -22,9 +22,23 @@ import { Directory } from './src/ui/Directory';
 import { NowPlaying } from './src/ui/NowPlaying';
 import { StationRow } from './src/ui/StationRow';
 import { Trash } from './src/ui/Trash';
-import { BG, FONTS, FONT_BODY, GREEN, GREEN_DIM, t } from './src/ui/theme';
+import { Settings } from './src/ui/Settings';
+import { FONTS, FONT_BODY, ThemeProvider, useTheme, type Palette } from './src/ui/theme';
 
 export default function App() {
+  // Le thème est au-dessus de tout : la couleur d écran change jusqu au fond
+  // de la barre système et à la trame du tube.
+  return (
+    <ThemeProvider>
+      <Radio />
+    </ThemeProvider>
+  );
+}
+
+function Radio() {
+  const { p, t } = useTheme();
+  const s = useMemo(() => makeStyles(p), [p]);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const lib = useLibrary();
   const play = usePlayback(lib.stations);
   const { titles, refreshOne } = useNowPlaying(lib.stations, play.currentUrl);
@@ -83,12 +97,23 @@ export default function App() {
     <SafeAreaProvider>
       <Crt>
         <SafeAreaView style={t.screen} edges={['top', 'bottom']}>
-        <StatusBar barStyle="light-content" backgroundColor={BG} />
+        <StatusBar barStyle="light-content" backgroundColor={p.bg} />
 
         <View style={t.header}>
           <Text style={t.title}>FALLOUT RADIO</Text>
-          <Clock />
+          <View style={s.headerRight}>
+            <Pressable
+              onPress={() => setSettingsOpen(true)}
+              accessibilityRole="button"
+              accessibilityLabel="Réglages"
+              style={t.btn}>
+              <Text style={t.btnText}>⚙</Text>
+            </Pressable>
+            <Clock />
+          </View>
         </View>
+
+        <Settings visible={settingsOpen} onClose={() => setSettingsOpen(false)} />
 
         {error ? <Text style={[t.msgErr, s.pad]}>⚠ {error}</Text> : null}
 
@@ -112,7 +137,7 @@ export default function App() {
         />
 
         {lib.loading || !ready || !fontsLoaded ? (
-          <ActivityIndicator color={GREEN} style={s.loader} />
+          <ActivityIndicator color={p.base} style={s.loader} />
         ) : (
           <SectionList
             sections={sections}
@@ -161,11 +186,12 @@ export default function App() {
   );
 }
 
-const s = StyleSheet.create({
+const makeStyles = (p: Palette) =>
+  StyleSheet.create({
   pad: { paddingHorizontal: 16 },
   loader: { marginTop: 32 },
   shortcuts: {
-    color: GREEN_DIM,
+    color: p.dim,
     fontFamily: FONT_BODY,
     fontSize: 11,
     letterSpacing: 1,
@@ -174,4 +200,5 @@ const s = StyleSheet.create({
     opacity: 0.8,
   },
   footerSpace: { height: 28 },
-});
+    headerRight: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  });

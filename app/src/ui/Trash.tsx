@@ -1,8 +1,8 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import type { Station } from '../model/station';
-import { BORDER, DIM, GREEN, RED, t } from './theme';
+import { type Palette, useTheme } from './theme';
 
 type Props = {
   hidden: Station[];
@@ -17,6 +17,9 @@ type Props = {
  * n'aurait de sens que jusque-là.
  */
 export function Trash({ hidden, onRestore, onPurge }: Props) {
+  const { p: p, t } = useTheme();
+  const s = useMemo(() => makeStyles(p), [p]);
+
   const [open, setOpen] = useState(false);
   if (!hidden.length) return null;
 
@@ -62,7 +65,8 @@ export function Trash({ hidden, onRestore, onPurge }: Props) {
   );
 }
 
-const s = StyleSheet.create({
+const makeStyles = (p: Palette) =>
+  StyleSheet.create({
   wrap: { marginTop: 8 },
   item: {
     flexDirection: 'row',
@@ -73,10 +77,10 @@ const s = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 6,
     borderWidth: 1,
-    borderColor: BORDER,
+    borderColor: p.border,
   },
-  name: { flex: 1, minWidth: 0, color: DIM, fontSize: 13 },
-  group: { color: DIM, fontSize: 9, letterSpacing: 1, opacity: 0.8 },
-  danger: { color: RED },
-  ghost: { color: GREEN },
+  name: { flex: 1, minWidth: 0, color: p.dim, fontSize: 13 },
+  group: { color: p.dim, fontSize: 9, letterSpacing: 1, opacity: 0.8 },
+  danger: { color: p.red },
+  ghost: { color: p.base },
 });

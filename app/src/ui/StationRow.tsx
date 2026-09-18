@@ -1,20 +1,10 @@
 import Slider from '@react-native-community/slider';
-import { memo } from 'react';
+import { memo, useMemo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { GAIN_MIN, type Station } from '../model/station';
 import { StationDot } from './StationDot';
-import {
-  BG2,
-  BG3,
-  BORDER,
-  FONT_BODY,
-  FONT_DISPLAY,
-  GREEN,
-  GREEN_BRIGHT,
-  GREEN_DIM,
-  RED,
-} from './theme';
+import { FONT_BODY, FONT_DISPLAY, type Palette, useTheme } from './theme';
 
 type Props = {
   station: Station;
@@ -44,6 +34,9 @@ function StationRowBase({
   onCommitGain,
   onHide,
 }: Props) {
+  const { p: p } = useTheme();
+  const s = useMemo(() => makeStyles(p), [p]);
+
   const playing = status === 'ON AIR';
 
   return (
@@ -72,9 +65,9 @@ function StationRowBase({
             maximumValue={1}
             step={0.01}
             value={station.gain}
-            minimumTrackTintColor={GREEN}
-            maximumTrackTintColor={BORDER}
-            thumbTintColor={GREEN}
+            minimumTrackTintColor={p.base}
+            maximumTrackTintColor={p.border}
+            thumbTintColor={p.base}
             // Audible immédiatement pendant le glissement ; l'écriture dans le
             // stockage attend la fin du geste, une par geste et non une par pixel.
             onValueChange={(v) => onPreviewGain(station.url, v)}
@@ -101,31 +94,32 @@ function StationRowBase({
 
 export const StationRow = memo(StationRowBase);
 
-const s = StyleSheet.create({
+const makeStyles = (p: Palette) =>
+  StyleSheet.create({
   row: {
     flexDirection: 'row',
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: BORDER,
-    backgroundColor: BG3,
+    borderColor: p.border,
+    backgroundColor: p.bg3,
     marginHorizontal: 16,
     marginBottom: 6,
     paddingHorizontal: 10,
     paddingVertical: 8,
   },
-  rowPlaying: { borderColor: GREEN, backgroundColor: BG2 },
-  rowSelected: { borderColor: GREEN_DIM },
+  rowPlaying: { borderColor: p.base, backgroundColor: p.bg2 },
+  rowSelected: { borderColor: p.dim },
   main: { flex: 1, minWidth: 0 },
-  name: { color: GREEN_BRIGHT, fontFamily: FONT_DISPLAY, fontSize: 19, letterSpacing: 1, lineHeight: 23 },
-  nameActive: { color: GREEN },
-  np: { color: GREEN_DIM, fontFamily: FONT_BODY, fontSize: 11, marginTop: 1 },
+  name: { color: p.bright, fontFamily: FONT_DISPLAY, fontSize: 19, letterSpacing: 1, lineHeight: 23 },
+  nameActive: { color: p.base },
+  np: { color: p.dim, fontFamily: FONT_BODY, fontSize: 11, marginTop: 1 },
   gainRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 2 },
-  gainLabel: { color: GREEN_DIM, fontFamily: FONT_DISPLAY, fontSize: 12, letterSpacing: 1 },
+  gainLabel: { color: p.dim, fontFamily: FONT_DISPLAY, fontSize: 12, letterSpacing: 1 },
   slider: { width: 110, height: 28 },
-  gainVal: { color: GREEN_DIM, fontFamily: FONT_BODY, fontSize: 10, minWidth: 32 },
+  gainVal: { color: p.dim, fontFamily: FONT_BODY, fontSize: 10, minWidth: 32 },
   side: { alignItems: 'flex-end', gap: 6, marginLeft: 8 },
-  status: { color: GREEN_DIM, fontFamily: FONT_DISPLAY, fontSize: 13, letterSpacing: 1 },
-  statusOn: { color: GREEN },
-  hideBtn: { borderWidth: 1, borderColor: BORDER, paddingHorizontal: 8, paddingVertical: 1 },
-  hideTxt: { color: RED, fontFamily: FONT_DISPLAY, fontSize: 15, lineHeight: 18 },
+  status: { color: p.dim, fontFamily: FONT_DISPLAY, fontSize: 13, letterSpacing: 1 },
+  statusOn: { color: p.base },
+  hideBtn: { borderWidth: 1, borderColor: p.border, paddingHorizontal: 8, paddingVertical: 1 },
+  hideTxt: { color: p.red, fontFamily: FONT_DISPLAY, fontSize: 15, lineHeight: 18 },
 });

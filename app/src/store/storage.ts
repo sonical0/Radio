@@ -9,6 +9,7 @@ export const KEY_CUSTOM = 'customStations';
 export const KEY_BUILTIN_PREFS = 'builtinStationPrefs';
 export const KEY_LAST_STATION = 'lastStationUrl';
 export const KEY_VOLUME = 'radioVolume';
+export const KEY_THEME = 'themePalette';
 
 /**
  * Toute lecture peut échouer (stockage plein, mode privé, données corrompues
