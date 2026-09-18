@@ -2,7 +2,7 @@
 
 Portage mobile du site, sur la branche `react-native/dev`. Le site en HTML pur reste sur `main` et n'est pas touché : on ajoute une cible, on ne migre pas.
 
-## État : jalons 1 à 4 atteints
+## État : parité atteinte avec le site (jalons 1 à 5)
 
 **Jalon 1 — la lecture.** Les stations jouent, la lecture **continue quand l app passe en arrière-plan**, avec notification média et contrôles de l écran verrouillé. Le titre y vient des métadonnées **ICY lues dans le flux** par le natif. Côté web, `navigator.mediaSession` est renseigné.
 
@@ -20,7 +20,11 @@ Deux défauts trouvés en testant, tous deux corrigés : une station restaurée 
 
 Vérifié sur l émulateur de bout en bout : recherche « jazz », ajout de *Jazz 24*, la station entre dans la bibliothèque sous un groupe « US », survit à un redémarrage et joue.
 
-Pas encore porté : les raccourcis clavier de la cible web, et tout l habillage Pip-Boy (scanline, flicker, ticker, polices VT323, visualiseur).
+**Jalon 5 — l habillage Pip-Boy, et les raccourcis clavier.** Polices VT323 et Share Tech Mono (les mêmes que le site, mais en TTF : le natif ne lit pas le woff2 des `data:` URI de la page), trame de balayage, vacillement, visualiseur 34 barres, titre défilant, horloge, pastille qui pulse pendant la lecture. Les raccourcis (espace, ← →, ↑ ↓, M, S) n existent que sur la cible web, et la légende ne s affiche que là — un téléphone n a pas de clavier.
+
+La trame mérite un mot : le site la fait en `repeating-linear-gradient`, que React Native n a pas, et empiler six cents vues d un pixel serait absurde. On carrelle donc une tuile de 4×4 px générée dans le dépôt (73 octets), de même période. Le vacillement reprend le profil du site — huit secondes de calme, un creux bref à 0,94 : c est l irrégularité qui fait tube.
+
+Vérifié sur les deux cibles. Deux défauts trouvés en regardant l écran : l en-tête passait sous la barre d état Android (le `SafeAreaView` de React Native ne pose des marges que sur iOS — remplacé par `react-native-safe-area-context`), et le titre défilant restait invisible, faute de largeur dans sa rangée flex, donc mesuré à zéro et masqué par son propre `overflow`.
 
 ## Lancer
 

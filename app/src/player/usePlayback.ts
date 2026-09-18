@@ -99,6 +99,22 @@ export function usePlayback(stations: Station[]) {
     void writeString(KEY_VOLUME, String(v));
   }, []);
 
+  /** Pas de volume au clavier : ±5 %, borné, et persisté comme un glissement. */
+  const nudgeVolume = useCallback(
+    (delta: number) => {
+      setMaster((v) => {
+        const next = Math.max(0, Math.min(1, v + delta));
+        if (next > 0) {
+          setMuted(false);
+          beforeMute.current = next;
+        }
+        void writeString(KEY_VOLUME, String(next));
+        return next;
+      });
+    },
+    [],
+  );
+
   const toggleMute = useCallback(() => {
     setMuted((m) => {
       if (!m) beforeMute.current = master;
@@ -247,6 +263,7 @@ export function usePlayback(stations: Station[]) {
     changeMaster,
     commitMaster,
     toggleMute,
+    nudgeVolume,
     cycleSleep,
   };
 }

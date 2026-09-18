@@ -3,7 +3,18 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import type { Station } from '../model/station';
 import type { StreamState } from '../player/usePlayback';
-import { BORDER, DIM, GREEN, GREEN_BRIGHT, RED, t } from './theme';
+import { Ticker } from './Ticker';
+import { Visualizer } from './Visualizer';
+import {
+  BG2,
+  BORDER,
+  FONT_BODY,
+  FONT_DISPLAY,
+  GREEN,
+  GREEN_DIM,
+  RED,
+  t,
+} from './theme';
 
 type Props = {
   station: Station | null;
@@ -47,14 +58,27 @@ export function NowPlaying(p: Props) {
 
   return (
     <View style={s.wrap}>
-      <Text style={s.station} numberOfLines={1}>
-        {p.station ? p.station.name : '— SELECT A STATION —'}
-      </Text>
-      {/* Le titre et l'état du flux passent par une région vivante : ce sont les
-          seuls changements que rien d'autre n'annonce. */}
-      <Text style={s.song} numberOfLines={1} accessibilityLiveRegion="polite">
-        {status || (p.station ? (p.title ?? '...') : ' ')}
-      </Text>
+      <View style={s.headRow}>
+        <Text style={s.label}>STATION ▸</Text>
+        <Text style={s.station} numberOfLines={1}>
+          {p.station ? p.station.name : '— SELECT A STATION —'}
+        </Text>
+      </View>
+
+      <View style={s.headRow}>
+        <Text style={s.label}>NOW PLAYING ▸</Text>
+        {status ? (
+          <Text style={s.status} accessibilityLiveRegion="polite">
+            {status}
+          </Text>
+        ) : (
+          // Le ticker mesure sa boîte pour savoir s il doit défiler : sans
+          // largeur, il se mesurerait à zéro et son overflow le masquerait.
+          <View style={s.tickerBox}>
+            <Ticker text={p.station ? (p.title ?? '...') : '—'} style={s.song} />
+          </View>
+        )}
+      </View>
 
       <View style={s.controls}>
         <Pressable
@@ -63,7 +87,7 @@ export function NowPlaying(p: Props) {
           onPress={p.onPrevious}
           accessibilityRole="button"
           accessibilityLabel="Station précédente">
-          <Text style={[t.btnText, disabled && t.btnOff]}>◀◀</Text>
+          <Text style={[t.btnText, disabled && t.btnOff]}>◀◀ PREV</Text>
         </Pressable>
         <Pressable
           style={t.btn}
@@ -71,7 +95,7 @@ export function NowPlaying(p: Props) {
           onPress={p.onToggle}
           accessibilityRole="button"
           accessibilityLabel={p.playing ? 'Pause' : 'Lecture'}>
-          <Text style={[t.btnText, disabled && t.btnOff]}>{p.playing ? '❚❚' : '▶'}</Text>
+          <Text style={[t.btnText, disabled && t.btnOff]}>{p.playing ? '❚❚ PAUSE' : '▶ PLAY'}</Text>
         </Pressable>
         <Pressable
           style={t.btn}
@@ -79,7 +103,7 @@ export function NowPlaying(p: Props) {
           onPress={p.onStop}
           accessibilityRole="button"
           accessibilityLabel="Arrêter">
-          <Text style={[t.btnText, disabled && t.btnOff]}>■</Text>
+          <Text style={[t.btnText, disabled && t.btnOff]}>■ STOP</Text>
         </Pressable>
         <Pressable
           style={t.btn}
@@ -87,7 +111,7 @@ export function NowPlaying(p: Props) {
           onPress={p.onNext}
           accessibilityRole="button"
           accessibilityLabel="Station suivante">
-          <Text style={[t.btnText, disabled && t.btnOff]}>▶▶</Text>
+          <Text style={[t.btnText, disabled && t.btnOff]}>NEXT ▶▶</Text>
         </Pressable>
         <Pressable
           style={[t.btn, p.sleepMinutes ? s.armed : null]}
@@ -116,28 +140,49 @@ export function NowPlaying(p: Props) {
           maximumValue={1}
           step={0.01}
           value={p.master}
-          minimumTrackTintColor={p.muted ? DIM : GREEN}
+          minimumTrackTintColor={p.muted ? GREEN_DIM : GREEN}
           maximumTrackTintColor={BORDER}
-          thumbTintColor={p.muted ? DIM : GREEN}
+          thumbTintColor={p.muted ? GREEN_DIM : GREEN}
           onValueChange={p.onChangeMaster}
           onSlidingComplete={p.onCommitMaster}
           accessibilityLabel="Volume général"
         />
         <Text style={s.volVal}>{Math.round((p.muted ? 0 : p.master) * 100)}%</Text>
       </View>
+
+      <Visualizer active={p.playing} />
     </View>
   );
 }
 
 const s = StyleSheet.create({
-  wrap: { borderWidth: 1, borderColor: DIM, margin: 16, marginBottom: 8, padding: 12 },
-  station: { color: GREEN, fontSize: 15, letterSpacing: 2 },
-  song: { color: GREEN_BRIGHT, fontSize: 11, marginTop: 4, opacity: 0.8 },
-  controls: { flexDirection: 'row', gap: 6, marginTop: 10, flexWrap: 'wrap' },
+  wrap: {
+    borderWidth: 1,
+    borderColor: GREEN_DIM,
+    backgroundColor: BG2,
+    margin: 16,
+    marginBottom: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
+  headRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 },
+  tickerBox: { flex: 1, minWidth: 0 },
+  label: { color: GREEN_DIM, fontFamily: FONT_DISPLAY, fontSize: 14, letterSpacing: 2, lineHeight: 17 },
+  station: {
+    flex: 1,
+    color: GREEN,
+    fontFamily: FONT_DISPLAY,
+    fontSize: 22,
+    letterSpacing: 2,
+    lineHeight: 26,
+  },
+  song: { color: GREEN, fontFamily: FONT_BODY, fontSize: 12 },
+  status: { flex: 1, color: GREEN, fontFamily: FONT_BODY, fontSize: 12 },
+  controls: { flexDirection: 'row', gap: 6, marginTop: 8, flexWrap: 'wrap' },
   armed: { borderColor: GREEN },
-  volRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 10 },
-  volLabel: { color: DIM, fontSize: 10, letterSpacing: 1 },
+  volRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 10 },
+  volLabel: { color: GREEN_DIM, fontFamily: FONT_DISPLAY, fontSize: 14, letterSpacing: 2 },
   slider: { flex: 1, height: 28 },
-  volVal: { color: DIM, fontSize: 10, minWidth: 34, textAlign: 'right' },
+  volVal: { color: GREEN_DIM, fontFamily: FONT_BODY, fontSize: 11, minWidth: 36, textAlign: 'right' },
   mutedTxt: { color: RED },
 });

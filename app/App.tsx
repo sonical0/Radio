@@ -1,31 +1,35 @@
-// Jalon 3 : le confort de lecture par-dessus la bibliothèque.
-// Volume maître et sourdine, suivant/précédent (qui sautent les masquées),
-// dernière station mémorisée, minuterie de veille avec fondu, reconnexion sur
-// flux coupé, et le titre en cours de toutes les stations et non plus seulement
-// de celle qu'on écoute.
-// Reste à faire : l'habillage Pip-Boy, l'annuaire Radio-Browser, les raccourcis
-// clavier de la cible web.
+// Jalon 5 : l'habillage Pip-Boy — polices VT323 et Share Tech Mono, trame de
+// balayage, vacillement, visualiseur, ticker, horloge, pastille qui pulse.
+// Avec les raccourcis clavier de la cible web, la parité fonctionnelle avec le
+// site est atteinte.
 
+import { useFonts } from 'expo-font';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, SafeAreaView, SectionList, StatusBar, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Platform, SectionList, StatusBar, StyleSheet, Text, View } from 'react-native';
+import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 
 import type { Station } from './src/model/station';
 import { useNowPlaying } from './src/model/useNowPlaying';
 import { setupPlayer } from './src/player/player';
+import { useKeyboardShortcuts } from './src/player/useKeyboardShortcuts';
 import { usePlayback } from './src/player/usePlayback';
 import { groupStations, knownGroups } from './src/store/library';
 import { useLibrary } from './src/store/useLibrary';
 import { AddStation } from './src/ui/AddStation';
+import { Clock } from './src/ui/Clock';
+import { Crt } from './src/ui/Crt';
 import { Directory } from './src/ui/Directory';
 import { NowPlaying } from './src/ui/NowPlaying';
 import { StationRow } from './src/ui/StationRow';
 import { Trash } from './src/ui/Trash';
-import { BG, GREEN, t } from './src/ui/theme';
+import { BG, FONTS, FONT_BODY, GREEN, GREEN_DIM, t } from './src/ui/theme';
 
 export default function App() {
   const lib = useLibrary();
   const play = usePlayback(lib.stations);
   const { titles, refreshOne } = useNowPlaying(lib.stations, play.currentUrl);
+  const [fontsLoaded] = useFonts(FONTS);
+  useKeyboardShortcuts(play);
   const [ready, setReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -76,72 +80,98 @@ export default function App() {
   const groups = useMemo(() => knownGroups(lib.stations), [lib.stations]);
 
   return (
-    <SafeAreaView style={t.screen}>
-      <StatusBar barStyle="light-content" backgroundColor={BG} />
-      <Text style={t.title}>FALLOUT RADIO</Text>
+    <SafeAreaProvider>
+      <Crt>
+        <SafeAreaView style={t.screen} edges={['top', 'bottom']}>
+        <StatusBar barStyle="light-content" backgroundColor={BG} />
 
-      {error ? <Text style={[t.msgErr, s.pad]}>⚠ {error}</Text> : null}
+        <View style={t.header}>
+          <Text style={t.title}>FALLOUT RADIO</Text>
+          <Clock />
+        </View>
 
-      <NowPlaying
-        station={play.current}
-        title={play.current ? (titles[play.current.url] ?? null) : null}
-        playing={play.playing}
-        streamState={play.streamState}
-        master={play.master}
-        muted={play.muted}
-        sleepMinutes={play.sleepMinutes}
-        sleepLeft={play.sleepLeft}
-        onToggle={play.toggle}
-        onStop={play.stop}
-        onNext={play.next}
-        onPrevious={play.previous}
-        onChangeMaster={play.changeMaster}
-        onCommitMaster={play.commitMaster}
-        onToggleMute={play.toggleMute}
-        onCycleSleep={play.cycleSleep}
-      />
+        {error ? <Text style={[t.msgErr, s.pad]}>⚠ {error}</Text> : null}
 
-      {lib.loading || !ready ? (
-        <ActivityIndicator color={GREEN} style={s.loader} />
-      ) : (
-        <SectionList
-          sections={sections}
-          keyExtractor={(item) => item.url}
-          stickySectionHeadersEnabled={false}
-          renderSectionHeader={({ section }) => <Text style={t.sectionLabel}>{section.title}</Text>}
-          renderItem={({ item }) => (
-            <StationRow
-              station={item}
-              active={item.url === play.currentUrl}
-              status={rowStatus(item.url)}
-              nowPlaying={titles[item.url]}
-              onSelect={onSelect}
-              onPreviewGain={lib.previewGain}
-              onCommitGain={lib.commitGain}
-              onHide={onHide}
-            />
-          )}
-          ListFooterComponent={
-            <View>
-              <Trash hidden={hidden} onRestore={lib.restore} onPurge={lib.purge} />
-              <AddStation
-                groups={groups}
-                onAdd={lib.addStation}
-                onExport={lib.exportStations}
-                onImport={lib.importStations}
-              />
-              <Directory onAdd={lib.addStation} />
-              <View style={s.footerSpace} />
-            </View>
-          }
+        <NowPlaying
+          station={play.current}
+          title={play.current ? (titles[play.current.url] ?? null) : null}
+          playing={play.playing}
+          streamState={play.streamState}
+          master={play.master}
+          muted={play.muted}
+          sleepMinutes={play.sleepMinutes}
+          sleepLeft={play.sleepLeft}
+          onToggle={play.toggle}
+          onStop={play.stop}
+          onNext={play.next}
+          onPrevious={play.previous}
+          onChangeMaster={play.changeMaster}
+          onCommitMaster={play.commitMaster}
+          onToggleMute={play.toggleMute}
+          onCycleSleep={play.cycleSleep}
         />
-      )}
-    </SafeAreaView>
+
+        {lib.loading || !ready || !fontsLoaded ? (
+          <ActivityIndicator color={GREEN} style={s.loader} />
+        ) : (
+          <SectionList
+            sections={sections}
+            keyExtractor={(item) => item.url}
+            stickySectionHeadersEnabled={false}
+            renderSectionHeader={({ section }) => (
+              <Text style={t.sectionLabel}>{'── ' + section.title + ' ──'}</Text>
+            )}
+            renderItem={({ item }) => (
+              <StationRow
+                station={item}
+                active={item.url === play.currentUrl}
+                status={rowStatus(item.url)}
+                nowPlaying={titles[item.url]}
+                onSelect={onSelect}
+                onPreviewGain={lib.previewGain}
+                onCommitGain={lib.commitGain}
+                onHide={onHide}
+              />
+            )}
+            ListFooterComponent={
+              <View>
+                <Trash hidden={hidden} onRestore={lib.restore} onPurge={lib.purge} />
+                <AddStation
+                  groups={groups}
+                  onAdd={lib.addStation}
+                  onExport={lib.exportStations}
+                  onImport={lib.importStations}
+                />
+                <Directory onAdd={lib.addStation} />
+                {/* Les raccourcis n existent que sur la cible web : ne pas les
+                    annoncer sur un téléphone, qui n a pas de clavier. */}
+                {Platform.OS === 'web' ? (
+                  <Text style={s.shortcuts}>
+                    ESPACE lecture/pause · ← → station · ↑ ↓ volume · M muet · S stop
+                  </Text>
+                ) : null}
+                <View style={s.footerSpace} />
+              </View>
+            }
+          />
+        )}
+        </SafeAreaView>
+      </Crt>
+    </SafeAreaProvider>
   );
 }
 
 const s = StyleSheet.create({
   pad: { paddingHorizontal: 16 },
   loader: { marginTop: 32 },
+  shortcuts: {
+    color: GREEN_DIM,
+    fontFamily: FONT_BODY,
+    fontSize: 11,
+    letterSpacing: 1,
+    marginTop: 18,
+    marginHorizontal: 16,
+    opacity: 0.8,
+  },
   footerSpace: { height: 28 },
 });
