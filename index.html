@@ -623,6 +623,7 @@
       <label class="sr-only" for="rb-q">Chercher une radio dans l'annuaire</label>
       <input class="add-input" id="rb-q" placeholder="Chercher une radio (nom, genre, pays…)" />
       <button class="add-btn" onclick="searchDirectory()">⌕ CHERCHER</button>
+      <button class="add-btn" id="rb-clear" onclick="clearDirectory()" hidden>✕ EFFACER</button>
     </div>
     <div class="rb-results" id="rb-results" aria-live="polite"></div>
   </div>
@@ -1803,10 +1804,23 @@ function addToLibrary(raw) {
 // cours, que detectMeta() récupère ensuite quand l'hôte est un AzuraCast.
 let rbSeq = 0;
 
+// Vide la liste de résultats. Chercher à vide le faisait déjà, mais rien ne le
+// disait : un bouton dédié, affiché seulement quand il y a quelque chose à
+// effacer, vaut mieux qu une astuce à connaître.
+function clearDirectory() {
+  rbSeq++;
+  document.getElementById('rb-q').value = '';
+  document.getElementById('rb-results').textContent = '';
+  document.getElementById('rb-clear').hidden = true;
+}
+
 async function searchDirectory() {
   const q = document.getElementById('rb-q').value.trim();
   const box = document.getElementById('rb-results');
-  if (!q) { box.textContent = ''; return; }
+  if (!q) { clearDirectory(); return; }
+  // Dès qu il y a quelque chose à l écran — résultats ou message — l effacement
+  // devient possible.
+  document.getElementById('rb-clear').hidden = false;
 
   // Une recherche lente ne doit pas écraser le résultat d'une recherche lancée
   // après elle : seul le dernier numéro de séquence a le droit d'écrire.

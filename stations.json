@@ -1,13 +1,13 @@
 [
-  { "group": "FO3",  "name": "Galaxy News Radio",   "url": "https://stations.fallout.radio/listen/fallout_3_-_galaxy_news_radio/radio.mp3",           "apiId": 3,  "gain": 0.63 },
-  { "group": "FO3",  "name": "Enclave Radio",        "url": "https://stations.fallout.radio/listen/fallout_3_-_enclave_radio/radio.mp3",                "apiId": 4,  "gain": 0.63 },
-  { "group": "FO3",  "name": "Agatha's Station",     "url": "https://stations.fallout.radio/listen/fallout_3_-_agathas_station/radio.mp3",              "apiId": 11, "gain": 0.63 },
-  { "group": "FO3",  "name": "Vault 101 PA System",  "url": "https://stations.fallout.radio/listen/fallout_3_-_vault_101_pa_system/radio.mp3",          "apiId": 12, "gain": 0.63 },
-  { "group": "FONV", "name": "Mojave Music Radio",   "url": "https://stations.fallout.radio/listen/fallout_new_vegas_-_mojave_music_radio/radio.mp3",   "apiId": 7  },
-  { "group": "FONV", "name": "Radio New Vegas",      "url": "https://stations.fallout.radio/listen/fallout_new_vegas_-_radio_new_vegas/radio.mp3",      "apiId": 8  },
-  { "group": "FONV", "name": "Mysterious Broadcast", "url": "https://stations.fallout.radio/listen/fallout_new_vegas_-_mysterious_broadcast/radio.mp3", "apiId": 13, "gain": 0.63 },
-  { "group": "FONV", "name": "Black Mountain Radio", "url": "https://stations.fallout.radio/listen/fallout_new_vegas_-_black_mountain_radio/radio.mp3",  "apiId": 15, "gain": 0.63 },
-  { "group": "FO4",  "name": "Diamond City Radio",   "url": "https://stations.fallout.radio/listen/fallout_4_-_diamond_city_radio/radio.mp3",           "apiId": 10, "gain": 0.63 },
-  { "group": "FO4",  "name": "Classical Radio",      "url": "https://stations.fallout.radio/listen/fallout_4_-_classical_radio/radio.mp3",              "apiId": 16, "gain": 0.63 },
-  { "group": "FO76", "name": "Pirate Radio",         "url": "https://stations.fallout.radio/listen/fallout_76_-_pirate_radio/radio.mp3",                "apiId": 14, "gain": 0.63 }
+  { "group": "FO3",  "name": "Galaxy News Radio",    "url": "https://stations.fallout.radio/listen/fallout_3_-_galaxy_news_radio/radio.mp3",            "apiId": 3,  "gain": 0.29 },
+  { "group": "FO3",  "name": "Enclave Radio",        "url": "https://stations.fallout.radio/listen/fallout_3_-_enclave_radio/radio.mp3",                "apiId": 4,  "gain": 0.45 },
+  { "group": "FO3",  "name": "Agatha's Station",     "url": "https://stations.fallout.radio/listen/fallout_3_-_agathas_station/radio.mp3",              "apiId": 11, "gain": 0.45 },
+  { "group": "FO3",  "name": "Vault 101 PA System",  "url": "https://stations.fallout.radio/listen/fallout_3_-_vault_101_pa_system/radio.mp3",          "apiId": 12, "gain": 0.39 },
+  { "group": "FONV", "name": "Mojave Music Radio",   "url": "https://stations.fallout.radio/listen/fallout_new_vegas_-_mojave_music_radio/radio.mp3",   "apiId": 7,  "gain": 1 },
+  { "group": "FONV", "name": "Radio New Vegas",      "url": "https://stations.fallout.radio/listen/fallout_new_vegas_-_radio_new_vegas/radio.mp3",      "apiId": 8,  "gain": 1 },
+  { "group": "FONV", "name": "Mysterious Broadcast", "url": "https://stations.fallout.radio/listen/fallout_new_vegas_-_mysterious_broadcast/radio.mp3", "apiId": 13, "gain": 0.42 },
+  { "group": "FONV", "name": "Black Mountain Radio", "url": "https://stations.fallout.radio/listen/fallout_new_vegas_-_black_mountain_radio/radio.mp3", "apiId": 15, "gain": 0.25 },
+  { "group": "FO4",  "name": "Diamond City Radio",   "url": "https://stations.fallout.radio/listen/fallout_4_-_diamond_city_radio/radio.mp3",           "apiId": 10, "gain": 0.24 },
+  { "group": "FO4",  "name": "Classical Radio",      "url": "https://stations.fallout.radio/listen/fallout_4_-_classical_radio/radio.mp3",              "apiId": 16, "gain": 1 },
+  { "group": "FO76", "name": "Pirate Radio",         "url": "https://stations.fallout.radio/listen/fallout_76_-_pirate_radio/radio.mp3",                "apiId": 14, "gain": 0.17 }
 ]

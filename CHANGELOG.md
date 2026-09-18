@@ -8,6 +8,27 @@ Ordre : **entrée la plus récente en tête**. Plusieurs passes le même jour so
 suffixées `(2)`, `(3)`… la plus haute étant la plus récente (même convention que
 `TANDEM_LOG.md`).
 
+## 2026-09-18 (4)
+
+### Changé — les gains des stations sont mesurés, plus estimés
+- Radio New Vegas et Mojave Music Radio s entendaient nettement moins que les autres, et les
+  gains livrés aggravaient l affaire : les fortes à 0,63, ces deux-là à 1, soit quatre
+  décibels de correction pour un écart qui s est révélé être de vingt-deux.
+- Les onze flux ont été mesurés à la sonie **EBU R128** (ffmpeg `ebur128`), deux passes de 40
+  et 100 s, moyennées. L éventail va de **-10,6 LUFS** (Pirate Radio) à **-32,7** (Mojave).
+- Les gains visent désormais une **cible de -26 LUFS** : ce qui est au-dessus est atténué
+  d autant, ce qui est en dessous garde 1 — on ne peut pas amplifier au-delà du maximum.
+  Aligner sur la plus faible aurait mis presque tout au plancher de 0,1.
+- Pirate Radio passe de 0,63 à **0,17**, Diamond City à **0,24**, Galaxy News à **0,29**.
+  Classical Radio, mesurée à -30 LUFS, remonte de 0,63 à **1** : elle était faible aussi,
+  personne ne l avait signalé.
+- Il reste un écart : Mojave est encore ~7 dB sous la cible, faute de pouvoir l amplifier.
+  Le curseur par station sert à ça, et son réglage est retenu.
+
+### Ajouté — effacer les résultats de l annuaire
+- Un bouton **✕ EFFACER** apparaît à côté de « CHERCHER » dès qu il y a quelque chose à
+  l écran. Chercher à vide vidait déjà la liste, mais rien ne le disait.
+
 ## 2026-09-18 (3)
 
 ### Changé — « Ajouter une station » se replie
