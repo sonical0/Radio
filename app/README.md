@@ -26,6 +26,22 @@ La trame mérite un mot : le site la fait en `repeating-linear-gradient`, que Re
 
 Vérifié sur les deux cibles. Deux défauts trouvés en regardant l écran : l en-tête passait sous la barre d état Android (le `SafeAreaView` de React Native ne pose des marges que sur iOS — remplacé par `react-native-safe-area-context`), et le titre défilant restait invisible, faute de largeur dans sa rangée flex, donc mesuré à zéro et masqué par son propre `overflow`.
 
+## Ce que l'app fait et que le site ne peut pas
+
+Deux verrous du navigateur tombent en natif, et ils sont désormais exploités tous les deux.
+
+**Amplifier.** `setVolume()` est borné à 1 : une station diffusée quinze décibels sous les autres ne peut pas être remontée, on ne peut qu'abaisser le reste — ce qui rend toute l'appli plus faible que le téléphone. Le module local `modules/audio-boost` attache un `LoudnessEnhancer` et ajoute le gain manquant : +11 dB sur Mojave Music Radio, +13 sur Radio New Vegas, d'après la mesure. Il s'accroche à la **session 0**, le mixage de sortie, faute de session publiée par le lecteur : tant qu'il tourne il amplifie tout ce qui sort du téléphone, d'où son armement pour la seule station concernée et son relâchement à la pause, au stop et à chaque changement. Un appareil qui refuse l'effet laisse la station faible plutôt que de casser quoi que ce soit.
+
+**Lire les métadonnées du flux.** Presque tous les Icecast et Shoutcast intercalent leur titre dans l'audio (ICY). Le lecteur natif les lit — c'est ce qui remplit la notification — et l'interface les affiche désormais pour la station écoutée, y compris pour une webradio venue de l'annuaire qui n'a aucun endpoint. À l'ajout, l'app interroge en plus l'hôte sur `/status-json.xsl` et `/stats?json=1`.
+
+Le second point mérite un chiffre, parce qu'il justifie à lui seul le portage : **sondées depuis un navigateur, 0 station sur 12 répondent** — tous les serveurs Icecast testés omettent l'en-tête CORS. Depuis le natif, 3 sur 7 répondent. La même sonde a donc été écrite ici et **retirée du site**, où elle n'aurait fait qu'ajouter six secondes d'attente à chaque ajout pour rien.
+
+## Gains et champ `boost`
+
+Les gains sont mesurés : `ffmpeg -af ebur128`, **deux passes de 180 s** par station, moyennées, vers une cible de **-18 LUFS**. Des fenêtres plus courtes ne suffisent pas — Pirate Radio mesure de -8,8 à -25,2 LUFS selon le moment, et un échantillon de 40 s avait produit un gain trois fois trop sévère.
+
+Ce qui dépasse la cible est atténué par `gain` (≤ 1). Ce qui est plus de 6 dB en dessous porte en plus un `boost` en décibels, appliqué par l'amplificateur natif. `stations.json` de la racine porte les deux champs ; le site ignore `boost`, faute de pouvoir amplifier.
+
 ## Lancer
 
 ```bash
