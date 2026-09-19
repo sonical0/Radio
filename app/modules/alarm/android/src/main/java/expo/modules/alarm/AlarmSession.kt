@@ -32,18 +32,27 @@ object AlarmSession {
   private const val KEY_SNOOZES = "snoozes"
   private const val KEY_URL = "url"
   private const val KEY_TITLE = "title"
+  private const val KEY_RAMP = "ramp"
+  private const val KEY_GAIN = "gain"
 
   private fun prefs(context: Context) =
     context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
 
-  fun open(context: Context, startedAt: Long, url: String, title: String) {
+  fun open(context: Context, startedAt: Long, url: String, title: String, rampSeconds: Int, gain: Double) {
     prefs(context).edit()
       .putLong(KEY_START, startedAt)
       .putInt(KEY_SNOOZES, 0)
       .putString(KEY_URL, url)
       .putString(KEY_TITLE, title)
+      .putInt(KEY_RAMP, rampSeconds)
+      .putFloat(KEY_GAIN, gain.toFloat())
       .apply()
   }
+
+  /** La rampe vaut aussi pour les reprises après report : c'est le même réveil. */
+  fun rampSeconds(context: Context): Int = prefs(context).getInt(KEY_RAMP, 30)
+
+  fun gain(context: Context): Float = prefs(context).getFloat(KEY_GAIN, 1f)
 
   fun close(context: Context) {
     prefs(context).edit().clear().apply()

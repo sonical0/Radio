@@ -13,13 +13,14 @@ import {
 
 import {
   DAY_INITIALS,
+  RAMP_STEPS,
   WEEK_ORDER,
   describeDays,
   setKeepAwake,
   type Alarm,
 } from '../../modules/alarm';
 import type { Station } from '../model/station';
-import { newAlarm, type AlarmLibrary } from '../store/useAlarms';
+import { newAlarm, withStation, type AlarmLibrary } from '../store/useAlarms';
 import { FONT_BODY, FONT_DISPLAY, useTheme, type Palette } from './theme';
 
 const DAY_NAMES = ['dimanche', 'lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi'];
@@ -99,7 +100,7 @@ export function Bedside({ station, lib }: { station: Station | null; lib: AlarmL
 
   const add = useCallback(() => {
     if (!station) return;
-    const created = newAlarm(station.url, station.name);
+    const created = newAlarm(station);
     lib.save(created);
     setEditing(created.id);
     if (Platform.OS === 'android' && Number(Platform.Version) >= 33) {
@@ -294,9 +295,25 @@ function AlarmRow({
             })}
           </View>
 
+          {/* La montée de volume : quatre paliers plutôt qu'un champ libre —
+              personne ne règle un réveil à 37 secondes. */}
+          <Pressable
+            onPress={() => {
+              const i = RAMP_STEPS.indexOf(alarm.rampSeconds);
+              const next = RAMP_STEPS[(i + 1) % RAMP_STEPS.length];
+              onSave({ ...alarm, rampSeconds: next });
+            }}
+            accessibilityRole="button"
+            accessibilityLabel="Durée de la montée de volume"
+            style={t.btn}>
+            <Text style={t.btnText}>
+              {alarm.rampSeconds === 0 ? 'SANS MONTÉE' : 'MONTÉE ' + alarm.rampSeconds + ' S'}
+            </Text>
+          </Pressable>
+
           {station && station.url !== alarm.stationUrl ? (
             <Pressable
-              onPress={() => onSave({ ...alarm, stationUrl: station.url, title: station.name })}
+              onPress={() => onSave(withStation(alarm, station))}
               accessibilityRole="button"
               style={t.btn}>
               <Text style={t.btnText}>RÉVEILLER AVEC {station.name.toUpperCase()}</Text>

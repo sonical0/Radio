@@ -36,7 +36,12 @@ export type Alarm = {
   title: string;
   enabled: boolean;
   rampSeconds: number;
+  /** Le gain de la station, recopié à l'enregistrement : le natif ne lit pas la bibliothèque. */
+  gain: number;
 };
+
+/** Les durées proposées pour la montée, en secondes. 0 = plein volume tout de suite. */
+export const RAMP_STEPS = [0, 15, 30, 60];
 
 export function alarmAvailable(): boolean {
   return native != null;

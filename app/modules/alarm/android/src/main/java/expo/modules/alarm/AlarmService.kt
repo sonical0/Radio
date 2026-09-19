@@ -29,6 +29,12 @@ private const val NOTIFICATION_ID = 42
 /** Ce qu'on laisse au flux pour produire du son avant de le déclarer mort. */
 private const val STREAM_GRACE_MS = 10 * 1000L
 
+/** Un pas toutes les demi-secondes : au-delà, la montée s'entend par paliers. */
+private const val RAMP_STEP_MS = 500L
+
+/** On ne part pas de zéro : inaudible pendant dix secondes ne réveille personne. */
+private const val RAMP_FROM = 0.1f
+
 /**
  * La sonnerie.
  *
@@ -56,6 +62,8 @@ class AlarmService : Service() {
 
     /** Non nul quand la sonnerie reprend après un report : l'heure de la première note. */
     const val EXTRA_SESSION_START = "sessionStart"
+    const val EXTRA_RAMP = "ramp"
+    const val EXTRA_GAIN = "gain"
 
     const val ACTION_STOP = "expo.modules.alarm.STOP"
     const val ACTION_SNOOZE = "expo.modules.alarm.SNOOZE"
@@ -71,6 +79,9 @@ class AlarmService : Service() {
   private var ringtone: MediaPlayer? = null
   private var wakeLock: PowerManager.WakeLock? = null
   private var fellBack = false
+  private var target = 1f
+  private var rampStartedAt = 0L
+  private var rampMs = 0L
 
   private val autoStopRunnable = Runnable {
     Log.i(TAG, "dix minutes sans action : arrêt de cette sonnerie")
@@ -78,6 +89,29 @@ class AlarmService : Service() {
   }
 
   private val fallbackRunnable = Runnable { fallbackToRingtone("le flux n'a rien produit en 10 s") }
+
+  /**
+   * La montée de volume.
+   *
+   * `@rntp/player` sait fondre à la baisse pour la minuterie de veille, mais
+   * n'a pas de symétrique à la hausse — et de toute façon ce n'est pas lui
+   * qui joue ici. C'est donc une rampe à la main, calculée sur l'horloge et
+   * non sur un compteur de pas : si le système retarde un pas, le suivant
+   * rattrape au lieu d'allonger la montée.
+   */
+  private val rampRunnable = object : Runnable {
+    override fun run() {
+      val exo = player ?: return
+      val elapsed = System.currentTimeMillis() - rampStartedAt
+      if (elapsed >= rampMs) {
+        exo.volume = target
+        return
+      }
+      val progress = elapsed.toFloat() / rampMs.toFloat()
+      exo.volume = target * (RAMP_FROM + (1f - RAMP_FROM) * progress)
+      handler.postDelayed(this, RAMP_STEP_MS)
+    }
+  }
 
   override fun onBind(intent: Intent?): IBinder? = null
 
@@ -100,9 +134,22 @@ class AlarmService : Service() {
 
     if (resumed == 0L) {
       // Première note du matin : c'est d'ici que court la demi-heure.
-      AlarmSession.open(this, now, url, title)
+      AlarmSession.open(
+        this,
+        now,
+        url,
+        title,
+        intent?.getIntExtra(EXTRA_RAMP, 30) ?: 30,
+        intent?.getDoubleExtra(EXTRA_GAIN, 1.0) ?: 1.0,
+      )
       AlarmDeadline.arm(this, AlarmSession.deadline(this))
     }
+
+    // Le gain de la station s'applique au réveil comme à l'écoute : une
+    // station mesurée trop forte ne doit pas l'être deux fois plus à 7 h.
+    target = AlarmSession.gain(this).coerceIn(0f, 1f)
+    rampMs = AlarmSession.rampSeconds(this).coerceIn(0, 300) * 1000L
+    rampStartedAt = now
 
     startForeground(NOTIFICATION_ID, notification(title))
     ringing = true
@@ -148,6 +195,7 @@ class AlarmService : Service() {
       // `handleAudioFocus = true` : si un appel arrive, on se tait plutôt que
       // de hurler par-dessus.
       setAudioAttributes(attrs, true)
+      volume = if (rampMs > 0L) target * RAMP_FROM else target
       setMediaItem(MediaItem.fromUri(url))
       addListener(object : Player.Listener {
         override fun onPlaybackStateChanged(state: Int) {
@@ -155,6 +203,10 @@ class AlarmService : Service() {
             // Le flux vit : le repli n'a plus lieu d'être.
             handler.removeCallbacks(fallbackRunnable)
             Log.i(TAG, "flux prêt, la radio sonne")
+            // La rampe part de la première note, pas de l'ouverture du flux :
+            // sinon dix secondes de réseau lent mangeraient la montée.
+            rampStartedAt = System.currentTimeMillis()
+            if (rampMs > 0L) handler.post(rampRunnable)
           }
         }
 
@@ -289,6 +341,7 @@ class AlarmService : Service() {
     ringing = false
     handler.removeCallbacks(autoStopRunnable)
     handler.removeCallbacks(fallbackRunnable)
+    handler.removeCallbacks(rampRunnable)
     releasePlayer()
     try {
       ringtone?.stop()

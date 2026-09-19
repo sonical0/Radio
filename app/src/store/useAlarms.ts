@@ -15,6 +15,7 @@ import {
   pushAlarms,
   type Alarm,
 } from '../../modules/alarm';
+import type { Station } from '../model/station';
 import { KEY_ALARMS, readJson, writeJson } from './storage';
 
 export type NextAlarm = { at: Date; id: string } | null;
@@ -30,17 +31,26 @@ export type AlarmLibrary = {
   refresh: () => void;
 };
 
-export function newAlarm(stationUrl: string, title: string): Alarm {
+export function newAlarm(station: Station): Alarm {
   return {
     id: String(Date.now()),
     hour: 7,
     minute: 0,
     days: [1, 2, 3, 4, 5],
-    stationUrl,
-    title,
+    stationUrl: station.url,
+    title: station.name,
     enabled: true,
     rampSeconds: RAMP_SECONDS_DEFAULT,
+    // Recopié plutôt que relu : le natif n'a pas accès à la bibliothèque,
+    // et une station réétalonnée depuis se répercute à la prochaine
+    // réaffectation, ce qui est un comportement prévisible.
+    gain: station.gain,
   };
+}
+
+/** Rattache une alarme à une station : l'URL, le nom et le gain vont ensemble. */
+export function withStation(alarm: Alarm, station: Station): Alarm {
+  return { ...alarm, stationUrl: station.url, title: station.name, gain: station.gain };
 }
 
 export function useAlarms(): AlarmLibrary {

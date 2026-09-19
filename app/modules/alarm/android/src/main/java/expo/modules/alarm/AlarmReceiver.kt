@@ -69,7 +69,9 @@ class AlarmReceiver : BroadcastReceiver() {
     context.startForegroundService(
       Intent(context, AlarmService::class.java)
         .putExtra(AlarmService.EXTRA_URL, spec.url)
-        .putExtra(AlarmService.EXTRA_TITLE, spec.title),
+        .putExtra(AlarmService.EXTRA_TITLE, spec.title)
+        .putExtra(AlarmService.EXTRA_RAMP, spec.rampSeconds)
+        .putExtra(AlarmService.EXTRA_GAIN, spec.gain),
     )
 
     // Une alarme sans récurrence est consommée ; une alarme récurrente

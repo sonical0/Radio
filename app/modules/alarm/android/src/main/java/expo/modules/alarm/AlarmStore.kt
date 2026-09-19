@@ -17,6 +17,10 @@ data class AlarmSpec(
   val url: String,
   val title: String,
   val enabled: Boolean,
+  /** Durée de la montée de volume, en secondes. 0 = plein volume tout de suite. */
+  val rampSeconds: Int,
+  /** Le gain de la station, mesuré côté JS : on ne réveille pas plus fort qu'en écoute. */
+  val gain: Double,
 )
 
 /**
@@ -77,6 +81,8 @@ object AlarmStore {
       url = o.optString("stationUrl"),
       title = o.optString("title", "Réveil"),
       enabled = o.optBoolean("enabled", true),
+      rampSeconds = o.optInt("rampSeconds", 30),
+      gain = o.optDouble("gain", 1.0),
     )
   }
 
