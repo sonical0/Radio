@@ -7,6 +7,7 @@
 // liste de stations.
 
 import TrackPlayer, { PlayerCommand } from '@rntp/player';
+import { setBoostDb } from '../../modules/audio-boost';
 import type { Station } from '../model/station';
 
 let ready = false;
@@ -69,6 +70,9 @@ export function playStation(s: Station, master: number): void {
     isLive: true,
   });
   setVolume(s, master);
+  // L amplificateur touche tout le mixage de sortie : on ne l arme que pour
+  // la station qui en a besoin, et on le coupe au moindre arrêt.
+  setBoostDb(s.boost);
   TrackPlayer.play();
 }
 
@@ -83,14 +87,22 @@ export function setVolume(s: Station | null, master: number): void {
   TrackPlayer.setVolume(Math.max(0, Math.min(1, master * g)));
 }
 
-export function togglePlay(playing: boolean): void {
+export function togglePlay(playing: boolean, boost = 0): void {
   ensure();
-  if (playing) TrackPlayer.pause();
-  else TrackPlayer.play();
+  if (playing) {
+    // En pause, plus rien ne sort d ici : garder l amplificateur armé
+    // reviendrait à pousser le son des autres applications.
+    setBoostDb(0);
+    TrackPlayer.pause();
+    return;
+  }
+  setBoostDb(boost);
+  TrackPlayer.play();
 }
 
 export function stop(): void {
   ensure();
+  setBoostDb(0);
   TrackPlayer.stop();
   TrackPlayer.clear();
 }

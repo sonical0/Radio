@@ -26,6 +26,7 @@ export function serializeStation(s: Station) {
     hls: s.hls,
     meta: s.meta,
     gain: s.gain,
+    ...(s.boost ? { boost: s.boost } : {}),
   };
   // Seulement quand il est vrai : un export ne contient que des stations
   // visibles, autant ne pas y traîner un `hidden: false` sur chaque entrée.

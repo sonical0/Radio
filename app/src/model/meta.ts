@@ -35,6 +35,16 @@ export function parseIcecast(d: unknown, streamUrl: string): string | null {
   return m ? m.title || m.yp_currently_playing || null : null;
 }
 
+/**
+ * Shoutcast v2 : /stats?json=1 donne le titre tel quel, sans séparer artiste et
+ * morceau. On le rend brut plutôt que de deviner où couper.
+ */
+export function parseShoutcast(d: unknown): string | null {
+  const s = d as { songtitle?: string; streamtitle?: string };
+  const txt = (s?.songtitle || s?.streamtitle || '').trim();
+  return txt || null;
+}
+
 export async function fetchMeta(meta: MetaSource, streamUrl: string): Promise<string | null> {
   try {
     const ctrl = new AbortController();
@@ -43,7 +53,9 @@ export async function fetchMeta(meta: MetaSource, streamUrl: string): Promise<st
     clearTimeout(t);
     if (!r.ok) return null;
     const d = await r.json();
-    return meta.type === 'icecast' ? parseIcecast(d, streamUrl) : parseAzuracast(d, streamUrl);
+    if (meta.type === 'icecast') return parseIcecast(d, streamUrl);
+    if (meta.type === 'shoutcast') return parseShoutcast(d);
+    return parseAzuracast(d, streamUrl);
   } catch {
     return null;
   }

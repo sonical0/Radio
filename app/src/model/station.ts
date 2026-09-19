@@ -9,7 +9,7 @@ export const API_BASE = 'https://stations.fallout.radio/api/nowplaying/';
 export const DEFAULT_GROUP = 'DIVERS';
 export const GAIN_MIN = 0.1;
 
-export type MetaType = 'azuracast' | 'icecast';
+export type MetaType = 'azuracast' | 'icecast' | 'shoutcast';
 export type MetaSource = { type: MetaType; url: string };
 
 /** Forme interne, identique à celle du site. */
@@ -20,6 +20,11 @@ export type Station = {
   hls: boolean;
   meta: MetaSource | null;
   gain: number;
+  /**
+   * Décibels à ajouter par l amplificateur natif, pour les stations diffusées
+   * si bas qu atténuer les autres ne suffit plus. 0 = rien à faire.
+   */
+  boost: number;
   hidden: boolean;
   isCustom: boolean;
 };
@@ -34,6 +39,7 @@ export type RawStation = {
   meta?: unknown;
   apiId?: unknown;
   gain?: unknown;
+  boost?: unknown;
   hidden?: unknown;
 };
 
@@ -46,6 +52,11 @@ export function isValidStation(s: unknown): s is RawStation {
     typeof r.url === 'string' &&
     r.url.startsWith('http')
   );
+}
+
+/** Un boost absent, négatif ou délirant vaut zéro : on n amplifie pas par accident. */
+export function sanitizeBoost(b: unknown): number {
+  return typeof b === 'number' && isFinite(b) && b > 0 ? Math.min(15, b) : 0;
 }
 
 export function stationGroup(s: RawStation): string {
@@ -122,7 +133,8 @@ export function detectMeta(url: string): MetaSource | null {
 export function normalizeMeta(s: RawStation, url: string): MetaSource | null {
   const m = s.meta as MetaSource | undefined;
   if (m && typeof m === 'object' && typeof m.url === 'string' && isSafeHttpUrl(m.url)) {
-    return { type: m.type === 'icecast' ? 'icecast' : 'azuracast', url: m.url };
+    const type: MetaType = m.type === 'icecast' || m.type === 'shoutcast' ? m.type : 'azuracast';
+    return { type, url: m.url };
   }
   if (s.apiId) return { type: 'azuracast', url: API_BASE + String(s.apiId) };
   return detectMeta(url);
@@ -138,6 +150,7 @@ export function normalizeStation(s: RawStation, isCustom: boolean): Station {
     hls: s.hls === true || isHlsUrl(url),
     meta: normalizeMeta(s, url),
     gain: sanitizeGain(s.gain),
+    boost: sanitizeBoost(s.boost),
     hidden: s.hidden === true,
     isCustom,
   };

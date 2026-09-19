@@ -26,7 +26,8 @@
       "predictiveBackGestureEnabled": false,
       "permissions": [
         "android.permission.FOREGROUND_SERVICE",
-        "android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK"
+        "android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK",
+        "android.permission.MODIFY_AUDIO_SETTINGS"
       ],
       "versionCode": 3
     },

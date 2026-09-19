@@ -67,8 +67,18 @@ async function rbQuery(params: Record<string, string>): Promise<DirectoryHit[]> 
   }
   if (!Array.isArray(data)) return [];
 
+  // L annuaire liste plusieurs fois le même flux — une fiche par nom donné par
+  // les contributeurs. On garde la première : deux lignes identiques n apportent
+  // rien, et leurs clés se marchent dessus au rendu.
+  const seen = new Set<string>();
   return (data as RawHit[])
-    .filter((s) => s && s.name && isPlayableStreamUrl(String(s.url_resolved || s.url || '')))
+    .filter((s) => {
+      if (!s || !s.name) return false;
+      const url = String(s.url_resolved || s.url || '');
+      if (!isPlayableStreamUrl(url) || seen.has(url)) return false;
+      seen.add(url);
+      return true;
+    })
     .slice(0, RB_LIMIT)
     .map((s) => {
       const url = String(s.url_resolved || s.url).trim();

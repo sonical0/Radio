@@ -5,6 +5,7 @@
 // l'annuaire permet d'accumuler des dizaines de stations — sans lui, chaque tour
 // partirait en autant de requêtes.
 
+import TrackPlayer, { Event } from '@rntp/player';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { AppState } from 'react-native';
 
@@ -38,6 +39,33 @@ export function useNowPlaying(stations: Station[], currentUrl: string | null) {
     },
     [apply],
   );
+
+  // ─── Métadonnées ICY, lues dans le flux par le lecteur natif ───
+  //
+  // C est le seul chemin qui marche pour une station venue de l annuaire : elle
+  // n a ni endpoint AzuraCast ni Icecast déclaré, mais presque tous les flux
+  // Shoutcast/Icecast intercalent leur titre dans l audio. Le navigateur ne peut
+  // pas y accéder — il faudrait lire le flux octet par octet avec l en-tête
+  // Icy-MetaData, ce que fetch ne permet pas ici — le natif, si.
+  //
+  // Le sondage HTTP garde la priorité quand la station a un endpoint déclaré :
+  // il renvoie le même titre en mieux formé, et deux sources qui écrivent tour à
+  // tour feraient clignoter la ligne.
+  useEffect(() => {
+    const onMeta = (e: { title?: string; artist?: string }) => {
+      const url = currentRef.current;
+      if (!url) return;
+      const station = stationsRef.current.find((s) => s.url === url);
+      if (!station || station.meta) return;
+      const txt = [e.title, e.artist].filter(Boolean).join(' — ').trim();
+      if (txt) apply(url, txt);
+    };
+    const subs = [
+      TrackPlayer.addEventListener(Event.MetadataReceived, onMeta),
+      TrackPlayer.addEventListener(Event.MediaMetadataChanged, onMeta),
+    ];
+    return () => subs.forEach((s) => s.remove());
+  }, [apply]);
 
   useEffect(() => {
     const poll = async () => {

@@ -138,7 +138,7 @@ export function usePlayback(stations: Station[]) {
     (s: Station) => {
       clearReconnect();
       if (currentRef.current === s.url && loadedUrl.current === s.url) {
-        togglePlayNative(playing);
+        togglePlayNative(playing, stationsRef.current.find((x) => x.url === currentRef.current)?.boost ?? 0);
         return;
       }
       setCurrentUrl(s.url);
@@ -171,7 +171,7 @@ export function usePlayback(stations: Station[]) {
       loadedUrl.current = url;
       return;
     }
-    togglePlayNative(playing);
+    togglePlayNative(playing, stationsRef.current.find((x) => x.url === currentRef.current)?.boost ?? 0);
   }, [master, muted, playing]);
 
   /**

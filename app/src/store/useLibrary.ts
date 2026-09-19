@@ -11,6 +11,7 @@ import {
   type RawStation,
   type Station,
 } from '../model/station';
+import { probeMeta } from '../net/probeMeta';
 import { resolveStreamUrl } from '../net/resolveStream';
 import { loadLibrary, persist, saveBuiltinPrefs, saveCustomStations, serializeStation } from './library';
 
@@ -94,6 +95,11 @@ export function useLibrary() {
       if (resolved.blocked) {
         return { ok: false, message: '⚠ La playlist pointe vers un hôte privé.' };
       }
+
+      // Rien de déclaré et rien à déduire de l URL : on demande à l hôte. Une
+      // station d annuaire n a jamais de métadonnées autrement, et c est là que
+      // le natif gagne — Shoutcast est inatteignable depuis un navigateur.
+      const probed = raw.metaUrl?.trim() ? null : await probeMeta(resolved.url);
 
       const metaUrl = raw.metaUrl?.trim();
       const entry: RawStation = {
