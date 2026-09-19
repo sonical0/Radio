@@ -21,6 +21,7 @@ import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 
 import type { Station } from './src/model/station';
 import { useNowPlaying } from './src/model/useNowPlaying';
+import { useUpdateCheck } from './src/model/useUpdateCheck';
 import { setupPlayer } from './src/player/player';
 import { useKeyboardShortcuts } from './src/player/useKeyboardShortcuts';
 import { usePlayback } from './src/player/usePlayback';
@@ -33,6 +34,7 @@ import { Directory } from './src/ui/Directory';
 import { NowPlaying } from './src/ui/NowPlaying';
 import { StationRow } from './src/ui/StationRow';
 import { Trash } from './src/ui/Trash';
+import { UpdateBanner } from './src/ui/UpdateBanner';
 import { Settings } from './src/ui/Settings';
 import { FONTS, FONT_BODY, ThemeProvider, useTheme, type Palette } from './src/ui/theme';
 
@@ -70,6 +72,7 @@ function Radio() {
   const play = usePlayback(lib.stations);
   const { titles, refreshOne } = useNowPlaying(lib.stations, play.currentUrl);
   const [fontsLoaded] = useFonts(FONTS);
+  const updates = useUpdateCheck();
   useKeyboardShortcuts(play);
   const [ready, setReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -143,7 +146,15 @@ function Radio() {
           </View>
         </View>
 
-        <Settings visible={settingsOpen} onClose={() => setSettingsOpen(false)} />
+        <Settings
+          visible={settingsOpen}
+          onClose={() => setSettingsOpen(false)}
+          update={updates.update}
+          checking={updates.checking}
+          onCheckUpdate={updates.check}
+        />
+
+        <UpdateBanner update={updates.update} onDismiss={updates.dismiss} />
 
         {error ? <Text style={[t.msgErr, s.pad]}>⚠ {error}</Text> : null}
 

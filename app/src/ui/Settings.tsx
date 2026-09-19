@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
-import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Linking, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 
+import { CURRENT_VERSION, type Release } from '../net/updates';
 import { FONT_BODY, FONT_DISPLAY, PALETTES, useTheme, type Palette } from './theme';
 
 /**
@@ -8,7 +9,19 @@ import { FONT_BODY, FONT_DISPLAY, PALETTES, useTheme, type Palette } from './the
  * affichée dans sa propre teinte : le nom d'une couleur ne dit rien, la couleur
  * si — et elle reste doublée du libellé pour qui ne la distingue pas.
  */
-export function Settings({ visible, onClose }: { visible: boolean; onClose: () => void }) {
+export function Settings({
+  visible,
+  onClose,
+  update,
+  checking,
+  onCheckUpdate,
+}: {
+  visible: boolean;
+  onClose: () => void;
+  update: Release | null;
+  checking: boolean;
+  onCheckUpdate: () => void;
+}) {
   const { p, t, setPalette } = useTheme();
   const s = useMemo(() => makeStyles(p), [p]);
 
@@ -37,6 +50,36 @@ export function Settings({ visible, onClose }: { visible: boolean; onClose: () =
               </Pressable>
             );
           })}
+
+          <Text style={s.label}>VERSION</Text>
+          {/* La vérification se fait d'elle-même une fois par jour ; ce bouton
+              n'existe que pour ne pas avoir à attendre le lendemain, et pour
+              rendre visible ce que l'appli fait déjà en silence. */}
+          <View style={s.version}>
+            <Text style={s.versionText} numberOfLines={1}>
+              {CURRENT_VERSION}
+              {update ? '  →  ' + update.version + ' DISPONIBLE' : ''}
+            </Text>
+            {update ? (
+              <Pressable
+                onPress={() => void Linking.openURL(update.url)}
+                accessibilityRole="link"
+                style={t.btn}>
+                <Text style={t.btnText}>VOIR</Text>
+              </Pressable>
+            ) : (
+              <Pressable
+                onPress={onCheckUpdate}
+                disabled={checking}
+                accessibilityRole="button"
+                accessibilityState={{ disabled: checking }}
+                style={t.btn}>
+                <Text style={[t.btnText, checking && t.btnOff]}>
+                  {checking ? '…' : 'VÉRIFIER'}
+                </Text>
+              </Pressable>
+            )}
+          </View>
 
           <Pressable style={[t.btn, s.close]} onPress={onClose} accessibilityRole="button">
             <Text style={t.btnText}>FERMER</Text>
@@ -92,6 +135,8 @@ const makeStyles = (p: Palette) =>
       marginBottom: 6,
     },
     swatch: { width: 14, height: 14, borderRadius: 7, borderWidth: 1 },
+    version: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+    versionText: { flex: 1, color: p.dim, fontFamily: FONT_BODY, fontSize: 12 },
     optionLabel: { flex: 1, fontFamily: FONT_DISPLAY, fontSize: 18, letterSpacing: 2, lineHeight: 22 },
     check: { fontFamily: FONT_BODY, fontSize: 14 },
     close: { alignSelf: 'flex-end', marginTop: 8 },

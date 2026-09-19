@@ -77,10 +77,13 @@ configures — stations, groupes, gains, couleur d'écran — reste dans le stoc
 l'application sur l'appareil et n'est envoyé nulle part ; l'export est un fichier que tu
 partages toi-même. L'application demande trois permissions, `FOREGROUND_SERVICE`,
 `FOREGROUND_SERVICE_MEDIA_PLAYBACK` et `MODIFY_AUDIO_SETTINGS`, toutes les trois pour jouer
-du son en arrière-plan — ni contacts, ni position, ni stockage. Deux tiers voient en revanche
+du son en arrière-plan — ni contacts, ni position, ni stockage. Trois tiers voient en revanche
 ton adresse IP pendant que tu t'en sers : le serveur de la station que tu écoutes
-(fallout.radio, ou celle que tu as ajoutée), et l'API Radio-Browser quand tu cherches dans
-l'annuaire. Le téléphone leur parle directement, rien ne passe par moi. Leurs politiques
+(fallout.radio, ou celle que tu as ajoutée), l'API Radio-Browser quand tu cherches dans
+l'annuaire, et l'API des releases GitHub, interrogée au plus une fois par jour pour savoir
+s'il existe un APK plus récent — l'application ne passant par aucun store, rien d'autre ne
+te le dirait. Cette requête ne porte aucun identifiant, n'installe rien, et son échec est
+silencieux. Le téléphone parle aux trois directement, rien ne passe par moi. Leurs politiques
 s'appliquent. Ce projet n'en a pas, puisqu'il ne collecte rien.
 
 Fallout est une marque de Bethesda Softworks. Projet de fan, sans affiliation.

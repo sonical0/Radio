@@ -77,10 +77,13 @@ No account, no analytics, no cookie, no server of mine. Everything you set up �
 groups, gains, screen colour — stays in the app's storage on the device and is never sent
 anywhere; the export is a file you share yourself. The app asks for three permissions,
 `FOREGROUND_SERVICE`, `FOREGROUND_SERVICE_MEDIA_PLAYBACK` and `MODIFY_AUDIO_SETTINGS`, all
-three for playing audio in the background — no contacts, no location, no storage. Two third
+three for playing audio in the background — no contacts, no location, no storage. Three third
 parties do see your IP address while you use it: the server of the station you are listening
-to (fallout.radio, or one you added yourself), and the Radio-Browser API when you search the
-directory. The phone talks to them directly; nothing passes through me. Their own policies
-apply. This project has none, because it collects nothing.
+to (fallout.radio, or one you added yourself), the Radio-Browser API when you search the
+directory, and GitHub's release API, which the app queries at most once a day to find out
+whether a newer APK exists — since it comes from no store, nothing else would tell you. That
+request carries no identifier, installs nothing, and a failure is silent. The phone talks to
+all three directly; nothing passes through me. Their own policies apply. This project has
+none, because it collects nothing.
 
 Fallout is a trademark of Bethesda Softworks. This is an unaffiliated fan project.
