@@ -113,8 +113,7 @@ Aucun ne se corrige dans le dépôt, et tous se reposeront à l'identique sur un
 sdkmanager "cmake;3.30.5"
 ```
 
-**L'installer ne suffit pas : il faut la désigner.** Les deux versions cohabitent dans le SDK, et AGP prend la 3.22.1 — sa valeur par défaut — tant que rien ne dit le contraire. Le symptôme n'est pas un message sur CMake mais une bordée d'erreurs de lien au moment de `:app:buildCMakeRelWithDebInfo`, du type `ld.lld: error: undefined symbol: vtable for std::bad_variant_access`, et la ligne qui trahit la cause est enterrée dans la commande ninja affichée après coup (`Sdk\cmake.22.1in
-inja.exe`). Le réglage va dans `local.properties`, à côté de `sdk.dir` :
+**L'installer ne suffit pas : il faut la désigner.** Les deux versions cohabitent dans le SDK, et AGP prend la 3.22.1 — sa valeur par défaut — tant que rien ne dit le contraire. Le symptôme n'est pas un message sur CMake mais une bordée d'erreurs de lien au moment de `:app:buildCMakeRelWithDebInfo`, du type `ld.lld: error: undefined symbol: vtable for std::bad_variant_access`, et la ligne qui trahit la cause est enterrée dans la commande ninja affichée après coup (`Sdk\cmake\3.22.1\bin\ninja.exe`). Le réglage va dans `local.properties`, à côté de `sdk.dir` :
 
 ```
 sdk.dir=C:/AndroidSdk
