@@ -160,4 +160,22 @@ Bundled third-party code keeps its own terms: `vendor/hls.light.min.js` is
 - Fonts: [VT323](https://fonts.google.com/specimen/VT323) and
   [Share Tech Mono](https://fonts.google.com/specimen/Share+Tech+Mono), SIL Open Font License
 
+## Streams
+
+This project broadcasts and hosts no audio. It is a player: it opens public URLs served by
+[fallout.radio](https://fallout.radio/), plus whatever stream the user adds. The games' music
+belongs to Bethesda Softworks and to the respective rights holders, and broadcasting it is the
+business of whoever runs those streams, not of this repository — which contains URLs and no
+audio file. When a station falls silent, it fell silent at the source.
+
+## Data
+
+No account, no analytics, no cookie, no server of mine. Everything you set up — stations,
+groups, gains, screen colour — stays in your browser's local storage and is never sent
+anywhere; the export is a file you download yourself. Three third parties do see your IP
+address while you use the page: the server of the station you are listening to
+(fallout.radio, or one you added yourself), the Radio-Browser API when you search the
+directory, and GitHub Pages, which serves the page. Their own policies apply. This project
+has none, because it collects nothing.
+
 Fallout is a trademark of Bethesda Softworks. This is an unaffiliated fan project.

@@ -167,5 +167,23 @@ Le code tiers embarqué conserve ses propres conditions : `vendor/hls.light.min.
 - Polices : [VT323](https://fonts.google.com/specimen/VT323) et
   [Share Tech Mono](https://fonts.google.com/specimen/Share+Tech+Mono), SIL Open Font License
 
+## Flux
+
+Ce projet ne diffuse ni n'héberge aucun audio. C'est un lecteur : il ouvre des URL publiques
+servies par [fallout.radio](https://fallout.radio/), plus celles que l'utilisateur ajoute. Les
+musiques des jeux appartiennent à Bethesda Softworks et à leurs ayants droit respectifs, et
+leur diffusion relève de qui opère ces flux, pas de ce dépôt — qui contient des URL et aucun
+fichier audio. Si une station se tait, elle s'est tue à la source.
+
+## Données
+
+Pas de compte, pas d'analytics, pas de cookie, pas de serveur à moi. Tout ce que tu
+configures — stations, groupes, gains, couleur d'écran — reste dans le stockage local de ton
+navigateur et n'est envoyé nulle part ; l'export est un fichier que tu télécharges toi-même.
+Trois tiers voient en revanche ton adresse IP pendant que tu utilises la page : le serveur de
+la station que tu écoutes (fallout.radio, ou celle que tu as ajoutée), l'API Radio-Browser
+quand tu cherches dans l'annuaire, et GitHub Pages, qui sert la page. Leurs politiques
+s'appliquent. Ce projet n'en a pas, puisqu'il ne collecte rien.
+
 Fallout est une marque déposée de Bethesda Softworks. Ce projet est un travail de fan, sans
 affiliation.
