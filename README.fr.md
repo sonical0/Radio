@@ -27,15 +27,18 @@ Pas d'étape de build, pas de gestionnaire de paquets, pas de framework. On sert
   nom ou par genre, et ajoute une station en un clic.
 - **Tes propres regroupements.** Un groupe est un libellé libre — un jeu, un genre, un
   pays — et non une liste figée.
-- **Quatre couleurs d écran Pip-Boy** — vert, ambre, bleu ou blanc, par le bouton ⚙ à côté de l horloge. Le choix est retenu.
-- **Gain par station**, pour qu'un flux plus fort que les autres ne t'arrache pas les
-  oreilles au changement — sur les stations livrées aussi, sans toucher à `stations.json`.
+- **Gain par station**, mesuré et non estimé : la sonie de chaque station a été relevée à
+  `ffmpeg -af ebur128`, et les gains les ramènent à une cible commune.
 - **Masque les stations que tu n'écoutes pas**, y compris celles livrées avec le site. Le
   masquage est réversible : une corbeille dépliable en bas de liste les rend une par une.
 - **Minuterie de veille** avec fondu progressif, **touches multimédia** et contrôles depuis
   l'écran verrouillé (Media Session API), **raccourcis clavier**, et reconnexion automatique
   quand un flux tombe.
 - **Import / export** de tes stations personnelles en JSON.
+- **Une application mobile**, en React Native, qui partage cette liste de stations. Elle fait
+  deux choses que cette page ne peut pas : amplifier les stations diffusées trop bas pour être
+  rattrapées en baissant les autres, et lire le titre dans le flux lui-même. Voir `app/` sur la
+  branche `react-native/main`.
 - **Rendu identique hors ligne.** Polices, favicon et bibliothèque HLS sont tous servis
   depuis le dossier : rien n'est récupéré sur un CDN au chargement.
 

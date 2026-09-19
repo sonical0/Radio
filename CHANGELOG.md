@@ -8,6 +8,22 @@ Ordre : **entrée la plus récente en tête**. Plusieurs passes le même jour so
 suffixées `(2)`, `(3)`… la plus haute étant la plus récente (même convention que
 `TANDEM_LOG.md`).
 
+## 2026-09-19 (2)
+
+### Essayé puis retiré — la détection automatique des métadonnées
+- L application mobile interroge l hôte d une station ajoutée sur `/status-json.xsl` (Icecast)
+  et `/stats?json=1` (Shoutcast) quand rien n est déclaré, ce qui donne un titre aux webradios
+  de l annuaire. La même sonde a été écrite ici, puis **retirée après mesure**.
+- **Zéro station sur douze répond depuis le navigateur** : tous les serveurs Icecast testés
+  omettent l en-tête CORS. Depuis le natif, trois sur sept répondent. Garder la sonde n aurait
+  fait qu ajouter six secondes d attente à chaque ajout, pour rien.
+- Shoutcast reste hors de portée ici pour la même raison, et le restera : c est un des deux
+  verrous qui justifiaient le portage natif, avec l amplification.
+
+### Documentation
+- Les deux README mentionnent l application mobile et ce qu elle fait que cette page ne peut
+  pas : amplifier les stations trop faibles, et lire le titre dans le flux lui-même.
+
 ## 2026-09-19
 
 ### Corrigé — les gains, mesurés cette fois sur des fenêtres assez longues
