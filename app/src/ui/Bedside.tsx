@@ -9,6 +9,7 @@ import {
   Text,
   TextInput,
   View,
+  useWindowDimensions,
 } from 'react-native';
 
 import {
@@ -59,6 +60,15 @@ function whenLabel(at: Date): string {
 export function Bedside({ station, lib }: { station: Station | null; lib: AlarmLibrary }) {
   const { p, t } = useTheme();
   const s = useMemo(() => makeStyles(p), [p]);
+  const { width, height } = useWindowDimensions();
+  // L'horloge remplit sa colonne au lieu d'une taille fixe : c'est le seul
+  // contenu de l'écran qu'on doit pouvoir lire d'un lit, à deux mètres et
+  // sans lunettes. « 07:00 » fait cinq caractères d'une police à chasse fixe,
+  // soit environ 2,6 largeurs de cadratin ; la hauteur borne le reste.
+  const clockSize = useMemo(
+    () => Math.floor(Math.min((width * 0.52 - 40) / 2.6, height * 0.66)),
+    [height, width],
+  );
   const [now, setNow] = useState(() => new Date());
   const [dimmed, setDimmed] = useState(false);
   const [editing, setEditing] = useState<string | null>(null);
@@ -130,7 +140,11 @@ export function Bedside({ station, lib }: { station: Station | null; lib: AlarmL
   return (
     <Pressable style={s.screen} onPress={wake} accessibilityLabel="Horloge de chevet">
       <View style={s.left}>
-        <Text style={s.clock} accessibilityLabel={'Il est ' + two(now.getHours()) + ' heures ' + two(now.getMinutes())}>
+        <Text
+          style={[s.clock, { fontSize: clockSize, lineHeight: Math.round(clockSize * 1.04) }]}
+          numberOfLines={1}
+          adjustsFontSizeToFit
+          accessibilityLabel={'Il est ' + two(now.getHours()) + ' heures ' + two(now.getMinutes())}>
           {two(now.getHours())}:{two(now.getMinutes())}
         </Text>
         <Text style={s.date}>{dateLabel(now).toUpperCase()}</Text>
@@ -328,11 +342,15 @@ function AlarmRow({
 const makeStyles = (p: Palette) =>
   StyleSheet.create({
     screen: { flex: 1, flexDirection: 'row', backgroundColor: p.bg, padding: 16, gap: 16 },
-    left: { flex: 1, justifyContent: 'center' },
-    clock: { color: p.base, fontFamily: FONT_DISPLAY, fontSize: 108, lineHeight: 116 },
-    date: { color: p.dim, fontFamily: FONT_DISPLAY, fontSize: 20, letterSpacing: 3 },
-    next: { color: p.base, fontFamily: FONT_DISPLAY, fontSize: 22, letterSpacing: 2, marginTop: 16 },
-    station: { color: p.dim, fontFamily: FONT_BODY, fontSize: 12, marginTop: 4 },
+    // La colonne de l'horloge prend un peu plus de la moitié : la liste des
+    // alarmes se contente d'une largeur de lecture, l'heure non.
+    left: { flex: 1.15, justifyContent: 'center' },
+    // La taille vient du composant, calculée sur l'écran ; ce qui reste ici
+    // ne dépend pas de la largeur.
+    clock: { color: p.base, fontFamily: FONT_DISPLAY },
+    date: { color: p.dim, fontFamily: FONT_DISPLAY, fontSize: 24, letterSpacing: 3 },
+    next: { color: p.base, fontFamily: FONT_DISPLAY, fontSize: 26, letterSpacing: 2, marginTop: 16 },
+    station: { color: p.dim, fontFamily: FONT_BODY, fontSize: 13, marginTop: 4 },
 
     right: { flex: 1 },
     row: { borderWidth: 1, backgroundColor: p.bg2, padding: 8, marginBottom: 8 },
