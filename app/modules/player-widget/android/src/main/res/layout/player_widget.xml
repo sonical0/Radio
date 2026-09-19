@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- RemoteViews : pas de Compose, pas de Glance. Glance embarquerait tout le
+     runtime Compose, que l'application n'utilise nulle part, pour quatre
+     boutons. Les couleurs sont posées au rendu depuis la palette Pip-Boy. -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+  android:id="@+id/widget_root"
+  android:layout_width="match_parent"
+  android:layout_height="match_parent"
+  android:orientation="horizontal"
+  android:gravity="center_vertical"
+  android:padding="10dp">
+
+  <LinearLayout
+    android:id="@+id/widget_text"
+    android:layout_width="0dp"
+    android:layout_height="wrap_content"
+    android:layout_weight="1"
+    android:orientation="vertical">
+
+    <TextView
+      android:id="@+id/widget_station"
+      android:layout_width="match_parent"
+      android:layout_height="wrap_content"
+      android:maxLines="1"
+      android:ellipsize="end"
+      android:textSize="16sp"
+      android:fontFamily="monospace"
+      android:text="FALLOUT RADIO" />
+
+    <TextView
+      android:id="@+id/widget_title"
+      android:layout_width="match_parent"
+      android:layout_height="wrap_content"
+      android:maxLines="1"
+      android:ellipsize="end"
+      android:textSize="12sp"
+      android:fontFamily="monospace"
+      android:text="" />
+  </LinearLayout>
+
+  <ImageButton
+    android:id="@+id/widget_previous"
+    android:layout_width="44dp"
+    android:layout_height="44dp"
+    android:background="@android:color/transparent"
+    android:src="@android:drawable/ic_media_previous"
+    android:contentDescription="Station précédente" />
+
+  <ImageButton
+    android:id="@+id/widget_play"
+    android:layout_width="44dp"
+    android:layout_height="44dp"
+    android:background="@android:color/transparent"
+    android:src="@android:drawable/ic_media_play"
+    android:contentDescription="Lecture ou pause" />
+
+  <ImageButton
+    android:id="@+id/widget_next"
+    android:layout_width="44dp"
+    android:layout_height="44dp"
+    android:background="@android:color/transparent"
+    android:src="@android:drawable/ic_media_next"
+    android:contentDescription="Station suivante" />
+</LinearLayout>

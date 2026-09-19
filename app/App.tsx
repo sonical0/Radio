@@ -20,6 +20,7 @@ import {
 } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 
+import { publishWidgetState } from './modules/player-widget';
 import type { Station } from './src/model/station';
 import { useNowPlaying } from './src/model/useNowPlaying';
 import { useUpdateCheck } from './src/model/useUpdateCheck';
@@ -122,6 +123,16 @@ function Radio() {
     },
     [play.currentUrl, play.playing, play.streamState],
   );
+
+  // Le widget d'écran d'accueil ne peut pas interroger l'application : il
+  // dessine ce qu'on lui a laissé. On republie à chaque changement visible,
+  // et c'est la seule chose que le JS lui doit — ses boutons, eux, passent
+  // par la session média et n'ont besoin de personne.
+  const current = play.current;
+  const currentTitle = current ? (titles[current.url] ?? '') : '';
+  useEffect(() => {
+    publishWidgetState(current?.name ?? '', currentTitle, play.playing);
+  }, [current?.name, currentTitle, play.playing]);
 
   // Le paysage n'est pas une mise en page de plus : c'est un autre écran.
   // Poser le téléphone à l'horizontale en fait un radio-réveil, et la liste

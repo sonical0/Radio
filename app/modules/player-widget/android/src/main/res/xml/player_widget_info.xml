@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Une seule ligne de haut, redimensionnable en largeur : un lecteur radio n'a
+     pas de pochette à montrer, et quatre boutons tiennent dans 4x1. -->
+<appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
+  android:minWidth="250dp"
+  android:minHeight="40dp"
+  android:targetCellWidth="4"
+  android:targetCellHeight="1"
+  android:resizeMode="horizontal"
+  android:widgetCategory="home_screen"
+  android:initialLayout="@layout/player_widget"
+  android:description="@string/player_widget_description"
+  android:updatePeriodMillis="0" />
