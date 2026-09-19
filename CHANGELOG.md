@@ -1,12 +1,49 @@
 # Changelog
 
-Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/). Pas de versions
-numérotées ni de dépôt git pour l'instant (projet livré comme fichier unique) — ce fichier
-n'est donc pas commit, il sert de suivi local daté.
+Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/). Les entrées sont
+datées plutôt que numérotées : le site n'a pas de version, il est déployé en continu. Seule
+l'application Android en a une, taguée dans le dépôt (`v1.0.1` à `v1.1.1`) et publiée en
+release.
 
 Ordre : **entrée la plus récente en tête**. Plusieurs passes le même jour sont
 suffixées `(2)`, `(3)`… la plus haute étant la plus récente (même convention que
 `TANDEM_LOG.md`).
+
+## 2026-09-19 (3)
+
+### Documentation — un README par cible, au lieu du même partout
+- Les trois branches portaient **le même README**, si bien que rien ne disait au lecteur sur
+  quelle cible il venait de tomber. `main` décrit désormais le navigateur et le Docker qui le
+  sert ; `react-native/main` et `/dev` décrivent l'application — APK d'abord, build ensuite —
+  et renvoient à `app/README.md` plutôt que de le recopier.
+- Les fichiers du site présents sur la branche app restent documentés sur `main` : ce sont des
+  copies, et leur README disait deux fois la même chose dans deux langues.
+- Côté site, trois fonctionnalités livrées sans une ligne de documentation la reçoivent enfin :
+  le sélecteur de couleur, le formulaire d'ajout replié, et le champ `boost` — avec ce qu'il
+  fait ici, c'est-à-dire rien. La taille annoncée passe de 108 à 126 Ko, elle avait trois
+  fonctionnalités de retard.
+- Côté app, un **jalon 6** regroupe le sélecteur de couleur et les sept défauts remontés du
+  téléphone ; ils partagent une origine qui méritait d'être écrite : aucun n'était visible sur
+  l'émulateur. Deux notes pourries sont tranchées au passage — la copie de `stations.json`
+  (la racine fait foi) et une section finale qui revendiquait un visualiseur FFT que l'app n'a
+  jamais eu.
+
+### Supprimé — la branche `dockerized`
+- Elle était en retard sur **chacun** des fichiers qu'elle était censée servir : `vendor/`
+  absent du `Dockerfile`, CSP d'avant hls.js dans `nginx.conf`, `.dockerignore` vide, et un
+  `index.html` d'avant HLS, l'annuaire et le sélecteur de couleur.
+- Tout le Docker vit sur `main` (`Dockerfile`, `docker-compose.yml`, `nginx.conf`,
+  `DOCKER.md`) et n'a jamais eu besoin d'une branche. Une branche de déploiement qui déploie
+  la semaine dernière est un piège, pas un raccourci.
+- Le commit est conservé en tag local `archive/dockerized`, non poussé.
+
+### Publié — l'APK 1.1.1 en release GitHub
+- Quatre tags posés sur les commits de montée de version (`v1.0.1`, `v1.0.2`, `v1.1.0`,
+  `v1.1.1`), et une release pour la dernière, avec l'APK signé de 80,3 Mo en pièce jointe.
+- Les trois versions antérieures gardent leur tag sans binaire : les recompiler supposerait de
+  repasser par la copie à chemin court, pour un intérêt nul.
+- Les deux README pointent maintenant la page des releases plutôt qu'un dossier de code : qui
+  lit ça veut installer, pas compiler.
 
 ## 2026-09-19 (2)
 
