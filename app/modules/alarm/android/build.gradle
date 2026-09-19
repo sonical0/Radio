@@ -1,0 +1,24 @@
+plugins {
+  id 'com.android.library'
+  id 'expo-module-gradle-plugin'
+}
+
+group = 'expo.modules.alarm'
+version = '0.1.0'
+
+android {
+  namespace "expo.modules.alarm"
+  defaultConfig {
+    versionCode 1
+    versionName "0.1.0"
+  }
+}
+
+dependencies {
+  implementation 'com.facebook.react:react-android'
+  // Même version que celle qu'embarque @rntp/player : deux versions de media3
+  // dans le même APK se résoudraient à la plus haute, autant la fixer ici.
+  implementation 'androidx.media3:media3-exoplayer:1.9.2'
+  implementation 'androidx.media3:media3-exoplayer-hls:1.9.2'
+  implementation 'androidx.media3:media3-common:1.9.2'
+}

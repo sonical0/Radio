@@ -1,7 +1,9 @@
 import { useMemo } from 'react';
 import { Linking, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 
+import type { Station } from '../model/station';
 import { CURRENT_VERSION, type Release } from '../net/updates';
+import { AlarmSetup } from './AlarmSetup';
 import { FONT_BODY, FONT_DISPLAY, PALETTES, useTheme, type Palette } from './theme';
 
 /**
@@ -15,12 +17,14 @@ export function Settings({
   update,
   checking,
   onCheckUpdate,
+  station,
 }: {
   visible: boolean;
   onClose: () => void;
   update: Release | null;
   checking: boolean;
   onCheckUpdate: () => void;
+  station: Station | null;
 }) {
   const { p, t, setPalette } = useTheme();
   const s = useMemo(() => makeStyles(p), [p]);
@@ -50,6 +54,8 @@ export function Settings({
               </Pressable>
             );
           })}
+
+          <AlarmSetup station={station} />
 
           <Text style={s.label}>VERSION</Text>
           {/* La vérification se fait d'elle-même une fois par jour ; ce bouton

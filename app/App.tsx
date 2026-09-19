@@ -152,6 +152,7 @@ function Radio() {
           update={updates.update}
           checking={updates.checking}
           onCheckUpdate={updates.check}
+          station={play.current}
         />
 
         <UpdateBanner update={updates.update} onDismiss={updates.dismiss} />
