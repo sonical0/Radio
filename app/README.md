@@ -103,15 +103,25 @@ Exclure les dossiers par **chemin absolu**. Un `/XD build` tout court emporte au
 
 **`src/data/stations.json` est une copie de `stations.json` de la racine.** Metro ne sort pas de `app/`, et un lien symbolique ne survit ni à Windows ni à la synchro. **Celui de la racine fait foi** : c'est lui que sert le site, et c'est là que les gains ont été mesurés. La copie se recopie à la main après toute modification — les deux fichiers sont identiques, `git diff` entre branches le vérifie en une commande.
 
-## Build Android : trois obstacles d'environnement, tous documentés ici
+## Build Android : les obstacles d'environnement, tous documentés ici
 
-Aucun des trois ne se corrige dans le dépôt, et les trois se reposeront à l'identique sur un autre poste Windows.
+Aucun ne se corrige dans le dépôt, et tous se reposeront à l'identique sur un autre poste Windows.
 
 **CMake 3.30.5 est requis** (RN 0.86 le demande explicitement). Avec seulement la 3.22.1 installée, AGP retombe dessus sans un mot. À installer via le SDK Manager d'Android Studio, ou en ligne de commande :
 
 ```bash
 sdkmanager "cmake;3.30.5"
 ```
+
+**L'installer ne suffit pas : il faut la désigner.** Les deux versions cohabitent dans le SDK, et AGP prend la 3.22.1 — sa valeur par défaut — tant que rien ne dit le contraire. Le symptôme n'est pas un message sur CMake mais une bordée d'erreurs de lien au moment de `:app:buildCMakeRelWithDebInfo`, du type `ld.lld: error: undefined symbol: vtable for std::bad_variant_access`, et la ligne qui trahit la cause est enterrée dans la commande ninja affichée après coup (`Sdk\cmake.22.1in
+inja.exe`). Le réglage va dans `local.properties`, à côté de `sdk.dir` :
+
+```
+sdk.dir=C:/AndroidSdk
+cmake.dir=C:/AndroidSdk/cmake/3.30.5
+```
+
+Purger `android/app/.cxx` après coup : la configuration précédente y est mise en cache, et un simple relancement reprendrait la 3.22.1.
 
 **Bâtir avec un JDK 17, pas le JBR d'Android Studio.** Le nouvel Android Studio embarque un JDK 25 ; AGP ne le supporte pas et l'échec est trompeur — la tâche `configureCMakeDebug` meurt sur `WARNING: A restricted method in java.lang.System has been called`, l'avertissement du JDK 25 polluant la sortie qu'AGP analyse. Gradle a déjà provisionné un Temurin 17 dans `~/.gradle/jdks/` :
 
@@ -128,7 +138,7 @@ cmd /c 'mklink /J C:\AndroidSdk "%LOCALAPPDATA%\Android\Sdk"'
 echo "sdk.dir=C:/AndroidSdk" > android/local.properties
 ```
 
-**`expo prebuild` régénère `android/` et efface `local.properties`** : le fichier est à réécrire après chaque prebuild, sinon le build repart droit dans l'erreur libc++.
+**`expo prebuild` régénère `android/` et efface `local.properties`** : le fichier est à réécrire — ses **deux** lignes — après chaque prebuild, sinon le build repart droit dans l'erreur libc++ ou dans celle du lien. Vérifié le 19/09/2026 en montant la version à 1.2.0 : un prebuild est obligatoire pour que `app.json` atteigne `android/app/build.gradle` — sans lui l'APK sort avec l'ancien `versionName` sans que rien ne prévienne — et il a coûté les deux échecs ci-dessus à la suite.
 
 ## HLS, et le visualiseur
 
