@@ -9,6 +9,21 @@ Ordre : **entrée la plus récente en tête**. Plusieurs passes le même jour so
 suffixées `(2)`, `(3)`… la plus haute étant la plus récente (même convention que
 `TANDEM_LOG.md`).
 
+## 2026-09-20 — app v1.3.5, widget d'écran d'accueil
+
+### Application — un lecteur sur l'écran d'accueil
+- Widget 4×1 : station en cours, titre, lecture/pause et zapping, aux couleurs du Pip-Boy.
+  `RemoteViews` et non Glance, qui embarquerait tout le runtime Compose pour quatre boutons.
+- Play/pause part en touche média : la session répond même application fermée.
+- **Zapper ne peut pas passer par la session média.** Trois chemins mesurés sur émulateur,
+  tous sans effet : la touche `KEYCODE_MEDIA_NEXT` (traduite en `seekToNext()`, non surchargée),
+  la commande `trackplayer.seek_to_next` (appelle le lecteur brut et acquitte quand même), et
+  `seekToNextMediaItem()` sur un contrôleur (abandonné côté client, file d'une seule piste).
+- Le widget s'adresse donc à l'application, qui seule connaît la station suivante. Conséquence :
+  le bouton ⏭ de la notification reste inopérant, pour la même raison de fond.
+- Corrigé au passage : un `BroadcastReceiver` ne peut pas se lier à un service, ce qui faisait
+  tomber l'application à chaque appui sur une flèche (`ReceiverCallNotAllowedException`).
+
 ## 2026-09-19 (5) — app v1.3.0, réveil radio
 
 ### Application — le téléphone posé à l'horizontale devient un radio-réveil
