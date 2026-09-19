@@ -55,6 +55,26 @@ Everything lives in `index.html` as three inline sections:
    - `exportStations()` / `importStations()` — download/upload custom stations as JSON, with schema + host validation on import.
    - Visualizer — 34 `div.vis-bar` elements driven by a `setInterval` with random heights when playing; `startVis()` / `stopVis()`. Heights are decorative, not real FFT data (see "Adding a Built-in Station" for why Web Audio is off-limits here). Paused while the tab is hidden.
 
+## Station Gains, and the `boost` field
+
+Gains are measured, not guessed: `ffmpeg -af ebur128` over two 180-second passes per station, averaged. They aim at **-18 LUFS**, the level the bulk of the stations already sit at, so the page is as loud as anything else on the machine. Anything above the target is attenuated; anything below keeps 1, because `audio.volume` cannot exceed it.
+
+Short samples are not enough. Pirate Radio measured anywhere between -8.8 and -25.2 LUFS depending on the minute — its content swings that much — and a 40-second window produced a gain three times too aggressive. Use 180 seconds, twice, and average.
+
+`stations.json` also carries **`boost`** on two stations, in decibels. **The site ignores it**, and should: there is no amplifying past the maximum in a browser, and the Web Audio path that could is off-limits here (`createMediaElementSource()` silences these CORS-less streams — see the 2026-09-14 entry). The field exists for the React Native app, which amplifies natively. It is kept in this file rather than duplicated so the two targets keep one source of truth for the stations.
+
+## Screen Colour
+
+Four palettes ship: green (the default), amber, blue and white. They are plain `:root[data-theme="…"]` blocks redefining the variables the whole sheet already uses, so nothing else in the CSS knows a theme exists. The variables keep their `--green-*` names in every palette — renaming them would touch the entire sheet and a variable's name is not what anyone sees.
+
+`--accent-rgb` carries the main hue as components. Six `rgba()` were hardcoded (title glow, header shadow, hovered and playing row backgrounds) and a hex variable cannot serve those; without it they would have stayed green on an amber screen. If you add a translucent accent anywhere, use `rgba(var(--accent-rgb), …)` or it will not follow the theme.
+
+The choice is stored in `localStorage.themePalette` — the same key the React Native app uses — and applied by a short script in `<head>`, not by the main script at the end of the body: otherwise the page paints green before switching. Green is represented by the *absence* of `data-theme`, so a page that has never been set carries no attribute and no override.
+
+Each palette's `--green-dim` sits between 5.5 and 8.0:1 against its own `--bg3`, matching the green's 5.9:1. Check a new palette against that before adding it — the dim tone is what the secondary text uses everywhere.
+
+While the settings dialog is open the global keyboard shortcuts stand down and only Escape is handled; stopping the radio by typing "s" in a dialog would be a nasty surprise.
+
 ## Adding a Built-in Station
 
 Add an entry to `stations.json` (not the JS — `STATIONS` is loaded from this file at runtime):

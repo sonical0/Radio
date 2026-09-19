@@ -8,6 +8,100 @@ Ordre : **entrée la plus récente en tête**. Plusieurs passes le même jour so
 suffixées `(2)`, `(3)`… la plus haute étant la plus récente (même convention que
 `TANDEM_LOG.md`).
 
+## 2026-09-19 (2)
+
+### Essayé puis retiré — la détection automatique des métadonnées
+- L application mobile interroge l hôte d une station ajoutée sur `/status-json.xsl` (Icecast)
+  et `/stats?json=1` (Shoutcast) quand rien n est déclaré, ce qui donne un titre aux webradios
+  de l annuaire. La même sonde a été écrite ici, puis **retirée après mesure**.
+- **Zéro station sur douze répond depuis le navigateur** : tous les serveurs Icecast testés
+  omettent l en-tête CORS. Depuis le natif, trois sur sept répondent. Garder la sonde n aurait
+  fait qu ajouter six secondes d attente à chaque ajout, pour rien.
+- Shoutcast reste hors de portée ici pour la même raison, et le restera : c est un des deux
+  verrous qui justifiaient le portage natif, avec l amplification.
+
+### Documentation
+- Les deux README mentionnent l application mobile et ce qu elle fait que cette page ne peut
+  pas : amplifier les stations trop faibles, et lire le titre dans le flux lui-même.
+
+## 2026-09-19
+
+### Corrigé — les gains, mesurés cette fois sur des fenêtres assez longues
+- Les gains posés la veille venaient d échantillons de 40 et 100 s. Trop court : **Pirate Radio
+  mesure de -8,8 à -25,2 LUFS selon le moment**, son contenu variant énormément. Le 0,17 qu on
+  lui avait donné était trois fois trop sévère.
+- Deux passes de **180 s** par station, moyennées : les écarts entre passes tombent sous 5 dB,
+  et **Radio New Vegas ressort stable à -30,6** sur quatre mesures — elle est bien diffusée
+  faible, ce n est pas un artefact de mesure.
+- Nouvelle cible : **-18 LUFS**, le niveau du gros du peloton, pour que la page sonne comme le
+  reste de la machine au lieu d être uniformément faible. Seules les cinq stations au-dessus
+  sont atténuées (Pirate 0,45, Diamond City 0,55, Black Mountain 0,67, Galaxy 0,69,
+  Mysterious 0,77) ; les six autres gardent 1.
+- Le champ **`boost`** apparaît sur deux stations. **Le site l ignore volontairement** — on ne
+  peut pas amplifier dans un navigateur — il sert à l application mobile, qui le peut en natif.
+  Il vit ici pour que les deux cibles gardent une seule source de vérité. Détail dans `CLAUDE.md`.
+
+### Corrigé — l annuaire ne liste plus deux fois le même flux
+- Radio-Browser publie une fiche par nom donné par les contributeurs : la même URL revenait
+  plusieurs fois dans les résultats. Déduplication sur l URL, la première fiche gagne.
+
+## 2026-09-18 (4)
+
+### Changé — les gains des stations sont mesurés, plus estimés
+- Radio New Vegas et Mojave Music Radio s entendaient nettement moins que les autres, et les
+  gains livrés aggravaient l affaire : les fortes à 0,63, ces deux-là à 1, soit quatre
+  décibels de correction pour un écart qui s est révélé être de vingt-deux.
+- Les onze flux ont été mesurés à la sonie **EBU R128** (ffmpeg `ebur128`), deux passes de 40
+  et 100 s, moyennées. L éventail va de **-10,6 LUFS** (Pirate Radio) à **-32,7** (Mojave).
+- Les gains visent désormais une **cible de -26 LUFS** : ce qui est au-dessus est atténué
+  d autant, ce qui est en dessous garde 1 — on ne peut pas amplifier au-delà du maximum.
+  Aligner sur la plus faible aurait mis presque tout au plancher de 0,1.
+- Pirate Radio passe de 0,63 à **0,17**, Diamond City à **0,24**, Galaxy News à **0,29**.
+  Classical Radio, mesurée à -30 LUFS, remonte de 0,63 à **1** : elle était faible aussi,
+  personne ne l avait signalé.
+- Il reste un écart : Mojave est encore ~7 dB sous la cible, faute de pouvoir l amplifier.
+  Le curseur par station sert à ça, et son réglage est retenu.
+
+### Ajouté — effacer les résultats de l annuaire
+- Un bouton **✕ EFFACER** apparaît à côté de « CHERCHER » dès qu il y a quelque chose à
+  l écran. Chercher à vide vidait déjà la liste, mais rien ne le disait.
+
+## 2026-09-18 (3)
+
+### Changé — « Ajouter une station » se replie
+- Le formulaire d ajout est passé en `<details>`, replié par défaut, comme la corbeille :
+  quatre champs et trois boutons repoussaient l annuaire hors de l écran pour un geste rare.
+- **L annuaire reste hors du `<details>`** : les deux partagent un cadre mais ne sont pas la
+  même chose, et replier l ajout ne doit pas emporter la recherche.
+- Le chevron ▸/▾ vient d un `::before` sur le `<summary>`, et le marqueur natif est masqué
+  (`list-style: none`) pour garder la ligne de tirets du reste de l interface.
+
+## 2026-09-18 (2)
+
+### Ajouté — la couleur de l'écran se choisit
+- **Bouton ⚙ à gauche de l'horloge**, ouvrant un panneau « RÉGLAGES » où l'on choisit parmi
+  les quatre écrans de Pip-Boy : **vert** (inchangé), **ambre**, **bleu**, **blanc**. Le choix
+  est retenu dans `localStorage.themePalette` — même clé que l'application mobile, qui a reçu
+  la fonctionnalité en premier.
+- **Trois blocs `:root[data-theme="…"]`** redéfinissent les variables existantes. Les noms
+  restent `--green-*` même en ambre : les renommer toucherait toute la feuille pour aucun
+  gain, et le nom d'une variable n'est pas ce que l'utilisateur voit.
+- **Nouvelle variable `--accent-rgb`**, la teinte principale en composantes. Six `rgba()`
+  étaient écrits en dur (`rgba(57,255,106,…)`) pour les halos du titre, l'ombre de l'en-tête
+  et les fonds de ligne survolée : une couleur hexadécimale ne peut pas les servir, et sans
+  cette variable ils seraient restés verts sur fond ambre.
+- **Le thème est appliqué avant le premier rendu**, par un court script en `<head>` — sinon la
+  page s'afficherait en vert le temps du chargement avant de virer.
+- **Contraste mesuré, pas choisi à l'œil** : chaque palette garde son `--green-dim` entre
+  5,5 et 8,0 : 1 sur son propre `--bg3`, au niveau du vert d'origine (5,9 : 1). Le texte
+  secondaire reste lisible quelle que soit la couleur.
+- Panneau accessible : `role="dialog"`, options en `role="radio"` avec `aria-checked`, focus
+  porté sur l'option cochée à l'ouverture et rendu au bouton ⚙ à la fermeture. Chaque option
+  est affichée dans sa teinte **et** nommée — une couleur seule ne dit rien à qui ne la
+  distingue pas.
+- **Échap referme**, et tant que le panneau est ouvert les raccourcis globaux se taisent :
+  taper « s » dans une boîte de dialogue ne doit pas couper la radio.
+
 ## 2026-09-18
 
 ### Changé — gain et masquage pour toutes les stations, corbeille
