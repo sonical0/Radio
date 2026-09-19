@@ -1,10 +1,7 @@
 import { useMemo } from 'react';
 import { Linking, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 
-import type { Station } from '../model/station';
-import type { AlarmLibrary } from '../store/useAlarms';
 import { CURRENT_VERSION, type Release } from '../net/updates';
-import { AlarmSetup } from './AlarmSetup';
 import { FONT_BODY, FONT_DISPLAY, PALETTES, useTheme, type Palette } from './theme';
 
 /**
@@ -18,16 +15,12 @@ export function Settings({
   update,
   checking,
   onCheckUpdate,
-  station,
-  alarms,
 }: {
   visible: boolean;
   onClose: () => void;
   update: Release | null;
   checking: boolean;
   onCheckUpdate: () => void;
-  station: Station | null;
-  alarms: AlarmLibrary;
 }) {
   const { p, t, setPalette } = useTheme();
   const s = useMemo(() => makeStyles(p), [p]);
@@ -58,7 +51,10 @@ export function Settings({
             );
           })}
 
-          <AlarmSetup station={station} lib={alarms} />
+          <Text style={s.label}>RÉVEIL</Text>
+          {/* Le réveil vit sur l'horloge de chevet : le dire ici, sinon
+              personne ne pense à tourner le téléphone. */}
+          <Text style={s.hint}>Tourne le téléphone à l'horizontale.</Text>
 
           <Text style={s.label}>VERSION</Text>
           {/* La vérification se fait d'elle-même une fois par jour ; ce bouton
@@ -146,6 +142,7 @@ const makeStyles = (p: Palette) =>
     swatch: { width: 14, height: 14, borderRadius: 7, borderWidth: 1 },
     version: { flexDirection: 'row', alignItems: 'center', gap: 10 },
     versionText: { flex: 1, color: p.dim, fontFamily: FONT_BODY, fontSize: 12 },
+    hint: { color: p.dim, fontFamily: FONT_BODY, fontSize: 12 },
     optionLabel: { flex: 1, fontFamily: FONT_DISPLAY, fontSize: 18, letterSpacing: 2, lineHeight: 22 },
     check: { fontFamily: FONT_BODY, fontSize: 14 },
     close: { alignSelf: 'flex-end', marginTop: 8 },

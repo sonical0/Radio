@@ -16,6 +16,7 @@ import {
   StyleSheet,
   Text,
   View,
+  useWindowDimensions,
 } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 
@@ -29,6 +30,7 @@ import { useAlarms } from './src/store/useAlarms';
 import { groupStations, knownGroups } from './src/store/library';
 import { useLibrary } from './src/store/useLibrary';
 import { AddStation } from './src/ui/AddStation';
+import { Bedside } from './src/ui/Bedside';
 import { Clock } from './src/ui/Clock';
 import { Crt } from './src/ui/Crt';
 import { Directory } from './src/ui/Directory';
@@ -121,9 +123,28 @@ function Radio() {
     [play.currentUrl, play.playing, play.streamState],
   );
 
+  // Le paysage n'est pas une mise en page de plus : c'est un autre écran.
+  // Poser le téléphone à l'horizontale en fait un radio-réveil, et la liste
+  // des stations n'a pas à savoir ce qu'elle deviendrait dans cette largeur.
+  const { width, height } = useWindowDimensions();
+  const landscape = width > height;
+
   const sections = useMemo(() => groupStations(lib.stations), [lib.stations]);
   const hidden = useMemo(() => lib.stations.filter((x) => x.hidden), [lib.stations]);
   const groups = useMemo(() => knownGroups(lib.stations), [lib.stations]);
+
+  if (landscape) {
+    return (
+      <SafeAreaProvider>
+        <Crt>
+          <SafeAreaView style={t.screen} edges={['top', 'bottom', 'left', 'right']}>
+            <StatusBar hidden />
+            <Bedside station={play.current} lib={alarms} />
+          </SafeAreaView>
+        </Crt>
+      </SafeAreaProvider>
+    );
+  }
 
   return (
     <SafeAreaProvider>
@@ -154,8 +175,6 @@ function Radio() {
           update={updates.update}
           checking={updates.checking}
           onCheckUpdate={updates.check}
-          station={play.current}
-          alarms={alarms}
         />
 
         <UpdateBanner update={updates.update} onDismiss={updates.dismiss} />

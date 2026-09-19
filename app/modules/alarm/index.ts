@@ -9,6 +9,7 @@ type AlarmNative = {
   isRinging(): boolean;
   stopRinging(): void;
   snooze(): void;
+  setKeepAwake(on: boolean): void;
   setPalette(background: string, surface: string, base: string, dim: string): void;
   canScheduleExact(): boolean;
 };
@@ -73,6 +74,11 @@ export function stopRinging(): void {
 
 export function snoozeRinging(): void {
   native?.snooze();
+}
+
+/** L'horloge de chevet garde l'écran allumé ; le reste de l'appli non. */
+export function setKeepAwake(on: boolean): void {
+  native?.setKeepAwake(on);
 }
 
 /**

@@ -4,6 +4,7 @@ import android.app.AlarmManager
 import android.content.Context
 import android.content.Intent
 import android.os.Build
+import android.view.WindowManager
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
 
@@ -53,6 +54,24 @@ class AlarmModule : Module() {
      */
     Function("setPalette") { background: String, surface: String, base: String, dim: String ->
       AlarmPalette.save(context, background, surface, base, dim)
+    }
+
+    /**
+     * Garder l'écran allumé pendant que l'horloge de chevet est affichée.
+     *
+     * `expo-keep-awake` ferait la même chose, mais c'est une dépendance de
+     * plus à installer et à tenir à jour pour deux appels à `addFlags`, dans
+     * un module natif qu'on a déjà.
+     */
+    Function("setKeepAwake") { on: Boolean ->
+      val activity = appContext.currentActivity ?: return@Function
+      activity.runOnUiThread {
+        if (on) {
+          activity.window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        } else {
+          activity.window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        }
+      }
     }
 
     /** Report depuis l'application, équivalent du bouton de la notification. */
