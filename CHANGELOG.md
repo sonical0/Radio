@@ -9,6 +9,21 @@ Ordre : **entrée la plus récente en tête**. Plusieurs passes le même jour so
 suffixées `(2)`, `(3)`… la plus haute étant la plus récente (même convention que
 `TANDEM_LOG.md`).
 
+## 2026-09-19 (4) — app v1.2.0
+
+### Application — l'app dit quand une version est sortie
+- Installée depuis une page de release, l'app vieillissait en silence : aucun store ne la
+  surveille. Une fois par jour au plus, et seulement sur Android, elle interroge l'API des
+  releases GitHub et compare le tag à `expo.version`. Une ligne sous l'en-tête propose
+  d'ouvrir la page — pas d'installation depuis l'appli, qui coûterait la permission
+  `REQUEST_INSTALL_PACKAGES` pour un appui économisé.
+- Un échec n'est pas daté : un téléphone démarré hors ligne réessaie à l'ouverture suivante
+  au lieu de rester muet un jour entier. La dernière release connue est persistée, donc le
+  bandeau s'affiche avant même la réponse du réseau.
+- Une version écartée le reste jusqu'à la suivante, ou jusqu'à une vérification demandée à la
+  main depuis les réglages — qui affichent aussi la version installée.
+- Les sections « Données » des README gagnent le tiers que cela ajoute : `api.github.com`.
+
 ## 2026-09-19 (3)
 
 ### Documentation — un README par cible, au lieu du même partout
