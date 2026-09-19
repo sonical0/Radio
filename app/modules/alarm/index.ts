@@ -2,9 +2,10 @@ import { requireOptionalNativeModule } from 'expo';
 import { Platform } from 'react-native';
 
 type AlarmNative = {
-  schedule(atMillis: number, url: string, title: string): void;
-  cancel(): void;
+  setAlarms(json: string): void;
+  cancelAll(): void;
   next(): number;
+  nextId(): string;
   isRinging(): boolean;
   stopRinging(): void;
   canScheduleExact(): boolean;
@@ -15,26 +16,49 @@ type AlarmNative = {
 const native =
   Platform.OS === 'android' ? requireOptionalNativeModule<AlarmNative>('Alarm') : null;
 
+/** Réglés une fois pour toutes : un réveil se règle à l'heure, pas en options. */
+export const SNOOZE_MINUTES = 10;
+export const SNOOZE_MAX = 3;
+export const AUTO_STOP_MINUTES = 10;
+export const GIVE_UP_MINUTES = 30;
+export const RAMP_SECONDS_DEFAULT = 30;
+
+export type Alarm = {
+  id: string;
+  hour: number;
+  minute: number;
+  /** 0 = dimanche … 6 = samedi. Vide = une seule fois. */
+  days: number[];
+  stationUrl: string;
+  title: string;
+  enabled: boolean;
+  rampSeconds: number;
+};
+
 export function alarmAvailable(): boolean {
   return native != null;
 }
 
-/** Pose l'alarme. `at` est un instant absolu : le calcul de l'heure reste au JS. */
-export function scheduleAlarm(at: Date, url: string, title: string): void {
-  native?.schedule(at.getTime(), url, title);
+/**
+ * Pousse la liste entière vers le natif, qui recalcule ce qu'il arme. À
+ * appeler après chaque modification : c'est la seule direction d'écriture, et
+ * une liste complète ne peut pas diverger de ce qui est affiché.
+ */
+export function pushAlarms(alarms: Alarm[]): void {
+  native?.setAlarms(JSON.stringify(alarms));
 }
 
-export function cancelAlarm(): void {
-  native?.cancel();
+export function cancelAll(): void {
+  native?.cancelAll();
 }
 
 /**
- * L'alarme armée, d'après le natif — qui fait foi : lui seul survit à la
- * fermeture de l'application.
+ * La prochaine sonnerie, d'après le natif — qui fait foi : lui seul survit à
+ * la fermeture de l'application et au redémarrage du téléphone.
  */
-export function nextAlarm(): Date | null {
+export function nextAlarm(): { at: Date; id: string } | null {
   const at = native?.next() ?? 0;
-  return at > 0 ? new Date(at) : null;
+  return at > 0 ? { at: new Date(at), id: native?.nextId() ?? '' } : null;
 }
 
 export function isRinging(): boolean {
@@ -50,14 +74,21 @@ export function canScheduleExact(): boolean {
   return native?.canScheduleExact() ?? false;
 }
 
+const DAY_LABELS = ['DIM', 'LUN', 'MAR', 'MER', 'JEU', 'VEN', 'SAM'];
+
 /**
- * Le prochain passage à `hour:minute`, aujourd'hui si l'heure n'est pas
- * passée, demain sinon. Les secondes sont remises à zéro : une alarme à 7 h 00
- * posée à 7 h 00 min 30 s doit sonner demain, pas dans une demi-minute.
+ * « LUN-VEN », « TOUS LES JOURS », « UNE FOIS » — les formes qu'on lit sur un
+ * réveil, plutôt que sept cases à déchiffrer.
  */
-export function nextOccurrence(hour: number, minute: number, from = new Date()): Date {
-  const at = new Date(from);
-  at.setHours(hour, minute, 0, 0);
-  if (at.getTime() <= from.getTime()) at.setDate(at.getDate() + 1);
-  return at;
+export function describeDays(days: number[]): string {
+  if (days.length === 0) return 'UNE FOIS';
+  if (days.length === 7) return 'TOUS LES JOURS';
+  const sorted = [...days].sort((a, b) => a - b);
+  if (sorted.join() === '1,2,3,4,5') return 'LUN-VEN';
+  if (sorted.join() === '0,6') return 'WEEK-END';
+  return sorted.map((d) => DAY_LABELS[d]).join(' ');
 }
+
+/** Ordre d'affichage : la semaine commence le lundi, le dimanche ferme. */
+export const WEEK_ORDER = [1, 2, 3, 4, 5, 6, 0];
+export const DAY_INITIALS = ['D', 'L', 'M', 'M', 'J', 'V', 'S'];

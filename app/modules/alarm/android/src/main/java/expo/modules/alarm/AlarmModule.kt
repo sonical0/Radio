@@ -10,10 +10,10 @@ import expo.modules.kotlin.modules.ModuleDefinition
 /**
  * La façade JavaScript du réveil.
  *
- * Volontairement mince : une alarme à la fois, posée par son instant absolu.
- * La récurrence, le snooze et l'écran de réveil viendront par-dessus (jalons 2
- * et 3) sans changer cette surface — le JS dira toujours « réveille-moi à cet
- * instant-là avec ce flux ».
+ * Le JS écrit la liste entière à chaque modification, le natif la relit et
+ * recalcule ce qu'il arme. Pas d'API « ajouter une alarme » : une écriture
+ * complète ne peut pas diverger de la liste affichée, là où une suite
+ * d'ajouts et de retraits finit toujours par le faire.
  */
 class AlarmModule : Module() {
   private val context: Context
@@ -22,18 +22,24 @@ class AlarmModule : Module() {
   override fun definition() = ModuleDefinition {
     Name("Alarm")
 
-    /** `atMillis` est un instant epoch ; `Date.now()`-compatible côté JS. */
-    Function("schedule") { atMillis: Double, url: String, title: String ->
-      AlarmScheduler.schedule(context, atMillis.toLong(), url, title)
+    /** La liste complète, en JSON : `[{ id, hour, minute, days, stationUrl, title, enabled }]`. */
+    Function("setAlarms") { json: String ->
+      AlarmStore.saveJson(context, json)
+      AlarmScheduler.rescheduleAll(context)
     }
 
-    Function("cancel") {
-      AlarmScheduler.cancel(context)
+    Function("cancelAll") {
+      AlarmScheduler.cancelAll(context)
     }
 
-    /** L'instant de l'alarme armée, ou 0. Le natif fait foi, pas le JS. */
+    /** L'instant de la prochaine sonnerie, ou 0. Le natif fait foi, pas le JS. */
     Function("next") {
-      AlarmStore.at(context).toDouble()
+      AlarmStore.pendingAt(context).toDouble()
+    }
+
+    /** L'identifiant de l'alarme qui sonnera, pour l'afficher. */
+    Function("nextId") {
+      AlarmStore.pendingId(context)
     }
 
     Function("isRinging") {

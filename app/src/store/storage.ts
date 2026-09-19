@@ -12,6 +12,8 @@ export const KEY_VOLUME = 'radioVolume';
 export const KEY_THEME = 'themePalette';
 /** Dernière vérification de release : date, version vue, lien, version écartée. */
 export const KEY_UPDATE = 'updateCheck';
+/** Les alarmes du réveil. Le natif en tient sa propre copie, qu'on lui pousse. */
+export const KEY_ALARMS = 'alarms';
 
 /**
  * Toute lecture peut échouer (stockage plein, mode privé, données corrompues
