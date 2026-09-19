@@ -1,6 +1,10 @@
 # Fallout Radio — application React Native
 
-Portage mobile du site, sur la branche `react-native/dev`. Le site en HTML pur reste sur `main` et n'est pas touché : on ajoute une cible, on ne migre pas.
+Portage mobile du site. Le site en HTML pur reste sur `main` et n'est pas touché : on ajoute une cible, on ne migre pas.
+
+**Version 1.1.1** (`versionCode` 5), APK signé, installé et testé sur téléphone.
+
+**Deux branches, pas une.** `react-native/dev` porte le travail, `react-native/main` ne reçoit que ce qui a tourné sur un appareil. Git refuse une branche `react-native` à côté de `react-native/main` — un nom ne peut pas être à la fois une référence et un dossier de références — d'où ce préfixe plutôt qu'une branche parente. Les fichiers du site présents ici sont une copie de `main` : ils s'alignent par `cherry-pick`, **jamais par `git checkout main -- index.html`**, qui écrase au lieu de reporter (fait une fois, trois fonctions perdues et mises en ligne dans cet état).
 
 ## État : parité atteinte avec le site (jalons 1 à 5)
 
@@ -25,6 +29,18 @@ Vérifié sur l émulateur de bout en bout : recherche « jazz », ajout de *Jaz
 La trame mérite un mot : le site la fait en `repeating-linear-gradient`, que React Native n a pas, et empiler six cents vues d un pixel serait absurde. On carrelle donc une tuile de 4×4 px générée dans le dépôt (73 octets), de même période. Le vacillement reprend le profil du site — huit secondes de calme, un creux bref à 0,94 : c est l irrégularité qui fait tube.
 
 Vérifié sur les deux cibles. Deux défauts trouvés en regardant l écran : l en-tête passait sous la barre d état Android (le `SafeAreaView` de React Native ne pose des marges que sur iOS — remplacé par `react-native-safe-area-context`), et le titre défilant restait invisible, faute de largeur dans sa rangée flex, donc mesuré à zéro et masqué par son propre `overflow`.
+
+**Jalon 6 — la couleur d'écran, et ce que le téléphone a appris.** Un bouton ⚙ à gauche de l'horloge ouvre le choix du phosphore : vert, ambre, bleu, blanc. Les quatre palettes sont définies une fois dans `src/ui/theme.tsx`, contraste mesuré en commentaire, et le choix est persisté. La fonctionnalité a plu et **a été reportée sur le site** — c'est le seul trajet app → site à ce jour, tous les autres vont dans l'autre sens.
+
+Le reste de ce jalon vient de l'APK installé, pas de l'émulateur. Sept défauts, tous invisibles au bureau :
+
+- **Le clavier ne levait plus l'écran.** L'affichage bord à bord d'Android 15 neutralise `adjustResize` : la fenêtre ne rétrécit plus, le champ de saisie reste sous le clavier. On réserve donc la hauteur nous-mêmes sur `keyboardDidShow`, avec un `scrollToEnd` au focus et `keyboardShouldPersistTaps`.
+- **Le titre de l'en-tête se coupait** en « FALLOUT RAD… ». Corps et interlettrage réduits (25/3 pour le titre, 20/1 pour l'horloge), vérifié à 360 dp — et non en tronquant, la première tentative, qui ne faisait qu'officialiser la coupure.
+- **Mojave et New Vegas restaient trop basses**, deux fois de suite : les gains avaient été mesurés sur des échantillons trop courts. Re-mesure, puis amplification native (voir plus bas).
+- **Le volume maître ne sert à rien sur téléphone**, les touches matérielles font déjà ce travail : la barre disparaît sur mobile et reste sur le web.
+- **Le formulaire d'ajout** se replie, comme la corbeille — repris ensuite sur le site.
+- **Une recherche d'annuaire ne se refermait pas** : un bouton l'efface, sur les deux cibles.
+- **L'icône de l'application** est la favicon du site, adaptative et monochrome comprises.
 
 ## Ce que l'app fait et que le site ne peut pas
 
@@ -85,7 +101,7 @@ Exclure les dossiers par **chemin absolu**. Un `/XD build` tout court emporte au
 
 **API synchrone.** La v5 passe par JSI : `setupPlayer()`, `play()`, `setVolume()` ne renvoient pas de promesse. `useIsPlaying()` renvoie un booléen, pas un objet. Les commandes distantes se règlent par `setCommands()`, à part de `setupPlayer()`, et `handling: 'native'` fait répondre la notification et l'écran verrouillé même quand le runtime JS ne tourne plus — c'est précisément ce qu'on est venu chercher.
 
-**`src/data/stations.json` est une copie de `stations.json` de la racine.** Metro ne sort pas de `app/`, et un lien symbolique ne survit ni à Windows ni à la synchro. Les deux fichiers doivent être modifiés ensemble tant qu'on n'a pas décidé lequel fait foi. À trancher avant le jalon 3.
+**`src/data/stations.json` est une copie de `stations.json` de la racine.** Metro ne sort pas de `app/`, et un lien symbolique ne survit ni à Windows ni à la synchro. **Celui de la racine fait foi** : c'est lui que sert le site, et c'est là que les gains ont été mesurés. La copie se recopie à la main après toute modification — les deux fichiers sont identiques, `git diff` entre branches le vérifie en une commande.
 
 ## Build Android : trois obstacles d'environnement, tous documentés ici
 
@@ -114,14 +130,11 @@ echo "sdk.dir=C:/AndroidSdk" > android/local.properties
 
 **`expo prebuild` régénère `android/` et efface `local.properties`** : le fichier est à réécrire après chaque prebuild, sinon le build repart droit dans l'erreur libc++.
 
-## Ce que le natif change par rapport au site
+## HLS, et le visualiseur
 
-Deux verrous du navigateur tombent, et c'est ce qui justifie le portage :
+HLS est géré nativement par ExoPlayer et AVPlayer : `vendor/hls.light.min.js` n'a pas d'équivalent ici, et sur le web la bibliothèque passe par shaka.
 
-- **Plus de CORS.** Les métadonnées Shoutcast v2 (`/stats?json=1`), inatteignables depuis une page web faute d'en-tête, deviennent lisibles. Déjà visible sur un point : les titres ICY du flux, que le natif lit sans aucune requête.
-- **Le visualiseur FFT redevient possible.** Côté web, `createMediaElementSource()` coupe le son de tous ces flux cross-origin sans CORS (constaté le 14/09, noté « ne pas retenter »). La contrainte n'existe pas en natif.
-
-Et une contrainte disparaît : HLS est géré nativement par ExoPlayer et AVPlayer. `vendor/hls.light.min.js` n'a pas d'équivalent ici — sur le web, la bibliothèque passe par shaka.
+Le visualiseur reste décoratif, ici comme sur le site — 34 barres animées, pas une FFT. Le natif permettrait une vraie analyse du signal, là où `createMediaElementSource()` coupe le son de ces flux sans CORS sur le web (constaté le 14/09, noté « ne pas retenter ») ; personne n'en a eu besoin jusqu'ici.
 
 ## Accessibilité
 
