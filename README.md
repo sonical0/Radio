@@ -32,6 +32,9 @@ No build step, no package manager, no framework. Serve the folder and it runs.
   with `ffmpeg -af ebur128` and the gains bring them to a common target.
 - **Hide any station you don't listen to**, built-in ones included. Hiding is reversible: a
   "hidden stations" drawer at the bottom of the list brings them back one by one.
+- **A screen colour you choose.** The ⚙ button next to the clock swaps the phosphor between
+  green, amber, blue and white, like a Pip-Boy. The choice is stored and re-applied by a
+  script in the `<head>`, before the first paint, so the page never flashes the wrong colour.
 - **Sleep timer** with a slow fade-out, **media keys** and lock-screen controls via the Media
   Session API, **keyboard shortcuts**, and automatic reconnection when a stream drops.
 - **Import / export** your custom stations as JSON.
@@ -64,7 +67,9 @@ See [DOCKER.md](./DOCKER.md).
 
 ## Adding stations
 
-**From the interface** — paste a stream URL into the add form, or search the directory.
+**From the interface** — unfold *Add a station* at the bottom of the list and paste a stream
+URL, or search the directory. The form is folded away by default: it is used once in a while,
+and the station list is what you came for.
 Custom stations live in `localStorage`, so they survive reloads and never leave your browser.
 
 **Built in** — add an entry to `stations.json`:
@@ -79,8 +84,9 @@ Metadata is usually automatic. To override it, or to reach an Icecast server:
 { "meta": { "type": "icecast", "url": "https://example.org/status-json.xsl" } }
 ```
 
-Optional fields: `gain` (0–1, attenuates a stream that is louder than the rest) and `hls`
-(only needed when an HLS stream's URL does not end in `.m3u8`).
+Optional fields: `gain` (0–1, attenuates a stream that is louder than the rest), `hls` (only
+needed when an HLS stream's URL does not end in `.m3u8`), and `boost` (decibels, **ignored
+here** — a browser cannot amplify past the maximum; the mobile app reads it).
 
 ## Keyboard shortcuts
 
@@ -94,7 +100,7 @@ Optional fields: `gain` (0–1, attenuates a stream that is louder than the rest
 
 ## How it works
 
-Everything lives in `index.html` — styles, markup and logic, ~108 KB of it, no dependencies
+Everything lives in `index.html` — styles, markup and logic, ~126 KB of it, no dependencies
 beyond the vendored HLS library. A few decisions worth knowing about:
 
 **No Web Audio API.** It would be the obvious way to boost a quiet stream past `volume = 1`,

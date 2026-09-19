@@ -31,6 +31,10 @@ Pas d'étape de build, pas de gestionnaire de paquets, pas de framework. On sert
   `ffmpeg -af ebur128`, et les gains les ramènent à une cible commune.
 - **Masque les stations que tu n'écoutes pas**, y compris celles livrées avec le site. Le
   masquage est réversible : une corbeille dépliable en bas de liste les rend une par une.
+- **La couleur de l'écran au choix.** Le bouton ⚙ à gauche de l'horloge fait passer le
+  phosphore du vert à l'ambre, au bleu ou au blanc, comme sur un Pip-Boy. Le choix est
+  mémorisé et réappliqué par un script du `<head>`, avant le premier rendu : la page ne
+  clignote jamais dans la mauvaise couleur.
 - **Minuterie de veille** avec fondu progressif, **touches multimédia** et contrôles depuis
   l'écran verrouillé (Media Session API), **raccourcis clavier**, et reconnexion automatique
   quand un flux tombe.
@@ -65,8 +69,9 @@ Voir [DOCKER.md](./DOCKER.md).
 
 ## Ajouter des stations
 
-**Depuis l'interface** — colle l'URL d'un flux dans le formulaire d'ajout, ou passe par
-l'annuaire. Les stations personnelles vivent dans le `localStorage` : elles survivent aux
+**Depuis l'interface** — déplie *Ajouter une station* en bas de liste et colle l'URL d'un
+flux, ou passe par l'annuaire. Le formulaire est replié par défaut : on s'en sert de loin en
+loin, et c'est la liste des stations qu'on vient voir. Les stations personnelles vivent dans le `localStorage` : elles survivent aux
 rechargements et ne quittent jamais ton navigateur.
 
 **En dur** — ajoute une entrée à `stations.json` :
@@ -82,8 +87,10 @@ Icecast :
 { "meta": { "type": "icecast", "url": "https://exemple.org/status-json.xsl" } }
 ```
 
-Champs optionnels : `gain` (0–1, atténue un flux plus fort que les autres) et `hls`
-(nécessaire uniquement quand l'URL d'un flux HLS ne se termine pas par `.m3u8`).
+Champs optionnels : `gain` (0–1, atténue un flux plus fort que les autres), `hls`
+(nécessaire uniquement quand l'URL d'un flux HLS ne se termine pas par `.m3u8`) et `boost`
+(en décibels, **ignoré ici** — un navigateur ne sait pas amplifier au-delà du maximum ;
+l'application mobile, si).
 
 ## Raccourcis clavier
 
@@ -97,7 +104,7 @@ Champs optionnels : `gain` (0–1, atténue un flux plus fort que les autres) et
 
 ## Comment ça marche
 
-Tout tient dans `index.html` — styles, balisage et logique, environ 108 Ko, sans autre
+Tout tient dans `index.html` — styles, balisage et logique, environ 126 Ko, sans autre
 dépendance que la bibliothèque HLS embarquée. Quelques décisions méritent d'être connues :
 
 **Pas de Web Audio API.** Ce serait la façon évidente d'amplifier un flux trop discret
