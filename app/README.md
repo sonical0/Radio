@@ -74,6 +74,19 @@ npm run android    # appareil ou émulateur ; dev build, pas Expo Go
 cd android && ./gradlew assembleRelease
 ```
 
+> **Toute modification d'`app.json` exige un `expo prebuild` avant de reconstruire.** `android/` est généré et ignoré par git : tant qu'on ne le régénère pas, Gradle rebat les cartes d'un manifeste et d'un `build.gradle` périmés. **Le build réussit** — c'est ce qui rend le piège coûteux : rien ne prévient, et l'APK est faux.
+>
+> Deux fois le 19/09/2026, sur le même oubli : une version montée à 1.2.0 dans `app.json` a produit un APK estampillé `1.0.2`, et `"orientation": "default"` a produit un APK toujours verrouillé en portrait, où tourner le téléphone ne faisait rien. Dans les deux cas le code JS était juste ; seul le natif ignorait le changement.
+>
+> ```bash
+> npx expo prebuild --platform android   # efface et recree android/
+> # puis reecrire android/local.properties, deux lignes :
+> #   sdk.dir=C:/AndroidSdk
+> #   cmake.dir=C:/AndroidSdk/cmake/3.30.5
+> ```
+>
+> Réécrire `local.properties` n'est pas optionnel : le prebuild l'emporte, et sans elle le build repart dans l'erreur de lien de CMake 3.22.1 décrite plus bas. **Vérifier le résultat sur l'APK, pas sur l'intention** — `aapt2 dump badging` pour la version, `aapt2 dump xmltree --file AndroidManifest.xml` pour le reste.
+
 La signature est injectée par `plugins/withReleaseSigning.js`, un plugin de configuration : `expo prebuild` régénère `android/`, donc tout réglage écrit à la main dedans disparaîtrait à la passe suivante. Le plugin lit `keystore/credentials.properties` et pousse les valeurs dans `gradle.properties`.
 
 **Le dossier `keystore/` est hors dépôt, et doit le rester.** Il contient le trousseau et son mot de passe. Android n'accepte une mise à jour que signée par la même clé : perdre ce fichier, c'est ne plus pouvoir mettre à jour l'app installée — il faudrait la désinstaller et repartir de zéro, en perdant les stations ajoutées. À sauvegarder ailleurs que sur ce seul disque.
