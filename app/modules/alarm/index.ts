@@ -8,6 +8,8 @@ type AlarmNative = {
   nextId(): string;
   isRinging(): boolean;
   stopRinging(): void;
+  snooze(): void;
+  setPalette(background: string, surface: string, base: string, dim: string): void;
   canScheduleExact(): boolean;
 };
 
@@ -67,6 +69,18 @@ export function isRinging(): boolean {
 
 export function stopRinging(): void {
   native?.stopRinging();
+}
+
+export function snoozeRinging(): void {
+  native?.snooze();
+}
+
+/**
+ * L'écran de réveil est natif : il ne voit pas le thème React. On lui
+ * dépose les couleurs courantes pour qu'il s'habille pareil.
+ */
+export function setAlarmPalette(background: string, surface: string, base: string, dim: string): void {
+  native?.setPalette(background, surface, base, dim);
 }
 
 /** Faux seulement sur Android 12 quand l'utilisateur a refusé les alarmes exactes. */

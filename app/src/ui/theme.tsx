@@ -11,6 +11,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { StyleSheet } from 'react-native';
 
+import { setAlarmPalette } from '../../modules/alarm';
 import { KEY_THEME, readString, writeString } from '../store/storage';
 
 export type Palette = {
@@ -186,6 +187,14 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     const p = PALETTES.find((x) => x.id === id) ?? fallback;
     return { p, t: makeShared(p), setPalette };
   }, [id, setPalette]);
+
+  // L'écran de réveil est une fenêtre native, posée alors que le runtime JS
+  // dort : il ne peut pas lire ce contexte. On lui dépose les couleurs à
+  // chaque changement, pour qu'il s'habille comme le reste au réveil.
+  useEffect(() => {
+    const p = value.p;
+    setAlarmPalette(p.bg, p.bg3, p.base, p.dim);
+  }, [value.p]);
 
   return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;
 }

@@ -25,6 +25,7 @@ import { useUpdateCheck } from './src/model/useUpdateCheck';
 import { setupPlayer } from './src/player/player';
 import { useKeyboardShortcuts } from './src/player/useKeyboardShortcuts';
 import { usePlayback } from './src/player/usePlayback';
+import { useAlarms } from './src/store/useAlarms';
 import { groupStations, knownGroups } from './src/store/library';
 import { useLibrary } from './src/store/useLibrary';
 import { AddStation } from './src/ui/AddStation';
@@ -73,6 +74,7 @@ function Radio() {
   const { titles, refreshOne } = useNowPlaying(lib.stations, play.currentUrl);
   const [fontsLoaded] = useFonts(FONTS);
   const updates = useUpdateCheck();
+  const alarms = useAlarms();
   useKeyboardShortcuts(play);
   const [ready, setReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -153,6 +155,7 @@ function Radio() {
           checking={updates.checking}
           onCheckUpdate={updates.check}
           station={play.current}
+          alarms={alarms}
         />
 
         <UpdateBanner update={updates.update} onDismiss={updates.dismiss} />

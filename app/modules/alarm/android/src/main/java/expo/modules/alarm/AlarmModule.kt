@@ -46,6 +46,22 @@ class AlarmModule : Module() {
       AlarmService.ringing
     }
 
+    /**
+     * Les couleurs de l'habillage, pour que l'écran de réveil — écrit en
+     * Kotlin, donc hors du thème React — ne jure pas avec un Pip-Boy réglé
+     * en ambre. À repousser à chaque changement de palette.
+     */
+    Function("setPalette") { background: String, surface: String, base: String, dim: String ->
+      AlarmPalette.save(context, background, surface, base, dim)
+    }
+
+    /** Report depuis l'application, équivalent du bouton de la notification. */
+    Function("snooze") {
+      context.startService(
+        Intent(context, AlarmService::class.java).setAction(AlarmService.ACTION_SNOOZE),
+      )
+    }
+
     /** Arrêt depuis l'application, équivalent du bouton de la notification. */
     Function("stopRinging") {
       context.startService(

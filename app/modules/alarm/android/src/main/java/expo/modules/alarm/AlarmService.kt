@@ -26,9 +26,6 @@ private const val TAG = "Alarm"
 private const val CHANNEL_ID = "alarm"
 private const val NOTIFICATION_ID = 42
 
-/** Au-delà, personne n'est là : le téléphone se tait plutôt que de vider sa batterie. */
-private const val AUTO_STOP_MS = 10 * 60 * 1000L
-
 /** Ce qu'on laisse au flux pour produire du son avant de le déclarer mort. */
 private const val STREAM_GRACE_MS = 10 * 1000L
 
@@ -42,18 +39,26 @@ private const val STREAM_GRACE_MS = 10 * 1000L
  * propre ExoPlayer, sur `USAGE_ALARM` — le canal d'alarme, celui qui sonne même
  * quand le téléphone est en silencieux et dont le volume ne suit pas le média.
  *
- * Deux garanties, dans cet ordre d'importance :
+ * Trois garanties, dans cet ordre d'importance :
  *
  * 1. **Ça sonne.** Si le flux n'a pas produit de son au bout de dix secondes,
  *    on bascule sur la sonnerie d'alarme du système. Une station morte à 7 h ne
  *    doit pas valoir un réveil raté.
- * 2. **Ça s'arrête.** Dix minutes sans action et le service se termine.
+ * 2. **Ça s'arrête.** Dix minutes sans action et la sonnerie se tait.
+ * 3. **Ça renonce.** Une demi-heure après la première note, reports compris,
+ *    plus rien ne sonnera : un téléphone qui insiste une heure dans une maison
+ *    vide n'a réveillé personne et a vidé sa batterie.
  */
 class AlarmService : Service() {
   companion object {
     const val EXTRA_URL = "url"
     const val EXTRA_TITLE = "title"
+
+    /** Non nul quand la sonnerie reprend après un report : l'heure de la première note. */
+    const val EXTRA_SESSION_START = "sessionStart"
+
     const val ACTION_STOP = "expo.modules.alarm.STOP"
+    const val ACTION_SNOOZE = "expo.modules.alarm.SNOOZE"
 
     /** Lu par le JS pour savoir s'il doit afficher un écran de sonnerie. */
     @Volatile
@@ -67,9 +72,9 @@ class AlarmService : Service() {
   private var wakeLock: PowerManager.WakeLock? = null
   private var fellBack = false
 
-  private val stopSelfRunnable = Runnable {
-    Log.i(TAG, "dix minutes sans action : arrêt")
-    stopSelf()
+  private val autoStopRunnable = Runnable {
+    Log.i(TAG, "dix minutes sans action : arrêt de cette sonnerie")
+    stopEverything(closeSession = !AlarmSession.canSnooze(this))
   }
 
   private val fallbackRunnable = Runnable { fallbackToRingtone("le flux n'a rien produit en 10 s") }
@@ -77,19 +82,30 @@ class AlarmService : Service() {
   override fun onBind(intent: Intent?): IBinder? = null
 
   override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-    if (intent?.action == ACTION_STOP) {
-      stopSelf()
-      return START_NOT_STICKY
+    when (intent?.action) {
+      ACTION_STOP -> {
+        stopEverything(closeSession = true)
+        return START_NOT_STICKY
+      }
+      ACTION_SNOOZE -> {
+        snooze()
+        return START_NOT_STICKY
+      }
     }
 
     val url = intent?.getStringExtra(EXTRA_URL).orEmpty()
     val title = intent?.getStringExtra(EXTRA_TITLE).orEmpty().ifEmpty { "Réveil" }
+    val resumed = intent?.getLongExtra(EXTRA_SESSION_START, 0L) ?: 0L
+    val now = System.currentTimeMillis()
+
+    if (resumed == 0L) {
+      // Première note du matin : c'est d'ici que court la demi-heure.
+      AlarmSession.open(this, now, url, title)
+      AlarmDeadline.arm(this, AlarmSession.deadline(this))
+    }
 
     startForeground(NOTIFICATION_ID, notification(title))
     ringing = true
-
-    // Le verrou couvre le temps d'ouvrir le flux : sans lui, l'appareil peut se
-    // rendormir entre le réveil du receiver et la première note.
     acquireWakeLock()
 
     if (url.isEmpty()) {
@@ -99,10 +115,27 @@ class AlarmService : Service() {
       handler.postDelayed(fallbackRunnable, STREAM_GRACE_MS)
     }
 
-    handler.postDelayed(stopSelfRunnable, AUTO_STOP_MS)
+    // La sonnerie ne dure jamais au-delà de l'échéance, même si dix minutes
+    // pleines lui resteraient.
+    val remaining = AlarmSession.deadline(this) - now
+    handler.postDelayed(autoStopRunnable, minOf(AUTO_STOP_MS, maxOf(remaining, 1_000L)))
+
     // Ne pas relancer tout seul : une alarme ressuscitée par le système à une
     // heure quelconque serait pire que pas d'alarme du tout.
     return START_NOT_STICKY
+  }
+
+  private fun snooze() {
+    if (!AlarmSession.canSnooze(this)) {
+      Log.i(TAG, "report refusé : plafond atteint ou échéance trop proche")
+      stopEverything(closeSession = true)
+      return
+    }
+    AlarmSession.countSnooze(this)
+    val at = System.currentTimeMillis() + SNOOZE_MS
+    AlarmSnooze.arm(this, at, AlarmSession.url(this), AlarmSession.title(this), AlarmSession.startedAt(this))
+    Log.i(TAG, "report n°" + AlarmSession.snoozes(this) + " jusqu'à " + at)
+    stopEverything(closeSession = false)
   }
 
   private fun startStream(url: String) {
@@ -173,7 +206,7 @@ class AlarmService : Service() {
   private fun notification(title: String): android.app.Notification {
     val manager = getSystemService(NotificationManager::class.java)
     // IMPORTANCE_HIGH et la catégorie alarme : c'est ce qui autorise le son à
-    // passer le mode silencieux et, au jalon 3, l'écran de réveil plein écran.
+    // passer le mode silencieux et l'écran de réveil à s'ouvrir tout seul.
     val channel = NotificationChannel(CHANNEL_ID, "Réveil", NotificationManager.IMPORTANCE_HIGH)
     channel.setSound(null, null)
     channel.setBypassDnd(true)
@@ -186,25 +219,40 @@ class AlarmService : Service() {
       PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
     )
 
-    val open = packageManager.getLaunchIntentForPackage(packageName)?.let {
-      PendingIntent.getActivity(
-        this,
-        2,
-        it,
-        PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
-      )
-    }
+    // L'écran plein écran. Si le système refuse de l'ouvrir — permission
+    // absente sur Android 14+, ou téléphone déverrouillé et actif — la
+    // notification reste, avec ses boutons : jamais d'échec silencieux.
+    val full = PendingIntent.getActivity(
+      this,
+      3,
+      Intent(this, AlarmActivity::class.java)
+        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK),
+      PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+    )
 
-    return NotificationCompat.Builder(this, CHANNEL_ID)
+    val builder = NotificationCompat.Builder(this, CHANNEL_ID)
       .setContentTitle("RÉVEIL")
       .setContentText(title)
       .setSmallIcon(android.R.drawable.ic_lock_idle_alarm)
       .setCategory(NotificationCompat.CATEGORY_ALARM)
       .setPriority(NotificationCompat.PRIORITY_MAX)
       .setOngoing(true)
-      .setContentIntent(open)
+      .setContentIntent(full)
+      .setFullScreenIntent(full, true)
       .addAction(android.R.drawable.ic_menu_close_clear_cancel, "ARRÊTER", stop)
-      .build()
+
+    if (AlarmSession.canSnooze(this)) {
+      val snoozePending = PendingIntent.getService(
+        this,
+        2,
+        Intent(this, AlarmService::class.java).setAction(ACTION_SNOOZE),
+        PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+      )
+      val label = if (AlarmSession.lastSnooze(this)) "DERNIER REPORT" else "REPORT 10 MIN"
+      builder.addAction(android.R.drawable.ic_menu_recent_history, label, snoozePending)
+    }
+
+    return builder.build()
   }
 
   private fun acquireWakeLock() {
@@ -220,6 +268,15 @@ class AlarmService : Service() {
     }
   }
 
+  private fun stopEverything(closeSession: Boolean) {
+    if (closeSession) {
+      AlarmSession.close(this)
+      AlarmDeadline.cancel(this)
+      AlarmSnooze.cancel(this)
+    }
+    stopSelf()
+  }
+
   private fun releasePlayer() {
     try {
       player?.release()
@@ -230,7 +287,7 @@ class AlarmService : Service() {
 
   override fun onDestroy() {
     ringing = false
-    handler.removeCallbacks(stopSelfRunnable)
+    handler.removeCallbacks(autoStopRunnable)
     handler.removeCallbacks(fallbackRunnable)
     releasePlayer()
     try {
