@@ -39,10 +39,11 @@ Pas d'étape de build, pas de gestionnaire de paquets, pas de framework. On sert
   l'écran verrouillé (Media Session API), **raccourcis clavier**, et reconnexion automatique
   quand un flux tombe.
 - **Import / export** de tes stations personnelles en JSON.
-- **Une application mobile**, en React Native, qui partage cette liste de stations. Elle fait
+- **Une application Android**, en React Native, qui partage cette liste de stations. Elle fait
   deux choses que cette page ne peut pas : amplifier les stations diffusées trop bas pour être
-  rattrapées en baissant les autres, et lire le titre dans le flux lui-même. Voir `app/` sur la
-  branche `react-native/main`.
+  rattrapées en baissant les autres, et lire le titre dans le flux lui-même.
+  [Télécharger l'APK](https://github.com/sonical0/Radio/releases) — le code et son propre
+  README sont sur la branche `react-native/main`.
 - **Rendu identique hors ligne.** Polices, favicon et bibliothèque HLS sont tous servis
   depuis le dossier : rien n'est récupéré sur un CDN au chargement.
 
@@ -136,6 +137,20 @@ complet est dans [CHANGELOG.md](./CHANGELOG.md).
 
 Chrome, Edge, Firefox et Safari, sur ordinateur comme sur mobile. HLS passe par hls.js
 partout sauf sur iOS, qui le lit nativement.
+
+## Branches
+
+Cette branche, `main`, est toute la cible navigateur : la page, la liste de stations, et le
+Docker qui les sert. C'est elle que déploie GitHub Pages, et elle n'a aucune étape de build.
+
+`react-native/main` et `react-native/dev` portent l'application Android, respectivement
+stable et en cours. Elles gardent une copie des fichiers du site pour que les deux cibles
+partagent une seule liste de stations, et leur README décrit l'application, pas cette page.
+
+Il a existé une branche `dockerized`. Elle a été supprimée le 19/09/2026 : tous les fichiers
+Docker vivent ici, et elle avait pris du retard sur chacun d'eux — elle servait un
+`index.html` d'avant HLS, l'annuaire et le sélecteur de couleur, ce qui est pire que pas de
+branche du tout.
 
 ## Licence
 

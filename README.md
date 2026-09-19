@@ -38,10 +38,11 @@ No build step, no package manager, no framework. Serve the folder and it runs.
 - **Sleep timer** with a slow fade-out, **media keys** and lock-screen controls via the Media
   Session API, **keyboard shortcuts**, and automatic reconnection when a stream drops.
 - **Import / export** your custom stations as JSON.
-- **A mobile app**, in React Native, sharing this station list. It does two things this page
+- **An Android app**, in React Native, sharing this station list. It does two things this page
   cannot: it amplifies the stations that are broadcast too quietly to be fixed by attenuating
-  the others, and it reads the title out of the stream itself. See `app/` on the
-  `react-native/main` branch.
+  the others, and it reads the title out of the stream itself.
+  [Download the APK](https://github.com/sonical0/Radio/releases) — source and its own README
+  on the `react-native/main` branch.
 - **Offline-identical rendering.** Fonts, favicon and the HLS library are all served from the
   folder — nothing is fetched from a CDN at load time.
 
@@ -130,6 +131,19 @@ Further notes for contributors are in [CLAUDE.md](./CLAUDE.md); the full history
 
 Chrome, Edge, Firefox and Safari, desktop and mobile. HLS goes through hls.js everywhere
 except iOS, which plays it natively.
+
+## Branches
+
+This branch, `main`, is the whole browser target: the page, the station list, and the Docker
+setup that serves them. It is what GitHub Pages deploys, and it has no build step.
+
+`react-native/main` and `react-native/dev` hold the Android app, stable and working
+respectively. They carry a copy of the site files so both targets share one station list, and
+their own README describes the app, not this page.
+
+There used to be a `dockerized` branch. It was deleted on 2026-09-19: every Docker file
+lives here, and the branch had fallen behind on all of them — it served an `index.html` from
+before HLS, the directory and the colour picker, which is worse than no branch at all.
 
 ## License
 
