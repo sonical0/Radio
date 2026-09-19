@@ -16,4 +16,8 @@ android {
 
 dependencies {
   implementation 'com.facebook.react:react-android'
+  // Même version que celle qu'embarque @rntp/player : c'est à SA session que
+  // le widget parle, autant ne pas introduire une seconde version de media3.
+  implementation 'androidx.media3:media3-session:1.9.2'
+  implementation 'androidx.media3:media3-common:1.9.2'
 }

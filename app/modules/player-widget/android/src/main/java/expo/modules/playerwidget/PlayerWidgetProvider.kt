@@ -7,19 +7,18 @@ import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.graphics.Color
-import android.media.AudioManager
-import android.view.KeyEvent
 import android.widget.RemoteViews
+import androidx.media3.common.util.UnstableApi
 
 /**
  * Le widget d'écran d'accueil.
  *
- * **Il ne parle pas à `@rntp/player`, il parle à la session média.** Le lecteur
- * configure ses commandes distantes en `handling: 'native'` (voir
- * `src/player/player.ts`), donc la session répond aux touches média même quand
- * le runtime JS ne tourne plus — c'est exactement ce que fait un casque
- * Bluetooth. `dispatchMediaKeyEvent()` suffit donc, sans permission, sans
- * couplage au lecteur, et sans réveiller la moindre ligne de JavaScript.
+ * **Il ne parle pas à `@rntp/player`, il parle à sa session média** — par deux
+ * chemins distincts, pour une raison expliquée dans `PlayerCommands` : une
+ * touche média suffit pour play/pause, mais elle est rejetée pour Next et
+ * Previous, dont la commande n'est pas « disponible » sur une file d'une
+ * seule piste. Ceux-là passent par la commande de session personnalisée, la
+ * même que le bouton de la notification.
  *
  * L'affichage, lui, vient de ce que le JS a laissé dans les préférences à sa
  * dernière exécution : nom de la station, titre en cours, état de lecture. Ce
@@ -28,6 +27,7 @@ import android.widget.RemoteViews
  * inventé, mais celui qu'on a reçu, et de le corriger dès que l'application
  * ou le service en publie un nouveau.
  */
+@UnstableApi
 class PlayerWidgetProvider : AppWidgetProvider() {
   companion object {
     const val ACTION_PLAY_PAUSE = "expo.modules.playerwidget.PLAY_PAUSE"
@@ -94,29 +94,33 @@ class PlayerWidgetProvider : AppWidgetProvider() {
 
   override fun onReceive(context: Context, intent: Intent) {
     super.onReceive(context, intent)
-    val key = when (intent.action) {
-      ACTION_PLAY_PAUSE -> KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE
-      ACTION_NEXT -> KeyEvent.KEYCODE_MEDIA_NEXT
-      ACTION_PREVIOUS -> KeyEvent.KEYCODE_MEDIA_PREVIOUS
-      else -> return
+    when (intent.action) {
+      ACTION_PLAY_PAUSE -> {
+        PlayerCommands.playPause(context)
+        // Le retour d'écran est immédiat : attendre que le JS republie
+        // l'état donnerait un bouton qui ne réagit pas quand l'application
+        // est fermée. L'état réel corrigera au prochain envoi.
+        WidgetState.togglePlaying(context)
+        refresh(context)
+      }
+      ACTION_NEXT -> withSession(context) { done -> PlayerCommands.next(context, done) }
+      ACTION_PREVIOUS -> withSession(context) { done -> PlayerCommands.previous(context, done) }
     }
-    sendMediaKey(context, key)
-
-    // Le retour d'écran est immédiat sur le bouton lecture : attendre que le
-    // JS republie l'état donnerait un bouton qui ne réagit pas quand
-    // l'application est fermée. L'état réel corrigera au prochain envoi.
-    if (key == KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE) {
-      WidgetState.togglePlaying(context)
-    }
-    refresh(context)
   }
 
-  private fun sendMediaKey(context: Context, code: Int) {
-    val audio = context.getSystemService(AudioManager::class.java) ?: return
-    // Deux évènements : une touche physique descend puis remonte, et une
-    // session qui n'en reçoit qu'un seul peut ignorer l'appui.
-    audio.dispatchMediaKeyEvent(KeyEvent(KeyEvent.ACTION_DOWN, code))
-    audio.dispatchMediaKeyEvent(KeyEvent(KeyEvent.ACTION_UP, code))
+  /**
+   * Joindre la session est asynchrone, et un `BroadcastReceiver` est tué dès
+   * la fin de `onReceive` : `goAsync()` tient le processus le temps de la
+   * connexion, et `finish()` le relâche dès la commande partie.
+   */
+  private fun withSession(context: Context, block: (done: () -> Unit) -> Unit) {
+    val pending = goAsync()
+    block {
+      try {
+        pending.finish()
+      } catch (_: Throwable) {
+      }
+    }
   }
 }
 
