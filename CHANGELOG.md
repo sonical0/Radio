@@ -8,6 +8,27 @@ Ordre : **entrée la plus récente en tête**. Plusieurs passes le même jour so
 suffixées `(2)`, `(3)`… la plus haute étant la plus récente (même convention que
 `TANDEM_LOG.md`).
 
+## 2026-09-19
+
+### Corrigé — les gains, mesurés cette fois sur des fenêtres assez longues
+- Les gains posés la veille venaient d échantillons de 40 et 100 s. Trop court : **Pirate Radio
+  mesure de -8,8 à -25,2 LUFS selon le moment**, son contenu variant énormément. Le 0,17 qu on
+  lui avait donné était trois fois trop sévère.
+- Deux passes de **180 s** par station, moyennées : les écarts entre passes tombent sous 5 dB,
+  et **Radio New Vegas ressort stable à -30,6** sur quatre mesures — elle est bien diffusée
+  faible, ce n est pas un artefact de mesure.
+- Nouvelle cible : **-18 LUFS**, le niveau du gros du peloton, pour que la page sonne comme le
+  reste de la machine au lieu d être uniformément faible. Seules les cinq stations au-dessus
+  sont atténuées (Pirate 0,45, Diamond City 0,55, Black Mountain 0,67, Galaxy 0,69,
+  Mysterious 0,77) ; les six autres gardent 1.
+- Le champ **`boost`** apparaît sur deux stations. **Le site l ignore volontairement** — on ne
+  peut pas amplifier dans un navigateur — il sert à l application mobile, qui le peut en natif.
+  Il vit ici pour que les deux cibles gardent une seule source de vérité. Détail dans `CLAUDE.md`.
+
+### Corrigé — l annuaire ne liste plus deux fois le même flux
+- Radio-Browser publie une fiche par nom donné par les contributeurs : la même URL revenait
+  plusieurs fois dans les résultats. Déduplication sur l URL, la première fiche gagne.
+
 ## 2026-09-18 (4)
 
 ### Changé — les gains des stations sont mesurés, plus estimés
