@@ -33,8 +33,19 @@ export function setupPlayer(): void {
     android: { wakeMode: 'network' },
   });
   // Les commandes distantes se configurent à part de setupPlayer en v5.
-  // Next/Previous sont exposées : la notification permet de zapper de station
-  // sans revenir dans l'appli, et le natif relaie l'appui via un évènement.
+  //
+  // `hybrid` et non `native`, corrigé le 20/09/2026 : en `native`, le lecteur
+  // traite lui-même Next/Previous par `seekToNextMediaItem()` **et n'émet
+  // aucun évènement au JS**. Or la file ne contient qu'une piste — une radio
+  // n'est pas une playlist — donc l'appel ne faisait rien : ni la
+  // notification, ni le casque, ni le widget d'écran d'accueil ne pouvaient
+  // zapper de station. Le symptôme n'était visible nulle part dans le code
+  // JS, dont les écouteurs RemoteNext ne se déclenchaient jamais.
+  //
+  // Zapper est une notion de la bibliothèque, pas de la file : seul le JS
+  // sait quelle est la station suivante. Play/pause et Stop restent natifs,
+  // donc répondent même quand le runtime est mort ; Next/Previous demandent
+  // un runtime vivant, ce qu'un service de lecture en cours garantit.
   TrackPlayer.setCommands({
     capabilities: [
       PlayerCommand.PlayPause,
@@ -42,7 +53,11 @@ export function setupPlayer(): void {
       PlayerCommand.Next,
       PlayerCommand.Previous,
     ],
-    handling: 'native',
+    handling: 'hybrid',
+    perCommandHandling: {
+      [PlayerCommand.Next]: 'js',
+      [PlayerCommand.Previous]: 'js',
+    },
   });
   ready = true;
 }
