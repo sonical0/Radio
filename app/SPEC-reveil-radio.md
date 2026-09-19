@@ -19,6 +19,7 @@ Un réveil qui joue Galaxy News Radio n'existe nulle part ailleurs, et c'est le 
 | Montée de volume | **30 s par défaut, réglable par alarme** |
 | Snooze | **10 minutes, trois reports au maximum** |
 | Arrêt automatique | **10 minutes** de sonnerie sans action |
+| Échéance absolue | **30 minutes** après la première note, quoi qu'il arrive |
 
 ## Hors périmètre, explicitement
 
@@ -76,6 +77,8 @@ export const KEY_ALARMS = 'alarms';
 export const SNOOZE_MINUTES = 10;
 export const SNOOZE_MAX = 3;
 export const AUTO_STOP_MINUTES = 10;
+/** Plus rien ne sonne passé ce délai depuis la première note, reports compris. */
+export const GIVE_UP_MINUTES = 30;
 export const RAMP_SECONDS_DEFAULT = 30;
 
 type Alarm = {
@@ -97,7 +100,7 @@ type Alarm = {
 
 1. **Ça sonne.** Une alarme, une station, sans récurrence ni rampe : `AlarmScheduler` + `AlarmReceiver` + `AlarmService` + repli sonnerie. Vérifié application tuée, écran éteint. C'est 80 % du risque technique.
 2. **Réarmement et récurrence.** Jours de semaine, occurrence suivante, `RECEIVE_BOOT_COMPLETED`.
-3. **L'écran de réveil.** Plein écran par-dessus le verrouillage, ARRÊTER / SNOOZE (10 min, trois fois), arrêt automatique à 10 min, dégradation en notification si la permission manque.
+3. **L'écran de réveil.** Plein écran par-dessus le verrouillage, ARRÊTER / SNOOZE (10 min, trois fois), arrêt automatique à 10 min, échéance absolue à 30 min, dégradation en notification si la permission manque.
 4. **L'horloge de chevet.** Bascule paysage, habillage, prochaine alarme, liste des alarmes et son bouton `+`.
 5. **Finitions.** Montée de volume et son réglage par alarme, gain par station appliqué au réveil.
 
@@ -116,14 +119,20 @@ type Alarm = {
 
 ## Le cycle d'une sonnerie, minuté
 
-C'est le point où quatre réglages se rencontrent, et il vaut d'être écrit une fois pour toutes :
+C'est le point où les réglages se rencontrent, et il vaut d'être écrit une fois pour toutes :
 
 1. L'heure arrive. Le son monte de 10 % à 100 % sur **30 s** (réglable par alarme, 0 = plein volume tout de suite).
-2. Personne ne touche à rien : l'alarme se tait d'elle-même au bout de **10 minutes**, et l'occurrence est close.
-3. SNOOZE : silence **10 minutes**, puis nouvelle sonnerie, rampe comprise. **Trois reports au maximum** ; après le troisième, le bouton disparaît et seul ARRÊTER reste.
-4. Fenêtre maximale d'un matin : `(10 + 10) × 3 + 10` = **70 minutes** entre la première note et le silence définitif. Au-delà, l'alarme n'insiste plus — c'est voulu : un téléphone qui sonne dans une maison vide vide sa batterie.
+2. Personne ne touche à rien : l'alarme se tait au bout de **10 minutes** de sonnerie.
+3. SNOOZE : silence **10 minutes**, puis nouvelle sonnerie, rampe comprise. **Trois reports au maximum.**
+4. **Et par-dessus tout ça, une échéance : 30 minutes après la première note, l'alarme s'arrête définitivement**, qu'elle sonne ou qu'elle soit en report. Un téléphone qui insiste une heure dans une maison vide n'a réveillé personne et a vidé sa batterie.
 
-L'arrêt automatique compte **par sonnerie**, pas sur l'ensemble : chaque reprise a ses dix minutes.
+Les trois premières règles disent le rythme, la quatrième dit la fin. Elles ne sont pas redondantes : sans l'échéance, trois reports de dix minutes plus quatre sonneries de dix font soixante-dix minutes.
+
+**Conséquence à assumer : les trois reports ne tiennent pas toujours dans la fenêtre.** Report immédiat dès la première note, l'alarme repart à T+10, T+20, T+30 — le troisième est coupé net par l'échéance. Laisser sonner, c'est pire : la première sonnerie mange dix minutes, et il ne reste la place que pour un report complet. Trois reste le plafond, pas une promesse.
+
+**Ce que l'écran doit montrer**, sinon l'arrêt paraît arbitraire : le bouton SNOOZE disparaît dès que le prochain report dépasserait l'échéance, plutôt que d'accepter un report qui sera tronqué. Et le dernier report possible s'annonce comme tel (« DERNIER REPORT »).
+
+L'échéance se matérialise côté natif par un `AlarmManager` de secours posé à T+30 au premier déclenchement : le service peut être tué et relancé entre-temps, un simple `Handler.postDelayed()` ne survivrait pas à ça.
 
 ## Ajouter une alarme
 
