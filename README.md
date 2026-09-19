@@ -1,149 +1,66 @@
 **English** · [Français](./README.fr.md)
 
-# Fallout Radio
+# Fallout Radio — Android app
 
-A Pip-Boy-styled internet radio player for the browser. Ships the eleven Fallout in-game
-stations out of the box, plays any web radio you point it at, and searches a directory of
-~50,000 more.
+The React Native port of the [browser player](https://github.com/sonical0/Radio/tree/main):
+the eleven Fallout in-game stations, any stream you add, and a directory of ~50,000 more —
+playing in the background, with lock-screen controls.
 
-No build step, no package manager, no framework. Serve the folder and it runs.
+**▶ [Download the APK](https://github.com/sonical0/Radio/releases)** — version 1.1.1, signed,
+installed and used on a phone. Android only; iOS would need a Mac to build.
 
-**▶ [sonical0.github.io/Radio](https://sonical0.github.io/Radio/)**
+> The interface is in French, like the site.
 
-![The player tuned to Diamond City Radio, showing live track metadata for every station](docs/screenshot.png)
+## What it does that the page cannot
 
-> The interface is in French.
+**It amplifies.** A browser cannot go past `volume = 1`, so a station broadcast fifteen
+decibels below the rest can only be fixed by turning *everything else down* — which makes the
+whole player quieter than the phone. A local native module adds the missing gain instead:
++11 dB on Mojave Music Radio, +13 on Radio New Vegas, both measured.
 
-## Features
+**It reads the title out of the stream.** Nearly every Icecast and Shoutcast server interleaves
+its current track in the audio itself (ICY). The native player reads it, so even a web radio
+pulled from the directory — one with no metadata endpoint at all — shows what is playing.
+From a browser, the same probe answered on **0 stations out of 12**: the CORS header is simply
+not there. Natively, 3 out of 7 answer.
 
-- **The eleven Fallout stations** — Fallout 3, New Vegas, 4 and 76 — with live "now playing"
-  metadata for each.
-- **Any stream you like.** MP3, AAC, Ogg Vorbis, Opus and FLAC play as-is. M3U and PLS
-  playlists are resolved to a direct URL. HLS (`.m3u8`) works too, which is what most large
-  broadcasters serve.
-- **Metadata without configuration.** Paste an AzuraCast stream URL and the track title
-  appears on its own — the API endpoint is derived from the URL. Icecast servers can be
-  pointed at by hand.
-- **A directory built in.** Search [Radio-Browser](https://www.radio-browser.info/) by name
-  or genre and add a station in one click.
-- **Your own groupings.** A group is a free label — a game, a genre, a country — not a fixed
-  list.
-- **Per-station gain**, measured rather than guessed: every station's loudness was sampled
-  with `ffmpeg -af ebur128` and the gains bring them to a common target.
-- **Hide any station you don't listen to**, built-in ones included. Hiding is reversible: a
-  "hidden stations" drawer at the bottom of the list brings them back one by one.
-- **A screen colour you choose.** The ⚙ button next to the clock swaps the phosphor between
-  green, amber, blue and white, like a Pip-Boy. The choice is stored and re-applied by a
-  script in the `<head>`, before the first paint, so the page never flashes the wrong colour.
-- **Sleep timer** with a slow fade-out, **media keys** and lock-screen controls via the Media
-  Session API, **keyboard shortcuts**, and automatic reconnection when a stream drops.
-- **Import / export** your custom stations as JSON.
-- **A mobile app**, in React Native, sharing this station list. It does two things this page
-  cannot: it amplifies the stations that are broadcast too quietly to be fixed by attenuating
-  the others, and it reads the title out of the stream itself. See `app/` on the
-  `react-native/main` branch.
-- **Offline-identical rendering.** Fonts, favicon and the HLS library are all served from the
-  folder — nothing is fetched from a CDN at load time.
+Everything else matches the site, feature for feature: groups, per-station gain, hidden-station
+bin, manual add, import/export, sleep timer, directory search, and the Pip-Boy skin with its
+four screen colours.
 
-## Quick start
+## Build it yourself
 
 ```bash
-python3 -m http.server 8080
-# → http://localhost:8080
+cd app
+npm install
+npm run android    # device or emulator; dev build, not Expo Go
+npm run web        # the same code in a browser
 ```
 
-Any static file server will do. Opening `index.html` straight from the filesystem will *not*
-work: `stations.json` is fetched at load, and `file://` blocks that.
+A signed release APK comes out of `cd android && ./gradlew assembleRelease`. The keystore is
+deliberately outside the repository, so that command needs your own.
 
-### Docker
+**Read [`app/README.md`](./app/README.md) before touching the dependencies or the build.**
+It is the real documentation of this branch, in French: what each milestone delivered, why the
+player is `@rntp/player` v5 and not `react-native-track-player` v4, how the gains were
+measured, and the three Windows build traps that cost the most time — the SDK path that must
+contain no space, the JDK 17 requirement, and the 260-character limit that `LongPathsEnabled`
+does *not* lift.
 
-```bash
-docker compose up -d --build
-# → http://localhost:8080
-```
+## What else is in this branch
 
-nginx-unprivileged, running as a non-root user, with gzip and security headers.
-See [DOCKER.md](./DOCKER.md).
+`index.html`, `stations.json`, `Dockerfile` and the rest of the site are here as a **copy of
+`main`**, kept aligned so that both targets share one station list. They are documented on
+`main`, not here, and they travel between branches by `cherry-pick` — never by copying a file
+from one branch onto another, which once silently reverted three of the site's features.
 
-## Adding stations
-
-**From the interface** — unfold *Add a station* at the bottom of the list and paste a stream
-URL, or search the directory. The form is folded away by default: it is used once in a while,
-and the station list is what you came for.
-Custom stations live in `localStorage`, so they survive reloads and never leave your browser.
-
-**Built in** — add an entry to `stations.json`:
-
-```json
-{ "group": "FO4", "name": "My Station", "url": "https://example.org/listen/mine/radio.mp3" }
-```
-
-Metadata is usually automatic. To override it, or to reach an Icecast server:
-
-```json
-{ "meta": { "type": "icecast", "url": "https://example.org/status-json.xsl" } }
-```
-
-Optional fields: `gain` (0–1, attenuates a stream that is louder than the rest), `hls` (only
-needed when an HLS stream's URL does not end in `.m3u8`), and `boost` (decibels, **ignored
-here** — a browser cannot amplify past the maximum; the mobile app reads it).
-
-## Keyboard shortcuts
-
-| Key | Action |
-| --- | --- |
-| <kbd>Space</kbd> | Play / pause |
-| <kbd>←</kbd> <kbd>→</kbd> | Previous / next station |
-| <kbd>↑</kbd> <kbd>↓</kbd> | Volume |
-| <kbd>M</kbd> | Mute |
-| <kbd>S</kbd> | Stop |
-
-## How it works
-
-Everything lives in `index.html` — styles, markup and logic, ~126 KB of it, no dependencies
-beyond the vendored HLS library. A few decisions worth knowing about:
-
-**No Web Audio API.** It would be the obvious way to boost a quiet stream past `volume = 1`,
-and it silently breaks every station: `createMediaElementSource()` reroutes the element into
-a graph that receives nothing but silence for these CORS-less cross-origin streams. Loud
-stations are turned *down* instead, per-station.
-
-**hls.js is pinned and served locally**, not pulled from a CDN, so the page renders and plays
-the same offline and on an isolated network. It takes precedence over the browser's native
-HLS support even where `canPlayType()` claims it — some engines answer `"maybe"` with only
-partial support, and hls.js surfaces errors the reconnection logic can act on. Native
-playback remains the iOS path, where MSE does not exist.
-
-**Metadata is limited by CORS, not by ambition.** AzuraCast and Icecast are the only two
-families that reliably send the header from a browser. Shoutcast v2 sends none at all, and
-most Icecast operators switch their status endpoint off — which is why AzuraCast, derived
-straight from the stream URL, carries most of the weight.
-
-**The station list is a real list.** Each row is a `<li>` containing a `<button>`, not a
-`<li role="button">` — the latter flattens its subtree and hides the nested gain slider and
-delete control from screen readers.
-
-Further notes for contributors are in [CLAUDE.md](./CLAUDE.md); the full history is in
-[CHANGELOG.md](./CHANGELOG.md).
-
-## Browser support
-
-Chrome, Edge, Firefox and Safari, desktop and mobile. HLS goes through hls.js everywhere
-except iOS, which plays it natively.
+`react-native/dev` carries the work; `react-native/main` only receives what has run on a real
+device.
 
 ## License
 
-[MIT](./LICENSE) — for this project's own code.
-
-Bundled third-party code keeps its own terms: `vendor/hls.light.min.js` is
-[hls.js](https://github.com/video-dev/hls.js) under Apache-2.0, with its notice in
-`vendor/hls.js-LICENSE.txt`.
-
-## Credits
-
-- Stream and metadata API: [fallout.radio](https://fallout.radio/)
-- Station directory: [Radio-Browser](https://www.radio-browser.info/)
-- Fonts: [VT323](https://fonts.google.com/specimen/VT323) and
-  [Share Tech Mono](https://fonts.google.com/specimen/Share+Tech+Mono), SIL Open Font License
+[MIT](./LICENSE) for this project's code. `@rntp/player` is free for personal and educational
+use and requires a licence for commercial use — this project is personal, which is the only
+reason it qualifies.
 
 Fallout is a trademark of Bethesda Softworks. This is an unaffiliated fan project.
