@@ -63,4 +63,24 @@ device.
 use and requires a licence for commercial use — this project is personal, which is the only
 reason it qualifies.
 
+## Streams
+
+This project broadcasts and hosts no audio. It is a player: it opens public URLs served by
+[fallout.radio](https://fallout.radio/), plus whatever stream the user adds. The games' music
+belongs to Bethesda Softworks and to the respective rights holders, and broadcasting it is the
+business of whoever runs those streams, not of this repository — which contains URLs and no
+audio file. When a station falls silent, it fell silent at the source.
+
+## Data
+
+No account, no analytics, no cookie, no server of mine. Everything you set up — stations,
+groups, gains, screen colour — stays in the app's storage on the device and is never sent
+anywhere; the export is a file you share yourself. The app asks for three permissions,
+`FOREGROUND_SERVICE`, `FOREGROUND_SERVICE_MEDIA_PLAYBACK` and `MODIFY_AUDIO_SETTINGS`, all
+three for playing audio in the background — no contacts, no location, no storage. Two third
+parties do see your IP address while you use it: the server of the station you are listening
+to (fallout.radio, or one you added yourself), and the Radio-Browser API when you search the
+directory. The phone talks to them directly; nothing passes through me. Their own policies
+apply. This project has none, because it collects nothing.
+
 Fallout is a trademark of Bethesda Softworks. This is an unaffiliated fan project.

@@ -62,4 +62,25 @@ un vrai appareil.
 personnel ou éducatif et demande une licence pour un usage commercial — ce projet est perso,
 c'est la seule raison pour laquelle il est en règle.
 
+## Flux
+
+Ce projet ne diffuse ni n'héberge aucun audio. C'est un lecteur : il ouvre des URL publiques
+servies par [fallout.radio](https://fallout.radio/), plus celles que l'utilisateur ajoute. Les
+musiques des jeux appartiennent à Bethesda Softworks et à leurs ayants droit respectifs, et
+leur diffusion relève de qui opère ces flux, pas de ce dépôt — qui contient des URL et aucun
+fichier audio. Si une station se tait, elle s'est tue à la source.
+
+## Données
+
+Pas de compte, pas d'analytics, pas de cookie, pas de serveur à moi. Tout ce que tu
+configures — stations, groupes, gains, couleur d'écran — reste dans le stockage de
+l'application sur l'appareil et n'est envoyé nulle part ; l'export est un fichier que tu
+partages toi-même. L'application demande trois permissions, `FOREGROUND_SERVICE`,
+`FOREGROUND_SERVICE_MEDIA_PLAYBACK` et `MODIFY_AUDIO_SETTINGS`, toutes les trois pour jouer
+du son en arrière-plan — ni contacts, ni position, ni stockage. Deux tiers voient en revanche
+ton adresse IP pendant que tu t'en sers : le serveur de la station que tu écoutes
+(fallout.radio, ou celle que tu as ajoutée), et l'API Radio-Browser quand tu cherches dans
+l'annuaire. Le téléphone leur parle directement, rien ne passe par moi. Leurs politiques
+s'appliquent. Ce projet n'en a pas, puisqu'il ne collecte rien.
+
 Fallout est une marque de Bethesda Softworks. Projet de fan, sans affiliation.
