@@ -9,7 +9,7 @@ Ordre : **entrée la plus récente en tête**. Plusieurs passes le même jour so
 suffixées `(2)`, `(3)`… la plus haute étant la plus récente (même convention que
 `TANDEM_LOG.md`).
 
-## 2026-09-19 (5) — app, réveil radio
+## 2026-09-19 (5) — app v1.3.0, réveil radio
 
 ### Application — le téléphone posé à l'horizontale devient un radio-réveil
 - Alarmes récurrentes par jour de semaine, qui déclenchent la station choisie application
