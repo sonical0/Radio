@@ -138,6 +138,16 @@ Spécifié dans [`SPEC-reveil-radio.md`](../SPEC-reveil-radio.md), livré en cin
 
 **API synchrone.** La v5 passe par JSI : `setupPlayer()`, `play()`, `setVolume()` ne renvoient pas de promesse. `useIsPlaying()` renvoie un booléen, pas un objet. Les commandes distantes se règlent par `setCommands()`, à part de `setupPlayer()`. `handling: 'native'` fait répondre la notification et l'écran verrouillé même quand le runtime JS ne tourne plus — c'est ce qu'on est venu chercher pour play/pause et stop. **Mais pas pour Next/Previous** : en `native`, le lecteur appelle `seekToNextMediaItem()` et **n'émet aucun évènement au JS** (`TrackPlayerPlaybackService.kt:399`, `emitRemoteEventIfNeeded`). Comme la file ne contient qu'une piste, l'appel ne faisait rien : ni la notification, ni le casque, ni le widget ne zappaient, et les écouteurs `RemoteNext` ne se déclenchaient jamais. Corrigé le 20/09/2026 en `handling: 'hybrid'` avec `perCommandHandling` à `js` pour ces deux commandes : zapper est une notion de la bibliothèque, pas de la file, et seul le JS sait quelle station suit. Conséquence assumée : Next et Previous demandent un runtime vivant, ce qu'un service de lecture en cours garantit.
 
+**Mais ce réglage ne suffit à personne d'autre que l'écran de l'application.** Trois chemins ont été essayés pour le widget, et mesurés un par un sur émulateur le 20/09/2026 — aucun n'atteint la surcharge qui émet l'évènement :
+
+| Chemin | Ce qui se passe réellement |
+|---|---|
+| Touche `KEYCODE_MEDIA_NEXT` | media3 la traduit en `seekToNext()`, que le lecteur **ne surcharge pas** : elle atteint le lecteur brut, file d'une piste, aucun effet |
+| Commande de session `trackplayer.seek_to_next` | son gestionnaire appelle `activePlayer` (`TrackPlayerPlaybackService.kt:583`), c'est-à-dire le lecteur **brut**, en contournant le `ForwardingPlayer` qui porte les surcharges. Acquitte `RESULT_SUCCESS`, ne fait rien |
+| `MediaController.seekToNextMediaItem()` | media3 l'abandonne **côté client** : sans piste suivante dans la file, l'index est `UNSET` et l'appel retourne en silence |
+
+Le dernier point est définitif : tant que la file ne contient qu'une piste, **aucun appel passant par la session média ne peut zapper**. Le bouton ⏭ de la notification est donc inopérant lui aussi, pour la même raison de fond. Le widget contourne en s'adressant à l'application (`WidgetBridge`), pas au lecteur. La seule vraie correction pour la notification serait une file contenant toutes les stations — ce qui poserait la question du gain par station au changement de piste, et n'a pas été entrepris.
+
 **`src/data/stations.json` est une copie de `stations.json` de la racine.** Metro ne sort pas de `app/`, et un lien symbolique ne survit ni à Windows ni à la synchro. **Celui de la racine fait foi** : c'est lui que sert le site, et c'est là que les gains ont été mesurés. La copie se recopie à la main après toute modification — les deux fichiers sont identiques, `git diff` entre branches le vérifie en une commande.
 
 ## Build Android : les obstacles d'environnement, tous documentés ici

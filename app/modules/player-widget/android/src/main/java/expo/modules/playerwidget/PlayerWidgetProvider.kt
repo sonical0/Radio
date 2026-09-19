@@ -8,17 +8,16 @@ import android.content.Context
 import android.content.Intent
 import android.graphics.Color
 import android.widget.RemoteViews
-import androidx.media3.common.util.UnstableApi
 
 /**
  * Le widget d'écran d'accueil.
  *
- * **Il ne parle pas à `@rntp/player`, il parle à sa session média** — par deux
- * chemins distincts, pour une raison expliquée dans `PlayerCommands` : une
- * touche média suffit pour play/pause, mais elle est rejetée pour Next et
- * Previous, dont la commande n'est pas « disponible » sur une file d'une
- * seule piste. Ceux-là passent par la commande de session personnalisée, la
- * même que le bouton de la notification.
+ * **Deux destinataires, pour deux natures de commande.** Play/pause s'adresse
+ * à la session média par une touche média : elle répond même quand le runtime
+ * JS est mort, et ne réveille rien. Zapper, en revanche, n'est pas une notion
+ * que le lecteur connaisse — sa file ne contient qu'une piste, la station
+ * suivante se lit dans la bibliothèque — et passe donc par `WidgetBridge`,
+ * qui parle à l'application elle-même.
  *
  * L'affichage, lui, vient de ce que le JS a laissé dans les préférences à sa
  * dernière exécution : nom de la station, titre en cours, état de lecture. Ce
@@ -27,7 +26,6 @@ import androidx.media3.common.util.UnstableApi
  * inventé, mais celui qu'on a reçu, et de le corriger dès que l'application
  * ou le service en publie un nouveau.
  */
-@UnstableApi
 class PlayerWidgetProvider : AppWidgetProvider() {
   companion object {
     const val ACTION_PLAY_PAUSE = "expo.modules.playerwidget.PLAY_PAUSE"
@@ -103,23 +101,9 @@ class PlayerWidgetProvider : AppWidgetProvider() {
         WidgetState.togglePlaying(context)
         refresh(context)
       }
-      ACTION_NEXT -> withSession(context) { done -> PlayerCommands.next(context, done) }
-      ACTION_PREVIOUS -> withSession(context) { done -> PlayerCommands.previous(context, done) }
-    }
-  }
-
-  /**
-   * Joindre la session est asynchrone, et un `BroadcastReceiver` est tué dès
-   * la fin de `onReceive` : `goAsync()` tient le processus le temps de la
-   * connexion, et `finish()` le relâche dès la commande partie.
-   */
-  private fun withSession(context: Context, block: (done: () -> Unit) -> Unit) {
-    val pending = goAsync()
-    block {
-      try {
-        pending.finish()
-      } catch (_: Throwable) {
-      }
+      // Zapper passe par l'application, pas par la session : voir WidgetBridge.
+      ACTION_NEXT -> WidgetBridge.deliver("next")
+      ACTION_PREVIOUS -> WidgetBridge.deliver("previous")
     }
   }
 }

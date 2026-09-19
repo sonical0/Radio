@@ -20,7 +20,7 @@ import {
 } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 
-import { publishWidgetState } from './modules/player-widget';
+import { onWidgetCommand, publishWidgetState } from './modules/player-widget';
 import type { Station } from './src/model/station';
 import { useNowPlaying } from './src/model/useNowPlaying';
 import { useUpdateCheck } from './src/model/useUpdateCheck';
@@ -133,6 +133,14 @@ function Radio() {
   useEffect(() => {
     publishWidgetState(current?.name ?? '', currentTitle, play.playing);
   }, [current?.name, currentTitle, play.playing]);
+
+  // Les flèches du widget : zapper se décide ici, où vit la bibliothèque —
+  // le lecteur, lui, n'a qu'une piste en file et ne sait pas ce qu'est la
+  // station suivante.
+  useEffect(
+    () => onWidgetCommand((command) => (command === 'next' ? play.next() : play.previous())),
+    [play],
+  );
 
   // Le paysage n'est pas une mise en page de plus : c'est un autre écran.
   // Poser le téléphone à l'horizontale en fait un radio-réveil, et la liste
