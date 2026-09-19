@@ -102,18 +102,17 @@ export function makeShared(p: Palette) {
       paddingVertical: 10,
     },
     title: {
-      // Rétractable : sur un écran étroit, c est le titre qui cède, pas
-      // l heure, qui se retrouvait coupée au bord.
+      // Rétractable en dernier recours, mais dimensionné pour ne pas en arriver
+      // là : à 30 px et 6 px d interlettrage, « FALLOUT RADIO » débordait sur un
+      // téléphone de 428 points de large et s affichait « FALLOUT RAD… ».
       flexShrink: 1,
       color: p.base,
       fontFamily: FONT_DISPLAY,
-      fontSize: 30,
-      letterSpacing: 6,
-      // VT323 a un interligne serré : sans hauteur explicite, les jambages sont
-      // rognées sur Android comme sur le web.
-      lineHeight: 34,
+      fontSize: 25,
+      letterSpacing: 3,
+      lineHeight: 29,
     },
-    clock: { flexShrink: 0, color: p.dim, fontFamily: FONT_DISPLAY, fontSize: 24, letterSpacing: 2, lineHeight: 28 },
+    clock: { flexShrink: 0, color: p.dim, fontFamily: FONT_DISPLAY, fontSize: 20, letterSpacing: 1, lineHeight: 24 },
 
     sectionLabel: {
       color: p.dim,

@@ -56,7 +56,7 @@ export function NowPlaying(np: Props) {
       <View style={s.headRow}>
         <Text style={s.label}>STATION ▸</Text>
         <Text style={s.station} numberOfLines={1}>
-          {np.station ? np.station.name : '— SELECT A STATION —'}
+          {np.station ? np.station.name : '— SELECT STATION —'}
         </Text>
       </View>
 
