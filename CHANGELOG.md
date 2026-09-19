@@ -9,6 +9,29 @@ Ordre : **entrée la plus récente en tête**. Plusieurs passes le même jour so
 suffixées `(2)`, `(3)`… la plus haute étant la plus récente (même convention que
 `TANDEM_LOG.md`).
 
+## 2026-09-19 (5) — app, réveil radio
+
+### Application — le téléphone posé à l'horizontale devient un radio-réveil
+- Alarmes récurrentes par jour de semaine, qui déclenchent la station choisie application
+  fermée et écran éteint. Module Expo local `modules/alarm/`, sur le patron de `audio-boost`.
+- L'alarme a son propre ExoPlayer sur `USAGE_ALARM` : le service de `@rntp/player` ne démarre
+  pas depuis l'arrière-plan, réveiller le JS est ce qui a tué la v4, et la v5 n'a pas de
+  fondu d'entrée. Le canal d'alarme ignore en prime le mode silencieux.
+- **Repli sur la sonnerie système** après dix secondes sans son : une station morte à 7 h ne
+  vaut pas un réveil raté. C'est la garantie centrale, pas une finition.
+- Écran de réveil plein écran par-dessus le verrouillage, écrit en Kotlin pour ne pas
+  attendre le runtime JS ; il emprunte les couleurs de la palette courante.
+- Report de 10 minutes, trois au maximum, et **échéance absolue à 30 minutes** depuis la
+  première note : le bouton disparaît plutôt que d'accorder un répit qui serait coupé.
+- Réarmement après redémarrage du téléphone (`RECEIVE_BOOT_COMPLETED`), sans quoi les alarmes
+  disparaîtraient en silence à la première mise à jour système nocturne.
+- Montée de volume de 30 s par défaut (0, 15, 30 ou 60), calculée sur l'horloge, et gain de
+  station appliqué au réveil comme à l'écoute.
+- Le paysage est un écran à part, pas une mise en page : les écrans existants n'y sont pas
+  rendus, donc aucun n'a à gérer une largeur qu'il n'a jamais vue.
+- Neuf permissions au total, dont six pour le réveil, listées dans la section « Données » des
+  README. Aucune ne touche aux données personnelles.
+
 ## 2026-09-19 (4) — app v1.2.0
 
 ### Application — l'app dit quand une version est sortie

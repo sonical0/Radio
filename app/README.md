@@ -91,6 +91,30 @@ cd C:\RB\android ; ./gradlew assembleRelease
 
 Exclure les dossiers par **chemin absolu**. Un `/XD build` tout court emporte aussi les `node_modules/*/build`, où les modules Expo rangent leur JS compilé — la copie paraît complète et le build échoue plus loin, sans rapport apparent.
 
+## Le réveil radio
+
+Spécifié dans [`SPEC-reveil-radio.md`](../SPEC-reveil-radio.md), livré en cinq jalons. Tout vit dans `modules/alarm/`, un module Expo local sur le patron de `modules/audio-boost/`.
+
+**L'alarme ne passe pas par `@rntp/player`, elle a son propre ExoPlayer.** Trois raisons, et aucune n'est une préférence : le service de `@rntp/player` refuse de démarrer depuis l'arrière-plan (`src/player/player.ts`), réveiller le runtime JS pour le piloter est exactement ce qui a tué la v4 sur la nouvelle architecture, et la v5 n'a pas de fondu d'entrée — seulement `fadeOutSeconds` pour la minuterie de veille. Le son sort sur `USAGE_ALARM`, le canal d'alarme : il ignore le mode silencieux et son volume ne suit pas celui du média. C'est ce qui distingue un réveil d'une notification.
+
+**`setAlarmClock()`, pas `setExactAndAllowWhileIdle()`** pour poser l'échéance principale. C'est la seule API que Doze et les surcouches constructeur respectent sans condition, elle affiche l'icône de réveil dans la barre d'état, et elle accorde la fenêtre pendant laquelle démarrer un service de premier plan depuis l'arrière-plan est permis.
+
+**Une seule entrée `AlarmManager` à la fois**, la plus proche, recalculée après chaque sonnerie et à chaque modification. Android en accepterait plusieurs, mais chacune aurait son `PendingIntent` et son occasion de diverger de la liste.
+
+**Les minuteries du matin — report et échéance — sont aussi des `AlarmManager`**, pas des `postDelayed()`. Le service meurt pendant un report : dix minutes où rien ne justifie un processus vivant, et où Android tue volontiers ce qui traîne. Un handler mourrait avec lui.
+
+**La liste est dupliquée dans des `SharedPreferences`.** Au redémarrage du téléphone, personne n'a monté le runtime : le natif doit pouvoir relire les alarmes seul. Le format interne d'AsyncStorage (un SQLite) n'est pas un contrat. Le JS écrit la liste entière à chaque modification ; la seule écriture du natif est l'extinction d'une alarme sans récurrence après qu'elle a sonné.
+
+**L'écran de réveil est en Kotlin, pas en React.** À 7 h du matin l'application est morte depuis huit heures : démarrer le runtime JS avant de pouvoir afficher un bouton ARRÊTER ajoute une à deux secondes pendant lesquelles le téléphone hurle sans rien proposer. Il emprunte les couleurs de la palette, que le thème dépose dans les préférences à chaque changement.
+
+**Le repli sonnerie est la garantie centrale**, pas une finition : dix secondes sans son, ou la première erreur du lecteur, et on bascule sur `RingtoneManager.TYPE_ALARM`. Une station morte à 7 h ne doit pas valoir un réveil raté. Conséquence assumée : sur un réseau très lent, une station qui mettrait douze secondes à démarrer sonnera en sonnerie système.
+
+**Les déclarations de composants vivent dans le manifeste du module** (`modules/alarm/android/src/main/AndroidManifest.xml`), pas dans `app.json` ni dans `android/`. C'est ce qui les rend insensibles à `expo prebuild`, qui effacerait une déclaration écrite à la main.
+
+**Le paysage est un écran, pas une mise en page.** `app.json` autorise la rotation, et `App.tsx` rend `Bedside` à la place du reste quand la largeur dépasse la hauteur. Les écrans existants ne sont pas rendus en paysage, donc aucun n'a à gérer une largeur qu'il n'a jamais vue.
+
+**Ce qui n'est pas fait :** le `boost` en décibels des stations faibles ne s'applique pas au réveil. `LoudnessEnhancer` s'attache à la session 0, c'est-à-dire à tout ce qui sort du téléphone (voir la section Gains) — acceptable le temps d'une écoute volontaire, douteux à 7 h du matin sur un appareil qu'on ne regarde pas. Seul le gain multiplicatif voyage avec l'alarme.
+
 ## Décisions à connaître avant de toucher aux dépendances
 
 **Le lecteur est `@rntp/player` v5, pas `react-native-track-player` v4.** La v4 ne tourne pas sur la nouvelle architecture : elle compile (au prix de correctifs Kotlin), passe le parsing TurboModule (au prix de 37 autres), puis meurt à l'exécution sur `RuntimeException: You should not use ReactNativeHost directly in the New Architecture` — son `MusicService` repose sur `HeadlessJsTaskService`, qui n'existe plus. Ce n'est pas rattrapable par un patch, c'est le mécanisme même du service de lecture. Ne pas y revenir.

@@ -75,9 +75,13 @@ audio file. When a station falls silent, it fell silent at the source.
 
 No account, no analytics, no cookie, no server of mine. Everything you set up — stations,
 groups, gains, screen colour — stays in the app's storage on the device and is never sent
-anywhere; the export is a file you share yourself. The app asks for three permissions,
-`FOREGROUND_SERVICE`, `FOREGROUND_SERVICE_MEDIA_PLAYBACK` and `MODIFY_AUDIO_SETTINGS`, all
-three for playing audio in the background — no contacts, no location, no storage. Three third
+anywhere; the export is a file you share yourself. The app asks for nine permissions and not
+one of them reaches your data: three to play audio in the background (`FOREGROUND_SERVICE`,
+`FOREGROUND_SERVICE_MEDIA_PLAYBACK`, `MODIFY_AUDIO_SETTINGS`) and six for the alarm clock
+(`USE_EXACT_ALARM` and `SCHEDULE_EXACT_ALARM` to ring on time, `RECEIVE_BOOT_COMPLETED` to
+survive a reboot, `WAKE_LOCK` to hold the CPU while the stream opens,
+`USE_FULL_SCREEN_INTENT` for the alarm screen over the lock screen, `POST_NOTIFICATIONS` for
+its notification). No contacts, no location, no storage. Three third
 parties do see your IP address while you use it: the server of the station you are listening
 to (fallout.radio, or one you added yourself), the Radio-Browser API when you search the
 directory, and GitHub's release API, which the app queries at most once a day to find out

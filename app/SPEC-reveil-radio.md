@@ -1,6 +1,6 @@
 # Réveil radio — spec
 
-> Validée le 19/09/2026. Cible : `react-native/dev`. Android seulement. Pas encore implémentée.
+> Validée le 19/09/2026, livrée le même jour, jalons 1 à 5. Cible : `react-native/dev`. Android seulement. Ce qui a été construit est décrit dans [`README.md`](README.md) ; ce document garde le raisonnement.
 
 ## Pourquoi
 

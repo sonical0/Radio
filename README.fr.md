@@ -75,9 +75,14 @@ fichier audio. Si une station se tait, elle s'est tue à la source.
 Pas de compte, pas d'analytics, pas de cookie, pas de serveur à moi. Tout ce que tu
 configures — stations, groupes, gains, couleur d'écran — reste dans le stockage de
 l'application sur l'appareil et n'est envoyé nulle part ; l'export est un fichier que tu
-partages toi-même. L'application demande trois permissions, `FOREGROUND_SERVICE`,
-`FOREGROUND_SERVICE_MEDIA_PLAYBACK` et `MODIFY_AUDIO_SETTINGS`, toutes les trois pour jouer
-du son en arrière-plan — ni contacts, ni position, ni stockage. Trois tiers voient en revanche
+partages toi-même. L'application demande neuf permissions, et pas une n'atteint tes données :
+trois pour jouer du son en arrière-plan (`FOREGROUND_SERVICE`,
+`FOREGROUND_SERVICE_MEDIA_PLAYBACK`, `MODIFY_AUDIO_SETTINGS`) et six pour le réveil
+(`USE_EXACT_ALARM` et `SCHEDULE_EXACT_ALARM` pour sonner à l'heure, `RECEIVE_BOOT_COMPLETED`
+pour survivre à un redémarrage, `WAKE_LOCK` pour tenir le processeur le temps d'ouvrir le
+flux, `USE_FULL_SCREEN_INTENT` pour l'écran de réveil par-dessus le verrouillage,
+`POST_NOTIFICATIONS` pour sa notification). Ni contacts, ni position, ni stockage. Trois tiers
+voient en revanche
 ton adresse IP pendant que tu t'en sers : le serveur de la station que tu écoutes
 (fallout.radio, ou celle que tu as ajoutée), l'API Radio-Browser quand tu cherches dans
 l'annuaire, et l'API des releases GitHub, interrogée au plus une fois par jour pour savoir
