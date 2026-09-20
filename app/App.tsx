@@ -30,6 +30,7 @@ import { setupPlayer } from './src/player/player';
 import { useKeyboardShortcuts } from './src/player/useKeyboardShortcuts';
 import { usePlayback } from './src/player/usePlayback';
 import { useAlarms } from './src/store/useAlarms';
+import { useHistory } from './src/store/useHistory';
 import { groupStations, knownGroups } from './src/store/library';
 import { useLibrary } from './src/store/useLibrary';
 import { AddStation } from './src/ui/AddStation';
@@ -37,6 +38,7 @@ import { Bedside } from './src/ui/Bedside';
 import { Clock } from './src/ui/Clock';
 import { Crt } from './src/ui/Crt';
 import { Directory } from './src/ui/Directory';
+import { History } from './src/ui/History';
 import { NowPlaying } from './src/ui/NowPlaying';
 import { StationRow } from './src/ui/StationRow';
 import { Trash } from './src/ui/Trash';
@@ -86,6 +88,7 @@ function Radio() {
   const lib = useLibrary();
   const play = usePlayback(lib.stations);
   const { titles, refreshOne } = useNowPlaying(lib.stations, play.currentUrl);
+  const history = useHistory(lib.stations, titles);
   const [fontsLoaded] = useFonts(FONTS);
   const updates = useUpdateCheck();
   const alarms = useAlarms();
@@ -325,6 +328,7 @@ function Radio() {
                   onFieldFocus={onFieldFocus}
                 />
                 <Directory onAdd={lib.addStation} onFieldFocus={onFieldFocus} />
+                <History entries={history.entries} onClear={history.clear} />
                 {/* Les raccourcis n existent que sur la cible web : ne pas les
                     annoncer sur un téléphone, qui n a pas de clavier. */}
                 {Platform.OS === 'web' ? (

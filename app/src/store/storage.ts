@@ -14,6 +14,8 @@ export const KEY_THEME = 'themePalette';
 export const KEY_UPDATE = 'updateCheck';
 /** Les alarmes du réveil. Le natif en tient sa propre copie, qu'on lui pousse. */
 export const KEY_ALARMS = 'alarms';
+/** Les titres passés, plafonnés : voir useHistory. */
+export const KEY_HISTORY = 'titleHistory';
 
 /**
  * Toute lecture peut échouer (stockage plein, mode privé, données corrompues
