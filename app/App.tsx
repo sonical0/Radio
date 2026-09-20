@@ -158,7 +158,13 @@ function Radio() {
         <Crt>
           <SafeAreaView style={t.screen} edges={['top', 'bottom', 'left', 'right']}>
             <StatusBar hidden />
-            <Bedside station={play.current} lib={alarms} />
+            <Bedside
+              station={play.current}
+              lib={alarms}
+              playing={play.playing}
+              streamState={play.streamState}
+              onToggle={play.toggle}
+            />
           </SafeAreaView>
         </Crt>
       </SafeAreaProvider>

@@ -57,7 +57,19 @@ function whenLabel(at: Date): string {
  * et l'annuaire restent en portrait, et ne sont tout simplement pas rendus
  * ici. Aucun écran existant n'a donc à gérer une largeur qu'il n'a jamais vue.
  */
-export function Bedside({ station, lib }: { station: Station | null; lib: AlarmLibrary }) {
+export function Bedside({
+  station,
+  lib,
+  playing,
+  streamState,
+  onToggle,
+}: {
+  station: Station | null;
+  lib: AlarmLibrary;
+  playing: boolean;
+  streamState: string;
+  onToggle: () => void;
+}) {
   const { p, t } = useTheme();
   const s = useMemo(() => makeStyles(p), [p]);
   const { width, height } = useWindowDimensions();
@@ -152,6 +164,29 @@ export function Bedside({ station, lib }: { station: Station | null; lib: AlarmL
           {lib.next ? '⏰ ' + whenLabel(lib.next.at) : 'AUCUN RÉVEIL ARMÉ'}
         </Text>
         {station ? <Text style={s.station}>{station.name}</Text> : null}
+
+        {/* Écouter sans se relever ni retourner le téléphone : la station
+            déjà choisie, rien de plus. Changer de station reste l'affaire du
+            portrait, où vit la liste. */}
+        <Pressable
+          onPress={onToggle}
+          disabled={!station}
+          accessibilityRole="button"
+          accessibilityState={{ disabled: !station, busy: streamState === 'loading' }}
+          accessibilityLabel={playing ? 'Mettre en pause' : 'Lancer la radio'}
+          style={[t.btn, s.play, { borderColor: station ? p.base : p.border }]}>
+          <Text style={[t.btnText, s.playText, !station && t.btnOff]}>
+            {/* Les mêmes glyphes que l'écran portrait : ⏸ sortait en emoji
+                de couleur, seul élément non Pip-Boy de l'écran. */}
+            {!station
+              ? '▶ AUCUNE STATION'
+              : streamState === 'loading'
+                ? '… CONNEXION'
+                : playing
+                  ? '❚❚ PAUSE'
+                  : '▶ ÉCOUTER'}
+          </Text>
+        </Pressable>
       </View>
 
       <View style={s.right}>
@@ -351,6 +386,10 @@ const makeStyles = (p: Palette) =>
     date: { color: p.dim, fontFamily: FONT_DISPLAY, fontSize: 24, letterSpacing: 3 },
     next: { color: p.base, fontFamily: FONT_DISPLAY, fontSize: 26, letterSpacing: 2, marginTop: 16 },
     station: { color: p.dim, fontFamily: FONT_BODY, fontSize: 13, marginTop: 4 },
+    // Large : c'est un bouton qu'on vise à moitié réveillé, de travers, dans
+    // le noir.
+    play: { alignSelf: 'flex-start', marginTop: 18, paddingVertical: 12, paddingHorizontal: 22 },
+    playText: { fontSize: 26, letterSpacing: 2, lineHeight: 30 },
 
     right: { flex: 1 },
     row: { borderWidth: 1, backgroundColor: p.bg2, padding: 8, marginBottom: 8 },
