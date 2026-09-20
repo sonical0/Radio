@@ -138,18 +138,38 @@ export function useLibrary() {
   );
 
   /** N'exporte que les stations custom visibles — le reste vient de stations.json. */
-  const exportStations = useCallback(async (): Promise<Outcome> => {
-    const custom = stations.filter((s) => s.isCustom && !s.hidden);
-    if (!custom.length) return { ok: false, message: '⚠ Aucune station custom à exporter.' };
-    try {
-      const where = await exportJson(JSON.stringify(custom.map(serializeStation), null, 2));
-      return { ok: true, message: `✓ ${custom.length} station(s) — ${where}.` };
-    } catch {
-      return { ok: false, message: "⚠ L'export a échoué." };
-    }
-  }, [stations]);
+  /**
+   * Exporte les stations ajoutées **et les réveils**.
+   *
+   * Le format v1 était un simple tableau de stations, et changer de téléphone
+   * perdait donc les alarmes en silence. La v2 est un objet ; l'import relit
+   * les deux formats, parce que les fichiers déjà exportsés existent.
+   */
+  const exportStations = useCallback(
+    async (alarms: unknown[] = []): Promise<Outcome> => {
+      const custom = stations.filter((s) => s.isCustom && !s.hidden);
+      if (!custom.length && !alarms.length) {
+        return { ok: false, message: '⚠ Rien à exporter : aucune station custom, aucun réveil.' };
+      }
+      const backup = { version: 2, stations: custom.map(serializeStation), alarms };
+      try {
+        const where = await exportJson(JSON.stringify(backup, null, 2));
+        const quoi = [
+          custom.length ? `${custom.length} station(s)` : null,
+          alarms.length ? `${alarms.length} réveil(s)` : null,
+        ]
+          .filter(Boolean)
+          .join(' et ');
+        return { ok: true, message: `✓ ${quoi} — ${where}.` };
+      } catch {
+        return { ok: false, message: "⚠ L'export a échoué." };
+      }
+    },
+    [stations],
+  );
 
-  const importStations = useCallback(async (): Promise<Outcome> => {
+  const importStations = useCallback(
+    async (onAlarms?: (alarms: unknown[]) => number): Promise<Outcome> => {
     let text: string | null;
     try {
       text = await pickJson();
@@ -159,14 +179,28 @@ export function useLibrary() {
     if (text == null) return { ok: true, message: '' };
 
     let list: RawStation[];
+    let importedAlarms = 0;
     try {
       const data = JSON.parse(text);
-      list = Array.isArray(data) ? data : [data];
+      if (Array.isArray(data)) {
+        // Format v1 : un tableau de stations, rien d'autre.
+        list = data;
+      } else if (data && Array.isArray((data as { stations?: unknown }).stations)) {
+        list = (data as { stations: RawStation[] }).stations;
+        const rawAlarms = (data as { alarms?: unknown }).alarms;
+        if (onAlarms && Array.isArray(rawAlarms)) importedAlarms = onAlarms(rawAlarms);
+      } else {
+        list = [data as RawStation];
+      }
     } catch {
       return { ok: false, message: '⚠ Fichier invalide.' };
     }
     const valid = list.filter(isValidStation);
-    if (!valid.length) return { ok: false, message: '⚠ Aucune station lisible dans ce fichier.' };
+    if (!valid.length) {
+      return importedAlarms
+        ? { ok: true, message: `✓ ${importedAlarms} réveil(s) importé(s), aucune station.` }
+        : { ok: false, message: '⚠ Aucune station lisible dans ce fichier.' };
+    }
 
     let added = 0;
     setStations((prev) => {
@@ -195,9 +229,12 @@ export function useLibrary() {
       }
       return added ? next : prev;
     });
+    const suffixe = importedAlarms ? ` et ${importedAlarms} réveil(s)` : '';
     return added
-      ? { ok: true, message: `✓ ${added} station(s) importée(s).` }
-      : { ok: false, message: '⚠ Aucune nouvelle station (déjà présentes).' };
+      ? { ok: true, message: `✓ ${added} station(s)${suffixe} importée(s).` }
+      : importedAlarms
+        ? { ok: true, message: `✓ ${importedAlarms} réveil(s) importé(s), stations déjà présentes.` }
+        : { ok: false, message: '⚠ Aucune nouvelle station (déjà présentes).' };
   }, []);
 
   return {

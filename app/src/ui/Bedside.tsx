@@ -59,12 +59,14 @@ function whenLabel(at: Date): string {
  */
 export function Bedside({
   station,
+  title,
   lib,
   playing,
   streamState,
   onToggle,
 }: {
   station: Station | null;
+  title: string | null;
   lib: AlarmLibrary;
   playing: boolean;
   streamState: string;
@@ -164,6 +166,13 @@ export function Bedside({
           {lib.next ? '⏰ ' + whenLabel(lib.next.at) : 'AUCUN RÉVEIL ARMÉ'}
         </Text>
         {station ? <Text style={s.station}>{station.name}</Text> : null}
+        {/* Ce qui passe, pas seulement où ça passe : l'écran affichait la
+            station sans jamais dire le morceau, alors que l'appli le connaît. */}
+        {station && title ? (
+          <Text style={s.track} numberOfLines={1}>
+            {title}
+          </Text>
+        ) : null}
 
         {/* Écouter sans se relever ni retourner le téléphone : la station
             déjà choisie, rien de plus. Changer de station reste l'affaire du
@@ -386,6 +395,7 @@ const makeStyles = (p: Palette) =>
     date: { color: p.dim, fontFamily: FONT_DISPLAY, fontSize: 24, letterSpacing: 3 },
     next: { color: p.base, fontFamily: FONT_DISPLAY, fontSize: 26, letterSpacing: 2, marginTop: 16 },
     station: { color: p.dim, fontFamily: FONT_BODY, fontSize: 13, marginTop: 4 },
+    track: { color: p.base, fontFamily: FONT_BODY, fontSize: 15, marginTop: 2, opacity: 0.9 },
     // Large : c'est un bouton qu'on vise à moitié réveillé, de travers, dans
     // le noir.
     play: { alignSelf: 'flex-start', marginTop: 18, paddingVertical: 12, paddingHorizontal: 22 },

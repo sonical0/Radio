@@ -15,12 +15,14 @@ import {
   StatusBar,
   StyleSheet,
   Text,
+  TextInput,
   View,
   useWindowDimensions,
 } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 
 import { publishWidgetState } from './modules/player-widget';
+import type { Alarm } from './modules/alarm';
 import type { Station } from './src/model/station';
 import { useNowPlaying } from './src/model/useNowPlaying';
 import { useUpdateCheck } from './src/model/useUpdateCheck';
@@ -41,6 +43,15 @@ import { Trash } from './src/ui/Trash';
 import { UpdateBanner } from './src/ui/UpdateBanner';
 import { Settings } from './src/ui/Settings';
 import { FONTS, FONT_BODY, ThemeProvider, useTheme, type Palette } from './src/ui/theme';
+
+/** Sans accents ni casse : chercher « agatha » doit trouver « Agatha's Station ». */
+function normalize(text: string): string {
+  return text
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .toLowerCase()
+    .trim();
+}
 
 export default function App() {
   // Le thème est au-dessus de tout : la couleur d écran change jusqu au fond
@@ -134,13 +145,47 @@ function Radio() {
     publishWidgetState(current?.name ?? '', currentTitle, play.playing);
   }, [current?.name, currentTitle, play.playing]);
 
+  // Sauvegarde et restauration : les stations ajoutées **et** les réveils.
+  // Le fichier v1 ne portait que les stations, et changer de téléphone perdait
+  // les alarmes sans rien dire.
+  const onExport = useCallback(() => lib.exportStations(alarms.alarms), [alarms.alarms, lib]);
+  const onImport = useCallback(
+    () =>
+      lib.importStations((raw) => {
+        const list = raw.filter(
+          (a): a is Alarm =>
+            !!a && typeof a === 'object' && typeof (a as Alarm).id === 'string',
+        );
+        // Une alarme importée arrive éteinte : on ne réveille personne à 7 h
+        // parce qu'il a restauré une sauvegarde la veille au soir.
+        for (const a of list) alarms.save({ ...a, enabled: false });
+        return list.length;
+      }),
+    [alarms, lib],
+  );
+
   // Le paysage n'est pas une mise en page de plus : c'est un autre écran.
   // Poser le téléphone à l'horizontale en fait un radio-réveil, et la liste
   // des stations n'a pas à savoir ce qu'elle deviendrait dans cette largeur.
   const { width, height } = useWindowDimensions();
   const landscape = width > height;
 
-  const sections = useMemo(() => groupStations(lib.stations), [lib.stations]);
+  // Onze stations tiennent à l'œil ; l'annuaire Radio-Browser en propose
+  // cinquante mille, et dès qu'on en ajoute vingt la liste devient un mur.
+  // Le filtre ne touche que l'affichage : la file du lecteur, donc le zapping,
+  // continue de parcourir toute la bibliothèque.
+  const [query, setQuery] = useState('');
+  const matching = useMemo(() => {
+    const q = normalize(query);
+    if (!q) return lib.stations;
+    // Les masquées restent écartées ici comme ailleurs : la corbeille a son
+    // propre volet, et une recherche qui ressort ce qu'on a jeté surprend.
+    return lib.stations.filter(
+      (s) => s.hidden || normalize(s.name).includes(q) || normalize(s.group).includes(q),
+    );
+  }, [lib.stations, query]);
+
+  const sections = useMemo(() => groupStations(matching), [matching]);
   const hidden = useMemo(() => lib.stations.filter((x) => x.hidden), [lib.stations]);
   const groups = useMemo(() => knownGroups(lib.stations), [lib.stations]);
 
@@ -152,6 +197,7 @@ function Radio() {
             <StatusBar hidden />
             <Bedside
               station={play.current}
+              title={currentTitle || null}
               lib={alarms}
               playing={play.playing}
               streamState={play.streamState}
@@ -223,6 +269,30 @@ function Radio() {
           <SectionList
             ref={listRef}
             sections={sections}
+            ListHeaderComponent={
+              lib.stations.filter((x) => !x.hidden).length > 8 ? (
+                <View style={s.search}>
+                  <TextInput
+                    style={[t.input, s.searchField]}
+                    value={query}
+                    onChangeText={setQuery}
+                    placeholder="CHERCHER UNE STATION"
+                    placeholderTextColor={p.dim}
+                    accessibilityLabel="Chercher une station"
+                    autoCorrect={false}
+                  />
+                  {query ? (
+                    <Pressable
+                      onPress={() => setQuery('')}
+                      accessibilityRole="button"
+                      accessibilityLabel="Effacer la recherche"
+                      style={t.btn}>
+                      <Text style={t.btnText}>✕</Text>
+                    </Pressable>
+                  ) : null}
+                </View>
+              ) : null
+            }
             keyExtractor={(item) => item.url}
             stickySectionHeadersEnabled={false}
             // Sans ça, le premier appui ne sert qu à fermer le clavier et le
@@ -250,8 +320,8 @@ function Radio() {
                 <AddStation
                   groups={groups}
                   onAdd={lib.addStation}
-                  onExport={lib.exportStations}
-                  onImport={lib.importStations}
+                  onExport={onExport}
+                  onImport={onImport}
                   onFieldFocus={onFieldFocus}
                 />
                 <Directory onAdd={lib.addStation} onFieldFocus={onFieldFocus} />
@@ -288,5 +358,7 @@ const makeStyles = (p: Palette) =>
     opacity: 0.8,
   },
   footerSpace: { height: 28 },
+  search: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 16, paddingTop: 10 },
+  searchField: { flex: 1, marginBottom: 0 },
     headerRight: { flexDirection: 'row', alignItems: 'center', gap: 10, flexShrink: 0 },
   });
