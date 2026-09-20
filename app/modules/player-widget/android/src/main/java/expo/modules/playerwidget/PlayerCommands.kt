@@ -5,29 +5,34 @@ import android.media.AudioManager
 import android.view.KeyEvent
 
 /**
- * Play/pause, et rien d'autre.
+ * Les boutons du widget, en touches media.
  *
- * Une touche media va directement a la session du lecteur, qui traite
- * play/pause en natif : ca repond meme quand le runtime JS est mort, sans
- * permission et sans reveiller quoi que ce soit.
+ * La session du lecteur traite play/pause et le zapping en natif : tout
+ * repond meme quand le runtime JS ne tourne plus, exactement comme un casque
+ * Bluetooth.
  *
- * Zapper ne peut pas emprunter ce chemin. Trois tentatives mesurees sur
- * emulateur le 20/09/2026, toutes sans effet : la touche KEYCODE_MEDIA_NEXT
- * (media3 la traduit en seekToNext(), que le lecteur ne surcharge pas), la
- * commande de session trackplayer.seek_to_next (son gestionnaire appelle le
- * lecteur brut et court-circuite le ForwardingPlayer, en acquittant
- * "succes"), et seekToNextMediaItem() sur un controleur (media3 l'abandonne
- * cote client des que la file n'a pas de piste suivante). La file n'en aura
- * jamais : une radio n'est pas une playlist. Le zapping passe donc par
- * WidgetBridge.
+ * Ca n'a pas toujours ete vrai. Tant que la file du lecteur ne contenait
+ * qu'une piste, media3 abandonnait KEYCODE_MEDIA_NEXT avant meme d'atteindre
+ * le lecteur, et le widget devait passer par l'application pour zapper. Depuis
+ * que la file porte toute la bibliotheque (voir src/player/player.ts), le
+ * chemin natif fonctionne et ce detour a ete retire.
+ *
+ * Limite : sans rien qui joue, il n'y a aucune session a qui parler, donc
+ * aucun effet. Il n'y a alors aucune station a quitter non plus.
  */
 object PlayerCommands {
 
-  fun playPause(context: Context) {
+  fun playPause(context: Context) = send(context, KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE)
+
+  fun next(context: Context) = send(context, KeyEvent.KEYCODE_MEDIA_NEXT)
+
+  fun previous(context: Context) = send(context, KeyEvent.KEYCODE_MEDIA_PREVIOUS)
+
+  private fun send(context: Context, code: Int) {
     val audio = context.getSystemService(AudioManager::class.java) ?: return
     // Deux evenements : une touche physique descend puis remonte, et une
     // session qui n'en recoit qu'un seul peut ignorer l'appui.
-    audio.dispatchMediaKeyEvent(KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE))
-    audio.dispatchMediaKeyEvent(KeyEvent(KeyEvent.ACTION_UP, KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE))
+    audio.dispatchMediaKeyEvent(KeyEvent(KeyEvent.ACTION_DOWN, code))
+    audio.dispatchMediaKeyEvent(KeyEvent(KeyEvent.ACTION_UP, code))
   }
 }

@@ -2,11 +2,16 @@
 // navigateur — la v5 embarque une implémentation web (WebTrackPlayer, shaka),
 // même si son README ne l'annonce pas.
 //
-// Une seule piste dans la file à la fois : une radio n'est pas une playlist, et
-// garder la file à une entrée évite de gérer des index en plus de ceux de la
-// liste de stations.
+// **Toute la bibliothèque visible est dans la file**, la station choisie servant
+// d'index de départ. Ce n'était pas le cas avant le 20/09/2026 : on n'y mettait
+// qu'une piste, « une radio n'est pas une playlist », et c'était vrai mais ruineux.
+// Sans piste suivante, la notification, le casque, l'écran verrouillé et le widget
+// ne pouvaient pas changer de station — media3 abandonne l'appel avant même
+// d'atteindre le lecteur. Une file complète rend le zapping natif, donc disponible
+// sans runtime JS. Le prix est un index à tenir en plus de la liste : c'est
+// l'évènement MediaItemTransition qui s'en charge, dans usePlayback.
 
-import TrackPlayer, { PlayerCommand } from '@rntp/player';
+import TrackPlayer, { PlayerCommand, RepeatMode } from '@rntp/player';
 import { setBoostDb } from '../../modules/audio-boost';
 import type { Station } from '../model/station';
 
@@ -34,18 +39,10 @@ export function setupPlayer(): void {
   });
   // Les commandes distantes se configurent à part de setupPlayer en v5.
   //
-  // `hybrid` et non `native`, corrigé le 20/09/2026 : en `native`, le lecteur
-  // traite lui-même Next/Previous par `seekToNextMediaItem()` **et n'émet
-  // aucun évènement au JS**. Or la file ne contient qu'une piste — une radio
-  // n'est pas une playlist — donc l'appel ne faisait rien : ni la
-  // notification, ni le casque, ni le widget d'écran d'accueil ne pouvaient
-  // zapper de station. Le symptôme n'était visible nulle part dans le code
-  // JS, dont les écouteurs RemoteNext ne se déclenchaient jamais.
-  //
-  // Zapper est une notion de la bibliothèque, pas de la file : seul le JS
-  // sait quelle est la station suivante. Play/pause et Stop restent natifs,
-  // donc répondent même quand le runtime est mort ; Next/Previous demandent
-  // un runtime vivant, ce qu'un service de lecture en cours garantit.
+  // `native` : le lecteur traite lui-même play/pause, stop et le zapping, donc
+  // tout répond même quand le runtime JS ne tourne plus — casque, notification,
+  // écran verrouillé. C'est possible depuis que la file contient toutes les
+  // stations ; avec une seule piste, Next et Previous ne faisaient rien du tout.
   TrackPlayer.setCommands({
     capabilities: [
       PlayerCommand.PlayPause,
@@ -53,12 +50,11 @@ export function setupPlayer(): void {
       PlayerCommand.Next,
       PlayerCommand.Previous,
     ],
-    handling: 'hybrid',
-    perCommandHandling: {
-      [PlayerCommand.Next]: 'js',
-      [PlayerCommand.Previous]: 'js',
-    },
+    handling: 'native',
   });
+  // La file boucle : après la dernière station on revient à la première, comme
+  // le faisait le parcours en JS. Sans ça, zapper s'arrête au bout.
+  TrackPlayer.setRepeatMode(RepeatMode.All);
   ready = true;
 }
 
@@ -72,23 +68,44 @@ export function setupPlayer(): void {
 function ensure(): void {
   if (!ready) setupPlayer();
 }
-/** Charge une station et lance la lecture. */
-export function playStation(s: Station, master: number): void {
+/**
+ * Charge la bibliothèque dans la file, se place sur la station choisie et
+ * lance la lecture.
+ *
+ * `queue` doit être la liste **visible**, dans l'ordre affiché : c'est elle que
+ * parcourront les boutons suivant/précédent, y compris ceux de la notification
+ * et du casque. Les stations masquées n'y figurent pas — la corbeille ne se
+ * traverse pas en zappant.
+ */
+export function playStation(s: Station, master: number, queue: Station[]): void {
   ensure();
-  TrackPlayer.setMediaItem({
-    mediaId: s.url,
-    url: s.url,
-    title: s.name,
-    artist: s.group,
+  const items = (queue.length ? queue : [s]).map((x) => ({
+    mediaId: x.url,
+    url: x.url,
+    title: x.name,
+    artist: x.group,
     // Un direct n'est ni mis en cache ni préchargé, et la notification n'affiche
     // pas de barre de progression.
     isLive: true,
-  });
+  }));
+  const startIndex = Math.max(0, items.findIndex((x) => x.url === s.url));
+  TrackPlayer.setMediaItems(items, startIndex);
   setVolume(s, master);
   // L amplificateur touche tout le mixage de sortie : on ne l arme que pour
   // la station qui en a besoin, et on le coupe au moindre arrêt.
   setBoostDb(s.boost);
   TrackPlayer.play();
+}
+
+/** Zapper dans la file, sans la reconstruire. */
+export function skipNext(): void {
+  ensure();
+  TrackPlayer.skipToNext();
+}
+
+export function skipPrevious(): void {
+  ensure();
+  TrackPlayer.skipToPrevious();
 }
 
 /**

@@ -12,12 +12,10 @@ import android.widget.RemoteViews
 /**
  * Le widget d'écran d'accueil.
  *
- * **Deux destinataires, pour deux natures de commande.** Play/pause s'adresse
- * à la session média par une touche média : elle répond même quand le runtime
- * JS est mort, et ne réveille rien. Zapper, en revanche, n'est pas une notion
- * que le lecteur connaisse — sa file ne contient qu'une piste, la station
- * suivante se lit dans la bibliothèque — et passe donc par `WidgetBridge`,
- * qui parle à l'application elle-même.
+ * **Tout passe par la session média, en touches média.** Play/pause comme le
+ * zapping répondent même quand le runtime JS est mort, et ne réveillent rien.
+ * Le détour par l'application qui existait ici jusqu'au 20/09/2026 n'a plus
+ * lieu d'être depuis que la file du lecteur porte toute la bibliothèque.
  *
  * L'affichage, lui, vient de ce que le JS a laissé dans les préférences à sa
  * dernière exécution : nom de la station, titre en cours, état de lecture. Ce
@@ -101,9 +99,8 @@ class PlayerWidgetProvider : AppWidgetProvider() {
         WidgetState.togglePlaying(context)
         refresh(context)
       }
-      // Zapper passe par l'application, pas par la session : voir WidgetBridge.
-      ACTION_NEXT -> WidgetBridge.deliver("next")
-      ACTION_PREVIOUS -> WidgetBridge.deliver("previous")
+      ACTION_NEXT -> PlayerCommands.next(context)
+      ACTION_PREVIOUS -> PlayerCommands.previous(context)
     }
   }
 }

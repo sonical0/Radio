@@ -1,7 +1,6 @@
 package expo.modules.playerwidget
 
 import android.content.Context
-import android.os.Bundle
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
 
@@ -19,19 +18,6 @@ class PlayerWidgetModule : Module() {
 
   override fun definition() = ModuleDefinition {
     Name("PlayerWidget")
-
-    Events("onWidgetCommand")
-
-    // Le relais n'existe que tant que le module vit, c'est-a-dire tant que le
-    // runtime JS vit : le widget s'en sert pour savoir s'il y a quelqu'un a
-    // qui parler.
-    OnCreate {
-      WidgetBridge.handler = { action ->
-        sendEvent("onWidgetCommand", Bundle().apply { putString("action", action) })
-      }
-    }
-
-    OnDestroy { WidgetBridge.handler = null }
 
     Function("setState") { station: String, title: String, playing: Boolean ->
       WidgetState.save(context, station, title, playing)

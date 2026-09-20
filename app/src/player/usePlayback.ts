@@ -18,6 +18,8 @@ import {
   retry,
   setSleepTimer,
   setVolume,
+  skipNext,
+  skipPrevious,
   stop as stopNative,
   togglePlay as togglePlayNative,
 } from './player';
@@ -45,6 +47,10 @@ export function usePlayback(stations: Station[]) {
 
   const stationsRef = useRef(stations);
   stationsRef.current = stations;
+  // La liste telle que la file du lecteur la voit : masquées exclues, ordre
+  // d'affichage conservé.
+  const visibleRef = useRef<Station[]>([]);
+  visibleRef.current = stations.filter((s) => !s.hidden);
   const currentRef = useRef<string | null>(null);
   currentRef.current = currentUrl;
   const attempts = useRef(0);
@@ -143,7 +149,11 @@ export function usePlayback(stations: Station[]) {
       }
       setCurrentUrl(s.url);
       setStreamState('buffering');
-      playNative(s, muted ? 0 : master);
+      // La file est reconstruite à chaque choix explicite : c'est le seul
+      // moment où l'on sait que l'utilisateur accepte une coupure. Une station
+      // ajoutée en cours d'écoute n'entre donc dans la file qu'au prochain
+      // choix — la reconstruire à chaud relancerait le flux en cours.
+      playNative(s, muted ? 0 : master, visibleRef.current);
       loadedUrl.current = s.url;
       void writeString(KEY_LAST_STATION, s.url);
     },
@@ -167,7 +177,7 @@ export function usePlayback(stations: Station[]) {
       const s = stationsRef.current.find((x) => x.url === url);
       if (!s) return;
       setStreamState('buffering');
-      playNative(s, muted ? 0 : master);
+      playNative(s, muted ? 0 : master, visibleRef.current);
       loadedUrl.current = url;
       return;
     }
@@ -175,16 +185,25 @@ export function usePlayback(stations: Station[]) {
   }, [master, muted, playing]);
 
   /**
-   * Parcourt la liste en sautant les masquées : elles restent dans le tableau
-   * (la corbeille en vit), mais ← et → ne doivent pas y tomber.
+   * Zapper, c'est déplacer l'index dans la file du lecteur — pas recharger une
+   * station. Le même geste sert au bouton de l'écran, à la notification, au
+   * casque et au widget ; l'état suit par `MediaItemTransition`.
+   *
+   * Tant que rien n'est chargé (juste après une restauration), il n'y a pas de
+   * file : on retombe sur une sélection, qui en construit une.
    */
   const step = useCallback(
     (dir: 1 | -1) => {
-      const visible = stationsRef.current.filter((s) => !s.hidden);
+      const visible = visibleRef.current;
       if (!visible.length) return;
-      const at = visible.findIndex((s) => s.url === currentRef.current);
-      const next = visible[(((at + dir) % visible.length) + visible.length) % visible.length];
-      if (next) select(next);
+      if (!loadedUrl.current) {
+        const at = visible.findIndex((s) => s.url === currentRef.current);
+        const next = visible[(((at + dir) % visible.length) + visible.length) % visible.length];
+        if (next) select(next);
+        return;
+      }
+      if (dir === 1) skipNext();
+      else skipPrevious();
     },
     [select],
   );
@@ -237,10 +256,28 @@ export function usePlayback(stations: Station[]) {
         setStreamState('reconnecting');
         reconnectTimer.current = setTimeout(retry, RECONNECT_DELAY_MS);
       }),
-      // Les boutons suivant/précédent de la notification et du casque : le natif
-      // ne sait pas ce qu'est « la station d'après », c'est à nous de le dire.
-      TrackPlayer.addEventListener(Event.RemoteNext, () => step(1)),
-      TrackPlayer.addEventListener(Event.RemotePrevious, () => step(-1)),
+      // **Le changement de station se constate, il ne se commande plus.** Le
+      // natif zappe seul dans la file ; ce qui remonte ici est le résultat,
+      // d'où qu'il vienne — écran, notification, casque, widget. Les
+      // écouteurs RemoteNext/RemotePrevious qui vivaient ici ne servaient plus :
+      // en `handling: 'native'` ils ne se déclenchent jamais.
+      TrackPlayer.addEventListener(Event.MediaItemTransition, ({ item }) => {
+        // `mediaId` plutôt que `url` : le type d'`url` couvre aussi les
+        // ressources locales numérotées, et c'est nous qui posons l'identifiant
+        // à la construction de la file — l'URL de la station.
+        const url = item?.mediaId ?? null;
+        if (!url) return;
+        const s = stationsRef.current.find((x) => x.url === url);
+        if (!s) return;
+        currentRef.current = url;
+        loadedUrl.current = url;
+        setCurrentUrl(url);
+        // Le gain de la station suit le changement de piste — tant que ce code
+        // tourne. Application tuée, le zapping natif garde le gain de la
+        // station précédente : ExoPlayer n'a qu'un volume, pas un par piste.
+        setVolume(s, muted ? 0 : master);
+        void writeString(KEY_LAST_STATION, url);
+      }),
       TrackPlayer.addEventListener(Event.SleepTimerTriggered, () => {
         setSleepStep(0);
         setSleepLeft(null);
