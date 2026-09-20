@@ -2,7 +2,7 @@
   "expo": {
     "name": "FO Radio",
     "slug": "fallout-radio",
-    "version": "1.3.5",
+    "version": "1.4.0",
     "orientation": "default",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "dark",
@@ -29,7 +29,7 @@
         "android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK",
         "android.permission.MODIFY_AUDIO_SETTINGS"
       ],
-      "versionCode": 8
+      "versionCode": 9
     },
     "web": {
       "bundler": "metro",

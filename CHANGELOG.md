@@ -9,7 +9,7 @@ Ordre : **entrée la plus récente en tête**. Plusieurs passes le même jour so
 suffixées `(2)`, `(3)`… la plus haute étant la plus récente (même convention que
 `TANDEM_LOG.md`).
 
-## 2026-09-20 (2) — app, en attente de release
+## 2026-09-20 (2) — app v1.4.0, zapping partout et historique des titres
 
 ### Réparation — zapper fonctionne enfin hors de l'application
 - **La file du lecteur contient toutes les stations visibles**, la station choisie servant d'index
