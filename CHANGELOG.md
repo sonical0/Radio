@@ -2,12 +2,34 @@
 
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/). Les entrées sont
 datées plutôt que numérotées : le site n'a pas de version, il est déployé en continu. Seule
-l'application Android en a une, taguée dans le dépôt (`v1.0.1` à `v1.1.1`) et publiée en
+l'application Android en a une, taguée dans le dépôt (`v1.0.1` à `v1.3.5`) et publiée en
 release.
 
 Ordre : **entrée la plus récente en tête**. Plusieurs passes le même jour sont
 suffixées `(2)`, `(3)`… la plus haute étant la plus récente (même convention que
 `TANDEM_LOG.md`).
+
+## 2026-09-20 (2) — app, en attente de release
+
+### Réparation — zapper fonctionne enfin hors de l'application
+- **La file du lecteur contient toutes les stations visibles**, la station choisie servant d'index
+  de départ, avec `RepeatMode.All`. Elle n'en contenait qu'une : sans piste suivante, aucun appui
+  sur ⏭ ne pouvait aboutir, ni depuis la notification, ni le casque, ni l'écran verrouillé.
+- Les commandes repassent en `handling: 'native'`, et `MediaItemTransition` remonte le résultat
+  d'où qu'il vienne. Les écouteurs `RemoteNext`/`RemotePrevious` étaient morts et sont retirés.
+- Le pont Kotlin du widget vers le JS disparaît avec : il n'existait que pour contourner ça.
+- Limites assumées : le gain par station ne suit le zapping que si l'application tourne, et la
+  file se reconstruit au choix explicite d'une station, pas à chaque modification de la liste.
+
+### Ajouts
+- **Historique des titres** : ce que chaque station a joué, horodaté, cherchable. 600 entrées au
+  total, 200 par station. Effacement avec confirmation.
+- **Bouton lecture/pause sur l'horloge de chevet**, avec un état « connexion » distinct.
+- **Titre en cours sur l'horloge de chevet** : elle nommait la station sans dire le morceau.
+- **Recherche dans la liste de stations**, au-delà de huit stations visibles ; filtre d'affichage
+  seulement, le zapping continue de parcourir toute la bibliothèque.
+- **Les réveils entrent dans la sauvegarde** (format v2, l'import relit aussi la v1). Une alarme
+  importée arrive éteinte.
 
 ## 2026-09-20 — app v1.3.5, widget d'écran d'accueil
 

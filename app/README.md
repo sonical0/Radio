@@ -128,6 +128,20 @@ Spécifié dans [`SPEC-reveil-radio.md`](../SPEC-reveil-radio.md), livré en cin
 
 **Ce qui n'est pas fait :** le `boost` en décibels des stations faibles ne s'applique pas au réveil. `LoudnessEnhancer` s'attache à la session 0, c'est-à-dire à tout ce qui sort du téléphone (voir la section Gains) — acceptable le temps d'une écoute volontaire, douteux à 7 h du matin sur un appareil qu'on ne regarde pas. Seul le gain multiplicatif voyage avec l'alarme.
 
+## Le widget, l'horloge de chevet, l'historique
+
+**Le widget d'écran d'accueil** (`modules/player-widget/`) est en `RemoteViews`, pas en Glance : Glance embarquerait tout le runtime Compose pour quatre boutons. Ses trois commandes partent en **touches média**, donc répondent application fermée. Il a d'abord parlé à l'application par un pont Kotlin, faute de pouvoir zapper par la session ; ce détour a été retiré le 20/09/2026 avec la file complète. L'affichage vient de ce que le JS dépose dans les `SharedPreferences` — station, titre, état — et les couleurs de la palette que le thème y écrit déjà pour l'écran de réveil : **un seul écrivain, deux lecteurs**.
+
+> [!] Un `BroadcastReceiver` reçoit un `ReceiverRestrictedContext` qui **interdit `bindService()`**. Toute tentative de joindre un service depuis `onReceive` doit passer par `context.applicationContext`, sinon l'application tombe à chaque appui.
+
+**L'horloge de chevet** affiche la station, le titre en cours et un bouton lecture/pause de la station choisie — changer de station reste l'affaire du portrait, où vit la liste. Trois états et non deux : une connexion lente affiche `… CONNEXION` plutôt que de laisser croire à un appui ignoré.
+
+**La recherche de stations** n'apparaît qu'au-delà de huit stations visibles, et **ne filtre que l'affichage** : la file du lecteur continue de parcourir toute la bibliothèque, donc zapper ne se limite pas aux résultats.
+
+**L'historique des titres** (`src/store/useHistory.ts`) garde ce que les stations ont joué, le plus récent en tête. Deux plafonds : 600 entrées au total pour le stockage, 200 par station pour qu'une station bavarde n'évince pas les autres. Le nom de la station est **recopié dans l'entrée**, pour qu'une station renommée ou supprimée garde un passé lisible. L'écriture est retardée de trois secondes — un tour de sondage touche jusqu'à quarante stations — et vidée au démontage. Effacer demande confirmation : c'est la seule action de l'application qui détruise quelque chose que la corbeille ne rend pas.
+
+**La sauvegarde est passée en v2** : un objet `{ version, stations, alarms }` là où la v1 était un tableau de stations, si bien que changer de téléphone perdait les réveils en silence. **L'import relit les deux formats**, et une alarme importée arrive **éteinte** — restaurer une sauvegarde le soir ne doit réveiller personne à 7 h.
+
 ## Décisions à connaître avant de toucher aux dépendances
 
 **Le lecteur est `@rntp/player` v5, pas `react-native-track-player` v4.** La v4 ne tourne pas sur la nouvelle architecture : elle compile (au prix de correctifs Kotlin), passe le parsing TurboModule (au prix de 37 autres), puis meurt à l'exécution sur `RuntimeException: You should not use ReactNativeHost directly in the New Architecture` — son `MusicService` repose sur `HeadlessJsTaskService`, qui n'existe plus. Ce n'est pas rattrapable par un patch, c'est le mécanisme même du service de lecture. Ne pas y revenir.
