@@ -525,6 +525,26 @@
   .trash-btn:hover { border-color: var(--green); color: var(--green-bright); }
   .trash-btn.danger:hover { border-color: #ff6b6b; color: #ff6b6b; }
 
+  /* TITRES PASSÉS */
+  .history { margin: 16px 20px 0; border-top: 1px solid var(--border); padding-top: 4px; }
+  .history[hidden] { display: none; }
+  .history-tools { display: flex; gap: 8px; align-items: center; margin: 8px 0 6px; }
+  .history-tools .add-input { flex: 1; }
+  .history-list { list-style: none; margin: 0; padding: 0; max-height: 320px; overflow-y: auto; }
+  .history-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 5px 2px;
+    border-bottom: 1px solid var(--border);
+  }
+  .history-time { color: var(--green-dim); font-size: 11px; flex-shrink: 0; min-width: 46px; padding-top: 2px; }
+  .history-texts { flex: 1; min-width: 0; }
+  .history-title { color: var(--green-bright); font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .history-station { color: var(--green-dim); font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .history-note { color: var(--green-dim); font-size: 11px; opacity: 0.8; padding: 6px 2px 0; }
+  .history-note:empty { display: none; }
+
   /* RECHERCHE DE STATIONS */
   .station-search { display: flex; gap: 8px; align-items: center; margin: 16px 20px 0; }
   .station-search .add-input { flex: 1; }
@@ -603,6 +623,18 @@
             onclick="clearStationQuery()" aria-label="Effacer la recherche">✕</button>
   </div>
   <div class="stations-wrap" id="stations-wrap"></div>
+
+  <details class="history" id="history" hidden>
+    <summary class="trash-summary" id="history-summary"></summary>
+    <div class="history-tools">
+      <label class="sr-only" for="history-q">Chercher dans les titres passés</label>
+      <input class="add-input" id="history-q" placeholder="Chercher un titre" autocomplete="off" />
+      <button type="button" class="trash-btn danger" id="history-clear"
+              onclick="onHistoryClear()">✕ Effacer</button>
+    </div>
+    <ul class="history-list" id="history-list"></ul>
+    <p class="history-note" id="history-note" role="status"></p>
+  </details>
 
   <div class="add-station-wrap">
     <details class="add-fold">
@@ -1065,6 +1097,9 @@ const MAX_META_POLL = 40;
 function applyMeta(i, url, txt) {
   if (!txt) return;
   nowPlayingData[url] = txt;
+  // Point de passage unique de tous les titres captés — le sondage groupé comme
+  // le rattrapage d'une seule station.
+  recordHistory(url, txt, stations[i] && stations[i].name);
   const el = document.getElementById('snp-' + i);
   if (el) el.textContent = txt;
   if (i === current) {
@@ -1103,8 +1138,10 @@ async function refreshNowPlaying() {
   }
 }
 
+window.addEventListener('pagehide', flushHistory);
+
 document.addEventListener('visibilitychange', () => {
-  if (document.hidden) { stopVis(); return; }
+  if (document.hidden) { stopVis(); flushHistory(); return; }
   refreshNowPlaying();
   if (current >= 0 && !audio.paused) startVis();
 });
@@ -2011,6 +2048,195 @@ function buildDirectoryRow(r) {
   return row;
 }
 
+// ─── Historique des titres ───
+// « C'était quoi, ce morceau ? » est la question qu'une radio provoque, et la
+// page a déjà la réponse sous la main : elle sonde les métadonnées de toutes les
+// stations visibles toutes les trente secondes, et jetait tout dès le titre
+// suivant. Même clé de stockage et mêmes plafonds que l'application mobile, pour
+// qu'un jour l'un puisse relire l'historique de l'autre sans conversion.
+const HISTORY_KEY = 'titleHistory';
+// Deux plafonds. Le global protège le stockage ; le second empêche une station
+// bavarde — une qui change de titre toutes les deux minutes — d'évincer toutes
+// les autres.
+const HISTORY_MAX_TOTAL = 600;
+const HISTORY_MAX_PER_STATION = 200;
+// Les titres arrivent par vagues : un tour de sondage en rapporte jusqu'à
+// quarante d'un coup. On laisse l'écriture retomber au lieu d'en faire une par
+// station.
+const HISTORY_WRITE_DEBOUNCE_MS = 3000;
+// Au-delà, on ferait défiler pour rien : la recherche est là pour ça.
+const HISTORY_MAX_SHOWN = 60;
+
+// Le plus récent en tête : c'est l'ordre dans lequel on cherche un morceau
+// qu'on vient d'entendre.
+let historyEntries = [];
+// Dernier titre retenu par URL de flux — sans lui, chaque tour de sondage
+// réécrirait le même morceau. Une Map et non un objet : la clé vient du
+// stockage et l'une d'elles pourrait s'appeler « __proto__ ».
+let historyLastTitle = new Map();
+let historyWriteTimer = null;
+let historyQuery = '';
+let historyConfirming = false;
+let historyConfirmTimer = null;
+
+function isValidHistoryEntry(e) {
+  return !!e && typeof e === 'object'
+    && typeof e.url === 'string' && e.url !== ''
+    && typeof e.title === 'string' && typeof e.station === 'string'
+    && typeof e.at === 'number' && isFinite(e.at);
+}
+
+// Applique les deux plafonds à une liste déjà triée du plus récent au plus
+// ancien : ce qui déborde est ce qu'on a le moins de chances de rechercher.
+function capHistory(list) {
+  const perStation = new Map();
+  const kept = [];
+  for (const e of list) {
+    const n = (perStation.get(e.url) || 0) + 1;
+    if (n > HISTORY_MAX_PER_STATION) continue;
+    perStation.set(e.url, n);
+    kept.push(e);
+    if (kept.length >= HISTORY_MAX_TOTAL) break;
+  }
+  return kept;
+}
+
+function loadHistory() {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(HISTORY_KEY) || '[]');
+    historyEntries = Array.isArray(parsed) ? capHistory(parsed.filter(isValidHistoryEntry)) : [];
+  } catch { historyEntries = []; }
+  // Repartir du dernier titre connu de chaque station, sinon le premier sondage
+  // après un rechargement ré-enregistrerait ce qui passe déjà.
+  for (const e of historyEntries) {
+    if (!historyLastTitle.has(e.url)) historyLastTitle.set(e.url, e.title);
+  }
+}
+
+function writeHistory() {
+  try { localStorage.setItem(HISTORY_KEY, JSON.stringify(historyEntries)); } catch {}
+}
+
+function persistHistorySoon() {
+  if (historyWriteTimer) return;
+  historyWriteTimer = setTimeout(() => { historyWriteTimer = null; writeHistory(); }, HISTORY_WRITE_DEBOUNCE_MS);
+}
+
+// Ce qui attendait d'être écrit ne doit pas partir avec l'onglet.
+function flushHistory() {
+  if (!historyWriteTimer) return;
+  clearTimeout(historyWriteTimer);
+  historyWriteTimer = null;
+  writeHistory();
+}
+
+function recordHistory(url, title, name) {
+  const clean = String(title || '').trim();
+  if (!clean || historyLastTitle.get(url) === clean) return;
+  historyLastTitle.set(url, clean);
+  // Le nom au moment de l'écoute : une station renommée depuis garde son passé.
+  historyEntries = capHistory([{ url, station: name || url, title: clean, at: Date.now() }, ...historyEntries]);
+  persistHistorySoon();
+  renderHistory();
+}
+
+function clearHistory() {
+  historyEntries = [];
+  historyLastTitle = new Map();
+  // L'écriture différée en cours porterait l'ancienne liste : elle est annulée,
+  // pas attendue.
+  if (historyWriteTimer) { clearTimeout(historyWriteTimer); historyWriteTimer = null; }
+  writeHistory();
+  renderHistory();
+}
+
+// L'heure seule pour aujourd'hui, la date devant sinon.
+function historyClock(at) {
+  const d = new Date(at);
+  const p2 = n => String(n).padStart(2, '0');
+  const hhmm = p2(d.getHours()) + ':' + p2(d.getMinutes());
+  const today = new Date().toDateString() === d.toDateString();
+  return today ? hhmm : p2(d.getDate()) + '/' + p2(d.getMonth() + 1) + ' ' + hhmm;
+}
+
+// Le volet est construit une fois dans le HTML et seul son contenu est re-rendu :
+// re-créer le <details> replierait le panneau et viderait le champ de recherche
+// à chaque titre capté, c'est-à-dire toutes les trente secondes.
+function renderHistory() {
+  const det = document.getElementById('history');
+  det.hidden = !historyEntries.length;
+  if (det.hidden) { det.open = false; return; }
+
+  const sum = document.getElementById('history-summary');
+  sum.textContent = '';
+  const dashL = document.createElement('span'); dashL.setAttribute('aria-hidden', 'true'); dashL.textContent = '── ';
+  const dashR = document.createElement('span'); dashR.setAttribute('aria-hidden', 'true'); dashR.textContent = ' ──';
+  sum.appendChild(dashL);
+  sum.appendChild(document.createTextNode('Titres passés (' + historyEntries.length + ')'));
+  sum.appendChild(dashR);
+
+  // Un sondage rapporte jusqu'à quarante titres d'un coup : replié, le volet
+  // n'a que son compteur à mettre à jour, et personne ne regarde les lignes.
+  if (!det.open) return;
+
+  const q = normalizeSearch(historyQuery);
+  const matching = q
+    ? historyEntries.filter(e => normalizeSearch(e.title).includes(q) || normalizeSearch(e.station).includes(q))
+    : historyEntries;
+  const shown = matching.slice(0, HISTORY_MAX_SHOWN);
+
+  const ul = document.getElementById('history-list');
+  ul.innerHTML = '';
+  // En DOM et jamais en innerHTML : ces titres viennent de serveurs tiers.
+  shown.forEach(e => {
+    const li = document.createElement('li');
+    li.className = 'history-item';
+
+    const time = document.createElement('span');
+    time.className = 'history-time';
+    time.textContent = historyClock(e.at);
+
+    const texts = document.createElement('div');
+    texts.className = 'history-texts';
+    const title = document.createElement('div');
+    title.className = 'history-title';
+    title.textContent = e.title;
+    const station = document.createElement('div');
+    station.className = 'history-station';
+    station.textContent = e.station;
+    texts.appendChild(title); texts.appendChild(station);
+
+    li.appendChild(time); li.appendChild(texts);
+    ul.appendChild(li);
+  });
+
+  const note = document.getElementById('history-note');
+  if (!matching.length) note.textContent = 'Aucun titre ne correspond.';
+  else if (matching.length > shown.length) note.textContent = shown.length + ' sur ' + matching.length + ' — affine la recherche pour voir le reste.';
+  else note.textContent = '';
+}
+
+// Effacer se confirme : c'est la seule action de cette page qui détruise quelque
+// chose d'irrécupérable — la corbeille, elle, rend les stations.
+function onHistoryClear() {
+  const btn = document.getElementById('history-clear');
+  if (historyConfirming) {
+    clearTimeout(historyConfirmTimer);
+    historyConfirming = false;
+    btn.textContent = '✕ Effacer';
+    document.getElementById('history-q').value = '';
+    historyQuery = '';
+    clearHistory();
+    return;
+  }
+  historyConfirming = true;
+  btn.textContent = '✓ Confirmer';
+  historyConfirmTimer = setTimeout(() => {
+    historyConfirming = false;
+    btn.textContent = '✕ Effacer';
+  }, 5000);
+}
+
 // ─── Export / import des stations custom ───
 function exportStations() {
   const msg = document.getElementById('add-msg');
@@ -2225,6 +2451,17 @@ document.addEventListener('keydown', e => {
     if (e.key === 'Enter') { e.preventDefault(); searchDirectory(); }
   });
 
+  // Replié, le volet ne rend pas ses lignes : les construire en l'ouvrant.
+  document.getElementById('history').addEventListener('toggle', renderHistory);
+
+  const historyQ = document.getElementById('history-q');
+  historyQ.addEventListener('input', () => { historyQuery = historyQ.value; renderHistory(); });
+  historyQ.addEventListener('keydown', e => {
+    if (e.key === 'Escape' && historyQ.value) {
+      e.preventDefault(); historyQ.value = ''; historyQuery = ''; renderHistory();
+    }
+  });
+
   const stationQ = document.getElementById('station-q');
   stationQ.addEventListener('input', () => setStationQuery(stationQ.value));
   // Échap vide le champ sans le quitter : le réflexe d'une barre de recherche.
@@ -2232,6 +2469,8 @@ document.addEventListener('keydown', e => {
     if (e.key === 'Escape' && stationQ.value) { e.preventDefault(); clearStationQuery(); }
   });
 
+  loadHistory();
+  renderHistory();
   buildStationList();
   restoreLastStation();
   updateSleepBtn();
