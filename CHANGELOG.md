@@ -2,12 +2,77 @@
 
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/). Les entrées sont
 datées plutôt que numérotées : le site n'a pas de version, il est déployé en continu. Seule
-l'application Android en a une, taguée dans le dépôt (`v1.0.1` à `v1.1.1`) et publiée en
+l'application Android en a une, taguée dans le dépôt (`v1.0.1` à `v1.4.0`) et publiée en
 release.
 
 Ordre : **entrée la plus récente en tête**. Plusieurs passes le même jour sont
 suffixées `(2)`, `(3)`… la plus haute étant la plus récente (même convention que
 `TANDEM_LOG.md`).
+
+## 2026-09-22 — le site rattrape l'application
+
+L'application a pris trois versions d'avance en trois jours (v1.2.0 à v1.4.0). Ce qui, de
+ces ajouts, tient dans un navigateur est porté ici ; ce qui n'y tient pas est dit plus bas
+plutôt que tenté à moitié.
+
+### Ajouté — la recherche dans la liste de stations
+- Un champ de filtre au-dessus de la liste, révélé à partir de **huit stations visibles**.
+  Il cherche dans les noms et les groupes, accents et casse neutralisés (`normalizeSearch()`) :
+  « crème » se trouve en tapant « creme ».
+- **Il ne filtre que l'affichage.** `stepStation()` continue de parcourir toute la
+  bibliothèque, donc le zapping ne s'arrête pas aux résultats d'une recherche qu'on a oublié
+  d'effacer. Même choix que dans l'application.
+- Le champ vit **hors de `#stations-wrap`**, que `buildStationList()` vide à chaque frappe :
+  à l'intérieur, il perdait le focus à la première lettre. Il reste affiché tant qu'une
+  recherche est en cours, même sous le seuil — sinon une recherche ramenant moins de huit
+  stations deviendrait impossible à effacer.
+- Le `<datalist>` des groupes du formulaire d'ajout et le seuil d'affichage se lisent sur la
+  bibliothèque entière, pas sur la liste filtrée.
+
+### Ajouté — l'historique des titres
+- Ce que chaque station a joué, horodaté et cherchable, dans un volet dépliable sous la
+  liste, sur le patron de la corbeille. **600 titres au total, 200 par station** — mêmes
+  plafonds et **même clé de stockage (`titleHistory`) que l'application**, le second
+  empêchant une station bavarde d'évincer toutes les autres.
+- Le crochet est posé sur `applyMeta()`, point de passage unique de tous les titres captés :
+  le sondage groupé comme le rattrapage d'une seule station. La page sondait déjà toutes les
+  stations visibles toutes les trente secondes et jetait tout au titre suivant.
+- Les écritures sont différées de 3 s et vidées quand l'onglet part (`pagehide`) ou passe en
+  arrière-plan : un tour de sondage rapporte jusqu'à quarante titres, qui feraient quarante
+  écritures.
+- Le volet est construit une fois et seul son contenu est re-rendu — le recréer le replierait
+  et viderait son champ de recherche toutes les trente secondes — et **replié, il ne rend que
+  son compteur**. Les lignes sont construites en DOM, jamais en `innerHTML` : ces titres
+  viennent de serveurs tiers.
+- **L'effacement se confirme.** C'est la seule action de la page qui détruise quelque chose
+  d'irrécupérable ; la corbeille, elle, rend les stations.
+
+### Changé — le fichier de sauvegarde passe en v2
+- L'application y a mis les réveils le 20/09 : `{ version, stations, alarms }` au lieu du
+  simple tableau. La page écrit désormais cette forme et **relit les deux**, plus l'objet
+  isolé qu'elle acceptait déjà. Une sauvegarde faite sur le téléphone s'ouvre ici, et
+  l'inverse.
+- **Les réveils traversent la page sans être lus.** Elle n'en a pas et n'en aura pas, mais
+  les conserver sous la clé de l'application (`alarms`), fusionnés par `id`, évite qu'un
+  export fait depuis le navigateur ampute la sauvegarde de qui s'en sert pour changer de
+  téléphone.
+
+### Pas porté, et pourquoi
+- **Le réveil radio.** Il n'a de valeur que par ses garanties : sonner application fermée et
+  écran éteint, ignorer le mode silencieux, se réarmer après un redémarrage, retomber sur la
+  sonnerie système quand la station est morte. Un navigateur n'en offre aucune — un onglet
+  fermé ne sonne pas, et la politique d'autoplay peut refuser le son. Un réveil qui échoue
+  une nuit sur dix est pire que pas de réveil.
+- **Le widget d'écran d'accueil** et **l'amplification en dB** : hors de portée d'une page,
+  pour les raisons déjà écrites ici les 19 et 20/09.
+- La **vérification de mise à jour** n'a pas d'objet : la page est servie, pas installée.
+
+### Vérifié
+- Chromium, page servie en local : filtrage (1 résultat sur « diamond », 0 et son message sur
+  une chaîne absente, insensibilité à la casse), focus rendu au champ après effacement,
+  historique (doublon consécutif ignoré, recherche sans accent, effacement en deux temps,
+  persistance après rechargement), import v1 puis v2 sans doublon de station ni de réveil, et
+  export relu : `version: 2`, 2 stations, 2 réveils transportés. Aucune erreur de console.
 
 ## 2026-09-19 (3)
 

@@ -29,6 +29,14 @@ Pas d'étape de build, pas de gestionnaire de paquets, pas de framework. On sert
   pays — et non une liste figée.
 - **Gain par station**, mesuré et non estimé : la sonie de chaque station a été relevée à
   `ffmpeg -af ebur128`, et les gains les ramènent à une cible commune.
+- **Cherche dans ta liste.** Passé huit stations visibles, un champ de filtre apparaît
+  au-dessus de la liste : il cherche dans les noms et les groupes, sans se soucier des
+  accents ni de la casse. Il ne filtre que l'affichage — les flèches continuent de parcourir
+  toute la bibliothèque.
+- **Les titres passés.** La page interroge déjà les métadonnées de toutes les stations
+  visibles toutes les trente secondes ; elle les garde désormais, horodatés et cherchables.
+  600 titres au total, 200 par station, dans un volet dépliable sous la liste. Rien ne sort
+  du navigateur, et l'effacement demande confirmation.
 - **Masque les stations que tu n'écoutes pas**, y compris celles livrées avec le site. Le
   masquage est réversible : une corbeille dépliable en bas de liste les rend une par une.
 - **La couleur de l'écran au choix.** Le bouton ⚙ à gauche de l'horloge fait passer le
@@ -38,10 +46,14 @@ Pas d'étape de build, pas de gestionnaire de paquets, pas de framework. On sert
 - **Minuterie de veille** avec fondu progressif, **touches multimédia** et contrôles depuis
   l'écran verrouillé (Media Session API), **raccourcis clavier**, et reconnexion automatique
   quand un flux tombe.
-- **Import / export** de tes stations personnelles en JSON.
+- **Import / export** de tes stations personnelles en JSON, dans le même fichier que
+  l'application Android. Les réveils qu'elle y met traversent la page sans être lus ni
+  perdus : exporter depuis le navigateur ne mutile pas la sauvegarde du téléphone.
 - **Une application Android**, en React Native, qui partage cette liste de stations. Elle fait
   deux choses que cette page ne peut pas : amplifier les stations diffusées trop bas pour être
-  rattrapées en baissant les autres, et lire le titre dans le flux lui-même.
+  rattrapées en baissant les autres, et lire le titre dans le flux lui-même. Le réveil radio
+  et le widget d'écran d'accueil lui sont propres, et le resteront : un onglet fermé ne sonne
+  pas.
   [Télécharger l'APK](https://github.com/sonical0/Radio/releases) — le code et son propre
   README sont sur la branche `react-native/main`.
 - **Rendu identique hors ligne.** Polices, favicon et bibliothèque HLS sont tous servis
@@ -105,7 +117,7 @@ l'application mobile, si).
 
 ## Comment ça marche
 
-Tout tient dans `index.html` — styles, balisage et logique, environ 126 Ko, sans autre
+Tout tient dans `index.html` — styles, balisage et logique, environ 140 Ko, sans autre
 dépendance que la bibliothèque HLS embarquée. Quelques décisions méritent d'être connues :
 
 **Pas de Web Audio API.** Ce serait la façon évidente d'amplifier un flux trop discret
@@ -178,7 +190,7 @@ fichier audio. Si une station se tait, elle s'est tue à la source.
 ## Données
 
 Pas de compte, pas d'analytics, pas de cookie, pas de serveur à moi. Tout ce que tu
-configures — stations, groupes, gains, couleur d'écran — reste dans le stockage local de ton
+configures — stations, groupes, gains, couleur d'écran — et les titres passés restent dans le stockage local de ton
 navigateur et n'est envoyé nulle part ; l'export est un fichier que tu télécharges toi-même.
 Trois tiers voient en revanche ton adresse IP pendant que tu utilises la page : le serveur de
 la station que tu écoutes (fallout.radio, ou celle que tu as ajoutée), l'API Radio-Browser

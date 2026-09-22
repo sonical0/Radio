@@ -30,6 +30,13 @@ No build step, no package manager, no framework. Serve the folder and it runs.
   list.
 - **Per-station gain**, measured rather than guessed: every station's loudness was sampled
   with `ffmpeg -af ebur128` and the gains bring them to a common target.
+- **Search your own list.** Past eight visible stations, a filter field appears above the
+  list, matching names and groups whatever the accents and the case. It filters the display
+  only — the arrow keys keep walking the whole library.
+- **The titles that went past.** The page already polls every visible station's metadata
+  every thirty seconds; it now keeps the result, timestamped and searchable. 600 titles in
+  all, 200 per station, in a drawer under the list. Nothing leaves the browser, and clearing
+  asks twice.
 - **Hide any station you don't listen to**, built-in ones included. Hiding is reversible: a
   "hidden stations" drawer at the bottom of the list brings them back one by one.
 - **A screen colour you choose.** The ⚙ button next to the clock swaps the phosphor between
@@ -37,10 +44,13 @@ No build step, no package manager, no framework. Serve the folder and it runs.
   script in the `<head>`, before the first paint, so the page never flashes the wrong colour.
 - **Sleep timer** with a slow fade-out, **media keys** and lock-screen controls via the Media
   Session API, **keyboard shortcuts**, and automatic reconnection when a stream drops.
-- **Import / export** your custom stations as JSON.
+- **Import / export** your custom stations as JSON, in the same file the Android app reads
+  and writes. The alarms it puts there cross the page unread and unharmed: exporting from the
+  browser does not amputate the phone's backup.
 - **An Android app**, in React Native, sharing this station list. It does two things this page
   cannot: it amplifies the stations that are broadcast too quietly to be fixed by attenuating
-  the others, and it reads the title out of the stream itself.
+  the others, and it reads the title out of the stream itself. The radio alarm clock and the
+  home-screen widget are its own, and will stay so: a closed tab does not ring.
   [Download the APK](https://github.com/sonical0/Radio/releases) — source and its own README
   on the `react-native/main` branch.
 - **Offline-identical rendering.** Fonts, favicon and the HLS library are all served from the
@@ -101,7 +111,7 @@ here** — a browser cannot amplify past the maximum; the mobile app reads it).
 
 ## How it works
 
-Everything lives in `index.html` — styles, markup and logic, ~126 KB of it, no dependencies
+Everything lives in `index.html` — styles, markup and logic, ~140 KB of it, no dependencies
 beyond the vendored HLS library. A few decisions worth knowing about:
 
 **No Web Audio API.** It would be the obvious way to boost a quiet stream past `volume = 1`,
@@ -171,7 +181,7 @@ audio file. When a station falls silent, it fell silent at the source.
 ## Data
 
 No account, no analytics, no cookie, no server of mine. Everything you set up — stations,
-groups, gains, screen colour — stays in your browser's local storage and is never sent
+groups, gains, screen colour — and the titles that went past stay in your browser's local storage and are never sent
 anywhere; the export is a file you download yourself. Three third parties do see your IP
 address while you use the page: the server of the station you are listening to
 (fallout.radio, or one you added yourself), the Radio-Browser API when you search the
