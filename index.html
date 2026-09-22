@@ -2238,20 +2238,64 @@ function onHistoryClear() {
 }
 
 // ─── Export / import des stations custom ───
+// Le fichier est au format v2 depuis que l'application y a mis les réveils :
+// { version, stations, alarms } au lieu du simple tableau de stations. L'import
+// relit les deux formes, et une sauvegarde faite dans l'application s'ouvre ici
+// comme l'inverse.
+const EXPORT_VERSION = 2;
+// Les réveils appartiennent à l'application : cette page n'en a pas, et n'en
+// aura pas — un onglet fermé ne sonne pas. Elle les transporte quand même, sans
+// jamais les lire, sous la clé de l'application : exporter depuis le navigateur
+// ne doit pas amputer la sauvegarde de qui s'en sert pour changer de téléphone.
+const ALARMS_KEY = 'alarms';
+
+function loadStoredAlarms() {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(ALARMS_KEY) || '[]');
+    return Array.isArray(parsed) ? parsed : [];
+  } catch { return []; }
+}
+
+// Fusion par `id`, le seul champ dont on suppose l'existence : une sauvegarde
+// importée deux fois ne doit pas doubler les réveils, et une importée par-dessus
+// une autre ne doit pas effacer ce qu'elle ne contient pas.
+function mergeStoredAlarms(incoming) {
+  const kept = loadStoredAlarms();
+  const byId = new Map();
+  for (const a of kept) if (a && typeof a === 'object' && typeof a.id === 'string') byId.set(a.id, a);
+  let n = 0;
+  for (const a of incoming) {
+    if (!a || typeof a !== 'object' || typeof a.id !== 'string') continue;
+    byId.set(a.id, a);
+    n++;
+  }
+  if (!n) return 0;
+  try { localStorage.setItem(ALARMS_KEY, JSON.stringify([...byId.values()])); } catch { return 0; }
+  return n;
+}
+
 function exportStations() {
   const msg = document.getElementById('add-msg');
   const custom = stations.filter(s => s.isCustom && !s.hidden);
-  if (!custom.length) {
+  const alarms = loadStoredAlarms();
+  if (!custom.length && !alarms.length) {
     msg.textContent = '⚠ Aucune station custom à exporter.'; msg.className = 'add-msg err';
     setTimeout(() => { msg.textContent = ''; msg.className = 'add-msg'; }, 3000);
     return;
   }
-  const blob = new Blob([JSON.stringify(custom.map(serializeStation), null, 2)], { type: 'application/json' });
+  const backup = { version: EXPORT_VERSION, stations: custom.map(serializeStation), alarms };
+  const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
   a.download = 'fallout-radio-stations.json';
   a.click();
   URL.revokeObjectURL(a.href);
+  const quoi = [
+    custom.length ? custom.length + ' station(s)' : null,
+    alarms.length ? alarms.length + ' réveil(s) de l\'application' : null
+  ].filter(Boolean).join(' et ');
+  msg.textContent = '✓ Exporté : ' + quoi + '.'; msg.className = 'add-msg ok';
+  setTimeout(() => { msg.textContent = ''; msg.className = 'add-msg'; }, 3000);
 }
 
 async function importStations(file) {
@@ -2261,9 +2305,30 @@ async function importStations(file) {
   try {
     const text = await file.text();
     const data = JSON.parse(text);
-    const list = Array.isArray(data) ? data : [data];
+    let list;
+    let alarms = [];
+    if (Array.isArray(data)) {
+      // Format v1 : un tableau de stations, rien d'autre.
+      list = data;
+    } else if (data && Array.isArray(data.stations)) {
+      // Format v2 : { version, stations, alarms }.
+      list = data.stations;
+      if (Array.isArray(data.alarms)) alarms = data.alarms;
+    } else {
+      list = [data];
+    }
+    const importedAlarms = alarms.length ? mergeStoredAlarms(alarms) : 0;
     const valid = list.filter(isValidStation);
-    if (!valid.length) throw new Error('empty');
+    if (!valid.length) {
+      if (importedAlarms) {
+        msg.textContent = '✓ ' + importedAlarms + ' réveil(s) conservé(s) pour l\'application, aucune station.';
+        msg.className = 'add-msg ok';
+        fileInput.value = '';
+        setTimeout(() => { msg.textContent = ''; msg.className = 'add-msg'; }, 3000);
+        return;
+      }
+      throw new Error('empty');
+    }
     const existingUrls = new Map(stations.map((s, i) => [s.url, i]));
     let added = 0;
     valid.forEach(s => {
@@ -2284,8 +2349,11 @@ async function importStations(file) {
     saveCustomStations();
     buildStationList();
     if (added) refreshNowPlaying();
-    msg.textContent = added ? ('✓ ' + added + ' station(s) importée(s).') : '⚠ Aucune nouvelle station (déjà présentes).';
-    msg.className = added ? 'add-msg ok' : 'add-msg err';
+    const suite = importedAlarms ? ' ' + importedAlarms + ' réveil(s) conservé(s) pour l\'application.' : '';
+    msg.textContent = added
+      ? ('✓ ' + added + ' station(s) importée(s).' + suite)
+      : ('⚠ Aucune nouvelle station (déjà présentes).' + suite);
+    msg.className = (added || importedAlarms) ? 'add-msg ok' : 'add-msg err';
   } catch {
     msg.textContent = '⚠ Fichier invalide.'; msg.className = 'add-msg err';
   }
