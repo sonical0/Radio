@@ -9,6 +9,16 @@ Ordre : **entrée la plus récente en tête**. Plusieurs passes le même jour so
 suffixées `(2)`, `(3)`… la plus haute étant la plus récente (même convention que
 `TANDEM_LOG.md`).
 
+## 2026-09-22 — app v1.4.1, zapper depuis l'horloge de chevet
+
+### Ajouts
+- **Deux boutons de station de part et d'autre de la lecture/pause sur l'horloge de chevet.**
+  L'écran de chevet savait lancer et arrêter la station déjà choisie, mais en changer imposait de
+  retourner le téléphone en portrait, où vit la liste. La file du lecteur est la même des deux
+  côtés : `◀◀` et `▶▶` y déplacent l'index, exactement comme `PREV`/`NEXT` en portrait.
+- Les trois boutons passent à la ligne plutôt que d'être coupés quand la colonne de gauche est
+  trop étroite — « ▶ AUCUNE STATION » et ses deux flèches dépassent sur un écran court.
+
 ## 2026-09-20 (2) — app v1.4.0, zapping partout et historique des titres
 
 ### Réparation — zapper fonctionne enfin hors de l'application

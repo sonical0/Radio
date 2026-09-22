@@ -64,6 +64,8 @@ export function Bedside({
   playing,
   streamState,
   onToggle,
+  onNext,
+  onPrevious,
 }: {
   station: Station | null;
   title: string | null;
@@ -71,6 +73,8 @@ export function Bedside({
   playing: boolean;
   streamState: string;
   onToggle: () => void;
+  onNext: () => void;
+  onPrevious: () => void;
 }) {
   const { p, t } = useTheme();
   const s = useMemo(() => makeStyles(p), [p]);
@@ -174,28 +178,51 @@ export function Bedside({
           </Text>
         ) : null}
 
-        {/* Écouter sans se relever ni retourner le téléphone : la station
-            déjà choisie, rien de plus. Changer de station reste l'affaire du
-            portrait, où vit la liste. */}
-        <Pressable
-          onPress={onToggle}
-          disabled={!station}
-          accessibilityRole="button"
-          accessibilityState={{ disabled: !station, busy: streamState === 'loading' }}
-          accessibilityLabel={playing ? 'Mettre en pause' : 'Lancer la radio'}
-          style={[t.btn, s.play, { borderColor: station ? p.base : p.border }]}>
-          <Text style={[t.btnText, s.playText, !station && t.btnOff]}>
-            {/* Les mêmes glyphes que l'écran portrait : ⏸ sortait en emoji
-                de couleur, seul élément non Pip-Boy de l'écran. */}
-            {!station
-              ? '▶ AUCUNE STATION'
-              : streamState === 'loading'
-                ? '… CONNEXION'
-                : playing
-                  ? '❚❚ PAUSE'
-                  : '▶ ÉCOUTER'}
-          </Text>
-        </Pressable>
+        {/* Écouter sans se relever ni retourner le téléphone. Zapper non plus :
+            la liste des stations reste en portrait, mais la file du lecteur est
+            la même des deux côtés, donc les deux flèches suffisent à en changer
+            sans quitter l'horloge. */}
+        <View style={s.transport}>
+          <Pressable
+            onPress={onPrevious}
+            disabled={!station}
+            accessibilityRole="button"
+            accessibilityState={{ disabled: !station }}
+            accessibilityLabel="Station précédente"
+            style={[t.btn, s.skip, { borderColor: station ? p.base : p.border }]}>
+            <Text style={[t.btnText, s.skipText, !station && t.btnOff]}>◀◀</Text>
+          </Pressable>
+
+          <Pressable
+            onPress={onToggle}
+            disabled={!station}
+            accessibilityRole="button"
+            accessibilityState={{ disabled: !station, busy: streamState === 'loading' }}
+            accessibilityLabel={playing ? 'Mettre en pause' : 'Lancer la radio'}
+            style={[t.btn, s.play, { borderColor: station ? p.base : p.border }]}>
+            <Text style={[t.btnText, s.playText, !station && t.btnOff]}>
+              {/* Les mêmes glyphes que l'écran portrait : ⏸ sortait en emoji
+                  de couleur, seul élément non Pip-Boy de l'écran. */}
+              {!station
+                ? '▶ AUCUNE STATION'
+                : streamState === 'loading'
+                  ? '… CONNEXION'
+                  : playing
+                    ? '❚❚ PAUSE'
+                    : '▶ ÉCOUTER'}
+            </Text>
+          </Pressable>
+
+          <Pressable
+            onPress={onNext}
+            disabled={!station}
+            accessibilityRole="button"
+            accessibilityState={{ disabled: !station }}
+            accessibilityLabel="Station suivante"
+            style={[t.btn, s.skip, { borderColor: station ? p.base : p.border }]}>
+            <Text style={[t.btnText, s.skipText, !station && t.btnOff]}>▶▶</Text>
+          </Pressable>
+        </View>
       </View>
 
       <View style={s.right}>
@@ -396,10 +423,19 @@ const makeStyles = (p: Palette) =>
     next: { color: p.base, fontFamily: FONT_DISPLAY, fontSize: 26, letterSpacing: 2, marginTop: 16 },
     station: { color: p.dim, fontFamily: FONT_BODY, fontSize: 13, marginTop: 4 },
     track: { color: p.base, fontFamily: FONT_BODY, fontSize: 15, marginTop: 2, opacity: 0.9 },
+    // Les trois boutons de transport sur une ligne. `wrap` parce que la
+    // colonne de gauche n'est pas large : « ▶ AUCUNE STATION » et ses deux
+    // flèches dépassent sur un écran étroit, et un bouton coupé serait pire
+    // qu'un bouton passé à la ligne.
+    transport: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 12, marginTop: 18 },
     // Large : c'est un bouton qu'on vise à moitié réveillé, de travers, dans
     // le noir.
-    play: { alignSelf: 'flex-start', marginTop: 18, paddingVertical: 12, paddingHorizontal: 22 },
+    play: { paddingVertical: 12, paddingHorizontal: 22 },
     playText: { fontSize: 26, letterSpacing: 2, lineHeight: 30 },
+    // Même hauteur de cible que la lecture, moins de largeur : deux glyphes
+    // au lieu d'un mot.
+    skip: { paddingVertical: 12, paddingHorizontal: 18 },
+    skipText: { fontSize: 26, letterSpacing: 2, lineHeight: 30 },
 
     right: { flex: 1 },
     row: { borderWidth: 1, backgroundColor: p.bg2, padding: 8, marginBottom: 8 },

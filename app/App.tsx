@@ -205,6 +205,8 @@ function Radio() {
               playing={play.playing}
               streamState={play.streamState}
               onToggle={play.toggle}
+              onNext={play.next}
+              onPrevious={play.previous}
             />
           </SafeAreaView>
         </Crt>
