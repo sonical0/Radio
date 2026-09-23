@@ -9,6 +9,42 @@ Ordre : **entrée la plus récente en tête**. Plusieurs passes le même jour so
 suffixées `(2)`, `(3)`… la plus haute étant la plus récente (même convention que
 `TANDEM_LOG.md`).
 
+## 2026-09-23 (2) — site, la pochette des stations de l'annuaire
+
+### Ajouté
+- **Une station ajoutée depuis l'annuaire garde sa fiche** : `uuid` (le `stationuuid` de
+  Radio-Browser) et `favicon`, validés par `normalizeStation()`, persistés et exportés. Jusqu'ici
+  on ne gardait que le nom, l'URL et le pays.
+- **Pochette dans la Media Session** : notification, écran verrouillé, contrôles média du
+  navigateur. Le favicon n'est retenu que s'il se charge vraiment et fait au moins 64 px — une
+  bonne part de l'annuaire, ce sont des `.ico` de 16 px ou des liens morts ; sinon l'icône
+  Pip-Boy reste. Il est proposé **seul** : à côté de l'icône SVG de 512 px, le navigateur
+  prendrait toujours la plus grande. Chargé en même temps que le son, jamais avant.
+- **Les écoutes sont signalées à Radio-Browser** (`/json/url/{uuid}`), une fois par station et
+  par chargement de page : c'est le compteur par lequel l'annuaire trie — celui-là même que la
+  recherche utilise — et l'usage qu'il demande à ses clients.
+- **Rattrapage des stations ajoutées avant** : une station custom sans `uuid` est cherchée une
+  fois par son URL de flux (`/json/stations/byurl`) quand on l'écoute, et sa fiche est
+  enregistrée si l'annuaire la connaît.
+
+### Changé
+- La CSP ouvre `img-src` à `https:` (balise de la page et `nginx.conf`), pour ces pochettes
+  seulement. Polices et icône restent embarquées.
+- La section vie privée des deux README le dit : l'URL d'une station ajoutée à la main part
+  une fois vers Radio-Browser, et l'hôte de l'image voit l'adresse IP.
+
+### Pas porté
+- L'`og:image` et l'`apple-touch-icon` de la page d'accueil, que cherche kleeamp : un
+  navigateur ne peut pas lire une page tierce sans en-tête CORS.
+- L'application ignore encore ces deux champs : une sauvegarde qui passe par elle les perd, et
+  le rattrapage les rend à la prochaine écoute.
+
+### Vérifié
+- Chromium, page servie en local : ajout depuis l'annuaire (fiche stockée), lecture (pochette
+  120×120 de la station dans la Media Session, écoute signalée une fois), station sans fiche
+  (retrouvée par son URL, fiche enregistrée, pochette affichée), favicon `.ico` trop petit
+  (écarté, icône Pip-Boy conservée).
+
 ## 2026-09-23 — site, une reconnexion qui ne renonce plus au premier tunnel
 
 Même politique que l'application le même jour (branche `react-native/dev`).

@@ -191,11 +191,15 @@ fichier audio. Si une station se tait, elle s'est tue à la source.
 
 Pas de compte, pas d'analytics, pas de cookie, pas de serveur à moi. Tout ce que tu
 configures — stations, groupes, gains, couleur d'écran — et les titres passés restent dans le stockage local de ton
-navigateur et n'est envoyé nulle part ; l'export est un fichier que tu télécharges toi-même.
-Trois tiers voient en revanche ton adresse IP pendant que tu utilises la page : le serveur de
-la station que tu écoutes (fallout.radio, ou celle que tu as ajoutée), l'API Radio-Browser
-quand tu cherches dans l'annuaire, et GitHub Pages, qui sert la page. Leurs politiques
-s'appliquent. Ce projet n'en a pas, puisqu'il ne collecte rien.
+navigateur et n'est envoyé nulle part, à une exception près : l'adresse du flux d'une station
+que tu as ajoutée toi-même est cherchée une fois dans l'annuaire Radio-Browser quand tu
+l'écoutes, pour en trouver l'image. L'export est un fichier que tu télécharges toi-même.
+Quatre tiers voient en revanche ton adresse IP pendant que tu utilises la page : le serveur
+de la station que tu écoutes (fallout.radio, ou celle que tu as ajoutée), le site qui héberge
+l'image de cette station quand l'annuaire en a une, l'API Radio-Browser quand tu cherches
+dans l'annuaire ou écoutes l'une de ses stations (elle compte les écoutes, une par adresse et
+par jour), et GitHub Pages, qui sert la page. Leurs politiques s'appliquent. Ce projet n'en a
+pas, puisqu'il ne collecte rien.
 
 Fallout est une marque déposée de Bethesda Softworks. Ce projet est un travail de fan, sans
 affiliation.

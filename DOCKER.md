@@ -6,7 +6,7 @@ The app is containerized via `Dockerfile` (`nginxinc/nginx-unprivileged:1.27-alp
 
 `nginx.conf` sets `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`, `Permissions-Policy` and a `Content-Security-Policy`. `connect-src`/`media-src` in the CSP stay open to any `http(s)` origin on purpose — the app's core feature lets users add a radio stream on any domain, so those directives can't be locked down to an allowlist.
 
-The CSP allows **no third-party host at all**: the two webfonts and the favicon are embedded in `index.html` as `data:` URIs, so `font-src`/`img-src` need only `'self' data:`. The page therefore renders identically offline and on an isolated LAN.
+The CSP allows **no third-party host for the page's own assets**: the two webfonts and the favicon are embedded in `index.html` as `data:` URIs, so `font-src` needs only `'self' data:`. The page therefore renders identically offline and on an isolated LAN. `img-src` also allows `https:` for one thing only: the artwork of a station that came from the Radio-Browser directory, which is that station's own favicon, hosted by the station. Nothing on the page depends on it — without it, the Pip-Boy icon stays.
 
 ## Caching
 

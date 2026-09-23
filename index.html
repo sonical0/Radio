@@ -11,7 +11,7 @@
      blob: et data: dans media-src, blob: dans worker-src : hls.js attache un
      MediaSource a <audio> via un blob URL, demultiplexe dans un worker construit
      depuis un blob, et repasse par une URL data: au detachement. -->
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; font-src 'self' data:; img-src 'self' data:; connect-src 'self' https: http:; media-src 'self' blob: data: https: http:; worker-src 'self' blob:; object-src 'none'; base-uri 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; font-src 'self' data:; img-src 'self' data: https:; connect-src 'self' https: http:; media-src 'self' blob: data: https: http:; worker-src 'self' blob:; object-src 'none'; base-uri 'none'">
 <meta name="referrer" content="no-referrer-when-downgrade">
 <title>Fallout Radio</title>
 <script>
@@ -689,7 +689,9 @@
 <script>
 const API_BASE = 'https://stations.fallout.radio/api/nowplaying/';
 // Annuaire public : ~50 000 stations, sans clé d'API, en-tête CORS permissif.
-const RB_API = 'https://all.api.radio-browser.info/json/stations/search';
+const RB_BASE = 'https://all.api.radio-browser.info/json';
+const RB_API = RB_BASE + '/stations/search';
+const RB_UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const RB_LIMIT = 15;
 const DEFAULT_GROUP = 'DIVERS';
 
@@ -762,7 +764,12 @@ function normalizeStation(s, isCustom) {
     // doit pouvoir la rendre, et garder l'entrée en place évite de décaler les
     // index (`current`, les id DOM `st-N`) à chaque masquage.
     hidden: s.hidden === true,
-    isCustom: !!isCustom
+    isCustom: !!isCustom,
+    // Fiche Radio-Browser d'origine, quand la station en vient : l'identifiant
+    // sert à signaler les écoutes, le favicon de pochette. Tous deux saisis par
+    // n'importe qui sur l'annuaire, donc validés ici comme le reste.
+    uuid: RB_UUID_RE.test(s.uuid ?? '') ? s.uuid.toLowerCase() : null,
+    favicon: typeof s.favicon === 'string' && isSafeHttpUrl(s.favicon.trim()) ? s.favicon.trim() : null
   };
 }
 
@@ -774,6 +781,8 @@ function serializeStation(s) {
   // Écrit seulement quand il est vrai : un export ne contient que des stations
   // visibles, autant ne pas y traîner un `hidden: false` sur chaque entrée.
   if (s.hidden) out.hidden = true;
+  if (s.uuid) out.uuid = s.uuid;
+  if (s.favicon) out.favicon = s.favicon;
   return out;
 }
 
@@ -1578,6 +1587,63 @@ function applyPausedState(btnLabel, statusKey) {
 // ─── Media Session : touches média, écran de verrouillage, boutons de casque ───
 const ARTWORK_SRC = document.querySelector('link[rel="icon"]')?.href || '';
 
+// ─── Pochette : le favicon de la fiche Radio-Browser ───
+// Un flux n'a pas de pochette ; la station, souvent, a une image. L'application
+// cherche aussi l'og:image de la page d'accueil, mais un navigateur ne peut pas
+// la lire (CORS) : ici, seul le favicon enregistré par l'annuaire est à portée.
+// Beaucoup sont des .ico de 16 px, ou des liens morts : on ne remplace l'icône
+// Pip-Boy que par une image qui se charge vraiment et reste lisible en grand.
+const ARTWORK_MIN_PX = 64;
+// Par URL d'image : { src, size } une fois validée, null si refusée, une
+// promesse tant que le chargement court. Jamais persisté : un favicon peut
+// changer ou mourir, le prochain chargement de page le redemandera.
+const artworkCache = new Map();
+
+// Sur une page https, une image http serait du contenu mixte : on tente la même
+// adresse en https, que la plupart des hôtes servent aussi.
+function artworkCandidate(url) {
+  if (location.protocol === 'https:' && url.startsWith('http:')) return 'https:' + url.slice(5);
+  return url;
+}
+
+function probeArtwork(url) {
+  const src = artworkCandidate(url);
+  if (artworkCache.has(src)) return artworkCache.get(src);
+  const p = new Promise(resolve => {
+    const img = new Image();
+    // Pas de cookies ni de Referer vers l'hôte de la station.
+    img.referrerPolicy = 'no-referrer';
+    const done = v => { artworkCache.set(src, v); resolve(v); };
+    const t = setTimeout(() => done(null), 8000);
+    img.onload = () => {
+      clearTimeout(t);
+      const size = Math.min(img.naturalWidth, img.naturalHeight);
+      done(size >= ARTWORK_MIN_PX ? { src, size } : null);
+    };
+    img.onerror = () => { clearTimeout(t); done(null); };
+    img.src = src;
+  });
+  artworkCache.set(src, p);
+  return p;
+}
+
+/** La pochette de la station si elle est déjà validée, null sinon. */
+function stationArtwork(s) {
+  if (!s?.favicon) return null;
+  const v = artworkCache.get(artworkCandidate(s.favicon));
+  return v && !(v instanceof Promise) ? v : null;
+}
+
+// Lancée en même temps que le son, jamais avant : un hôte lent ne doit pas se
+// glisser entre l'appui et la musique. Quand l'image arrive, la session est
+// rafraîchie si la station est toujours celle qu'on écoute.
+function loadArtwork(s) {
+  if (!s?.favicon) return;
+  Promise.resolve(probeArtwork(s.favicon)).then(v => {
+    if (v && stations[current] === s) updateMediaSession();
+  });
+}
+
 function updateMediaSession() {
   if (!('mediaSession' in navigator)) return;
   const ms = navigator.mediaSession;
@@ -1588,12 +1654,19 @@ function updateMediaSession() {
   }
   const s = stations[current];
   const np = npFor(current);
+  // Seule, et non à côté de l'icône : proposées ensemble, le navigateur prend la
+  // plus grande taille annoncée — l'icône SVG de 512 px — et la pochette ne
+  // servirait jamais.
+  const art = stationArtwork(s);
+  const artwork = art
+    ? [{ src: art.src, sizes: art.size + 'x' + art.size }]
+    : ARTWORK_SRC ? [{ src: ARTWORK_SRC, sizes: '512x512', type: 'image/svg+xml' }] : [];
   try {
     ms.metadata = new MediaMetadata({
       title: np || s.name,
       artist: np ? s.name : s.group,
       album: 'Fallout Radio',
-      artwork: ARTWORK_SRC ? [{ src: ARTWORK_SRC, sizes: '512x512', type: 'image/svg+xml' }] : []
+      artwork
     });
   } catch {}
   ms.playbackState = audio.paused ? 'paused' : 'playing';
@@ -1669,6 +1742,7 @@ function playStation(idx) {
   // Une station hors du lot interrogé en boucle n'a jamais eu son titre : le
   // demander à la volée dès qu'on l'écoute.
   refreshOne(idx);
+  onStationStarted(stations[idx]);
   audio.play().catch((err) => {
     // Interrompu par le choix d'une autre station : ne pas effacer celle-ci.
     if (isAbort(err)) return;
@@ -1684,6 +1758,9 @@ function togglePlay() {
     // pendant la pause est déjà périmé.
     if (!attachStream(current)) return;
     applyPlayingState();
+    // Première lecture après une restauration : c'est ici, et non dans
+    // playStation(), que la station démarre. Les doublons s'arrêtent d'eux-mêmes.
+    onStationStarted(stations[current]);
     audio.play().catch(onPlayRejected);
   } else {
     clearReconnect();
@@ -2052,6 +2129,52 @@ async function searchDirectory() {
   list.forEach(r => box.appendChild(buildDirectoryRow(r)));
 }
 
+// Signaler l'écoute d'une station de l'annuaire : c'est le compteur qui classe
+// ses résultats par popularité — celui-là même qu'utilise rbQuery() — et
+// l'usage que Radio-Browser demande à ses clients. Une fois par station et par
+// chargement de page ; le serveur ne compte de toute façon qu'une écoute par
+// adresse IP et par jour.
+const rbReported = new Set();
+function reportListen(s) {
+  if (!s?.uuid || rbReported.has(s.uuid)) return;
+  rbReported.add(s.uuid);
+  fetch(RB_BASE + '/url/' + encodeURIComponent(s.uuid), { signal: AbortSignal.timeout(10000) })
+    .catch(() => {});
+}
+
+// Les stations ajoutées depuis l'annuaire avant qu'on en garde la fiche n'ont
+// ni identifiant ni favicon. On les retrouve par leur URL de flux, une fois par
+// station et par chargement de page, et seulement pour les stations custom :
+// les stations livrées ne viennent pas de l'annuaire.
+const rbLookedUp = new Set();
+async function backfillFromDirectory(s) {
+  if (!s?.isCustom || s.uuid || rbLookedUp.has(s.url)) return;
+  rbLookedUp.add(s.url);
+  try {
+    const r = await fetch(RB_BASE + '/stations/byurl?' + new URLSearchParams({ url: s.url }),
+      { signal: AbortSignal.timeout(10000) });
+    if (!r.ok) return;
+    const data = await r.json();
+    const hit = Array.isArray(data) ? data.find(x => RB_UUID_RE.test(x?.stationuuid ?? '')) : null;
+    if (!hit) return;
+    // Repassée par normalizeStation() : la fiche vient d'un annuaire ouvert en
+    // écriture, elle n'entre pas sans validation.
+    const n = normalizeStation({ ...serializeStation(s), uuid: hit.stationuuid, favicon: hit.favicon }, true);
+    s.uuid = n.uuid;
+    s.favicon = n.favicon;
+    saveCustomStations();
+    if (stations[current] === s) onStationStarted(s);
+  } catch {}
+}
+
+/** Ce qui accompagne le démarrage d'une station, sans jamais le retarder. */
+function onStationStarted(s) {
+  if (!s) return;
+  reportListen(s);
+  loadArtwork(s);
+  backfillFromDirectory(s);
+}
+
 async function rbQuery(params) {
   const qs = new URLSearchParams({
     ...params,
@@ -2128,7 +2251,10 @@ function buildDirectoryRow(r) {
     // pays fait un regroupement bien plus utile qu'un fourre-tout unique.
     const typed = document.getElementById('add-group').value.trim();
     const group = typed || (r.countrycode || '').toUpperCase() || DEFAULT_GROUP;
-    const ok = addToLibrary({ group, name: r.name.trim(), url, hls: isHlsUrl(url) });
+    const ok = addToLibrary({
+      group, name: r.name.trim(), url, hls: isHlsUrl(url),
+      uuid: r.stationuuid, favicon: r.favicon
+    });
     btn.disabled = true;
     btn.textContent = ok ? '✓' : '=';
     btn.setAttribute('aria-label', (ok ? 'Ajoutée : ' : 'Déjà présente : ') + r.name.trim());
