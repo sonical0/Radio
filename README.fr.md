@@ -192,7 +192,7 @@ fichier audio. Si une station se tait, elle s'est tue à la source.
 ## Données
 
 Pas de compte, pas d'analytics, pas de cookie, pas de serveur à moi. Tout ce que tu
-configures — stations, groupes, gains, couleur d'écran — et les titres passés restent dans le stockage local de ton
+configures — stations, groupes, gains, couleur d'écran —, les titres passés et le temps d'écoute de chaque station restent dans le stockage local de ton
 navigateur et n'est envoyé nulle part, à une exception près : l'adresse du flux d'une station
 que tu as ajoutée toi-même est cherchée une fois dans l'annuaire Radio-Browser quand tu
 l'écoutes, pour en trouver l'image. L'export est un fichier que tu télécharges toi-même.

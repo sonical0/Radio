@@ -599,6 +599,29 @@
   .history-note { color: var(--green-dim); font-size: 11px; opacity: 0.8; padding: 6px 2px 0; }
   .history-note:empty { display: none; }
 
+  /* STATISTIQUES D'ÉCOUTE */
+  .stats-totals { color: var(--green); font-size: 12px; margin: 8px 2px 10px; }
+  .stats-days {
+    display: flex; align-items: flex-end; gap: 2px; height: 48px;
+    padding: 0 2px; border-bottom: 1px solid var(--border);
+  }
+  .stats-bar { flex: 1; background: var(--green-dim); }
+  .stats-bar.today { background: var(--green); box-shadow: 0 0 6px rgba(var(--accent-rgb),0.5); }
+  .stats-axis {
+    display: flex; justify-content: space-between;
+    color: var(--green-dim); font-size: 10px; margin: 3px 2px 10px;
+  }
+  .stats-top { list-style: none; margin: 0; padding: 0; }
+  .stats-row {
+    display: grid; grid-template-columns: minmax(0, 1fr) 28% 58px; gap: 8px; align-items: center;
+    padding: 4px 2px; border-bottom: 1px solid var(--border); font-size: 12px;
+  }
+  .stats-name { color: var(--green-bright); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .stats-meter { height: 6px; background: rgba(var(--accent-rgb), 0.12); }
+  .stats-meter > span { display: block; height: 100%; background: var(--green); }
+  .stats-time { color: var(--green-dim); font-size: 11px; text-align: right; }
+  .stats-note { flex: 1; color: var(--green-dim); font-size: 11px; opacity: 0.8; }
+
   /* RECHERCHE DE STATIONS */
   .station-search { display: flex; gap: 8px; align-items: center; margin: 16px 20px 0; }
   .station-search .add-input { flex: 1; }
@@ -695,6 +718,19 @@
     </div>
     <ul class="history-list" id="history-list"></ul>
     <p class="history-note" id="history-note" role="status"></p>
+  </details>
+
+  <details class="history" id="stats" hidden>
+    <summary class="trash-summary" id="stats-summary"></summary>
+    <p class="stats-totals" id="stats-totals"></p>
+    <div class="stats-days" id="stats-days" role="img"></div>
+    <div class="stats-axis" aria-hidden="true"><span id="stats-first"></span><span>aujourd'hui</span></div>
+    <ol class="stats-top" id="stats-top"></ol>
+    <div class="history-tools">
+      <span class="stats-note">Compté seulement quand le son sort. Rien ne quitte ce navigateur.</span>
+      <button type="button" class="trash-btn danger" id="stats-clear"
+              onclick="onStatsClear()">✕ Effacer</button>
+    </div>
   </details>
 
   <div class="add-station-wrap">
@@ -2802,6 +2838,270 @@ function onHistoryClear() {
   }, 5000);
 }
 
+// ─── Statistiques d'écoute ───
+// Repris de kleeamp (écran STATS) : combien de temps chaque station a joué, jour
+// par jour, sur un mois glissant. Tout reste dans ce navigateur, comme
+// l'historique des titres ; rien n'est exporté ni envoyé.
+const STATS_KEY = 'listenStats';
+const STATS_DAYS = 31;
+// Un pas toutes les cinq secondes. Le temps compté est celui mesuré à l'horloge
+// entre deux pas, pas cinq secondes forfaitaires : un onglet en arrière-plan voit
+// ses minuteries ralenties, l'horloge, elle, ne ment pas.
+const STATS_TICK_MS = 5000;
+// Au-delà, l'écart vient d'une mise en veille de l'ordinateur, pendant laquelle
+// rien n'a joué : on n'en compte que ce plafond.
+const STATS_MAX_STEP_S = 65;
+const STATS_WRITE_DEBOUNCE_MS = 30000;
+const STATS_TOP_SHOWN = 8;
+const STATS_DAY_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+// days : { 'AAAA-MM-JJ': { url: secondes } } ; names : { url: nom }, le nom au
+// moment de l'écoute — une station renommée ou supprimée garde un passé lisible.
+// Objets sans prototype : les clés viennent du stockage.
+let listenStats = { days: Object.create(null), names: Object.create(null) };
+let statsLastTick = 0;
+let statsWriteTimer = null;
+let statsConfirming = false;
+let statsConfirmTimer = null;
+
+function dayKey(d) {
+  const p2 = n => String(n).padStart(2, '0');
+  return d.getFullYear() + '-' + p2(d.getMonth() + 1) + '-' + p2(d.getDate());
+}
+
+function statsCutoffKey() {
+  const d = new Date();
+  d.setDate(d.getDate() - (STATS_DAYS - 1));
+  return dayKey(d);
+}
+
+// Hors de la fenêtre de 31 jours : oublié. Et les noms que plus aucun jour ne
+// référence avec.
+function pruneStats() {
+  const cutoff = statsCutoffKey();
+  const used = new Set();
+  for (const day of Object.keys(listenStats.days)) {
+    // Les clés AAAA-MM-JJ se comparent comme des chaînes.
+    if (day < cutoff) { delete listenStats.days[day]; continue; }
+    for (const url of Object.keys(listenStats.days[day])) used.add(url);
+  }
+  for (const url of Object.keys(listenStats.names)) if (!used.has(url)) delete listenStats.names[url];
+}
+
+function loadStats() {
+  const days = Object.create(null);
+  const names = Object.create(null);
+  try {
+    const raw = JSON.parse(localStorage.getItem(STATS_KEY) || '{}');
+    if (raw && typeof raw.days === 'object' && raw.days) {
+      for (const [day, byUrl] of Object.entries(raw.days)) {
+        if (!STATS_DAY_RE.test(day) || !byUrl || typeof byUrl !== 'object') continue;
+        const clean = Object.create(null);
+        for (const [url, sec] of Object.entries(byUrl)) {
+          if (typeof url === 'string' && url.startsWith('http') && typeof sec === 'number' && isFinite(sec) && sec > 0) {
+            clean[url] = sec;
+          }
+        }
+        if (Object.keys(clean).length) days[day] = clean;
+      }
+    }
+    if (raw && typeof raw.names === 'object' && raw.names) {
+      for (const [url, name] of Object.entries(raw.names)) {
+        if (url.startsWith('http') && typeof name === 'string') names[url] = name;
+      }
+    }
+  } catch {}
+  listenStats = { days, names };
+  pruneStats();
+}
+
+function writeStats() {
+  pruneStats();
+  // Au dixième de seconde : assez pour que les arrondis ne s'accumulent pas
+  // d'une écriture à l'autre, sans gonfler le stockage.
+  const days = {};
+  for (const [day, byUrl] of Object.entries(listenStats.days)) {
+    days[day] = {};
+    for (const [url, sec] of Object.entries(byUrl)) days[day][url] = Math.round(sec * 10) / 10;
+  }
+  try { localStorage.setItem(STATS_KEY, JSON.stringify({ days, names: listenStats.names })); } catch {}
+}
+
+function persistStatsSoon() {
+  if (statsWriteTimer) return;
+  statsWriteTimer = setTimeout(() => { statsWriteTimer = null; writeStats(); }, STATS_WRITE_DEBOUNCE_MS);
+}
+
+function flushStats() {
+  if (!statsWriteTimer) return;
+  clearTimeout(statsWriteTimer);
+  statsWriteTimer = null;
+  writeStats();
+}
+
+// Le son sort vraiment : ni pause, ni tampon vide (readyState < 3 pendant un
+// 'waiting'), ni reconnexion en attente.
+function isAudible() {
+  return current >= 0 && !audio.paused && !reconnecting && audio.readyState >= 3;
+}
+
+// Ajoute le temps écoulé depuis le dernier point à la station courante.
+function statsAccount(now) {
+  const s = stations[current];
+  const step = Math.min((now - statsLastTick) / 1000, STATS_MAX_STEP_S);
+  if (!s || step <= 0) return;
+  const day = dayKey(new Date(now));
+  const byUrl = listenStats.days[day] || (listenStats.days[day] = Object.create(null));
+  byUrl[s.url] = (byUrl[s.url] || 0) + step;
+  listenStats.names[s.url] = s.name;
+  persistStatsSoon();
+  renderStats();
+}
+
+// Le pas régulier compte pendant la lecture ; les évènements de l'élément
+// bornent le chronomètre au plus près — sans eux, jusqu'à cinq secondes se
+// perdaient au début et à la fin de chaque écoute.
+function statsTick() {
+  const now = Date.now();
+  if (!isAudible()) { statsLastTick = 0; return; }
+  if (statsLastTick) statsAccount(now);
+  statsLastTick = now;
+}
+
+audio.addEventListener('playing', () => { statsLastTick = Date.now(); });
+// Le son s'arrête : on solde jusqu'à maintenant. À ce moment isAudible() est
+// déjà faux — la pause est posée — mais il jouait jusqu'ici.
+for (const ev of ['pause', 'waiting', 'emptied']) {
+  audio.addEventListener(ev, () => {
+    if (statsLastTick && current >= 0) statsAccount(Date.now());
+    statsLastTick = 0;
+  });
+}
+
+// « 45 s », « 12 min », « 3 h 05 ».
+function fmtListen(sec) {
+  if (sec < 60) return Math.round(sec) + ' s';
+  const min = Math.round(sec / 60);
+  if (min < 60) return min + ' min';
+  return Math.floor(min / 60) + ' h ' + String(min % 60).padStart(2, '0');
+}
+
+function statsDayTotal(day) {
+  const byUrl = listenStats.days[day];
+  if (!byUrl) return 0;
+  let t = 0;
+  for (const sec of Object.values(byUrl)) t += sec;
+  return t;
+}
+
+// Le nom d'aujourd'hui si la station est encore là, sinon celui de l'écoute.
+function statsStationName(url) {
+  return stations.find(s => s.url === url)?.name || listenStats.names[url] || url;
+}
+
+function renderStats() {
+  const det = document.getElementById('stats');
+  const hasData = Object.keys(listenStats.days).length > 0;
+  det.hidden = !hasData;
+  if (!hasData) { det.open = false; return; }
+
+  const today = new Date();
+  const todayKey = dayKey(today);
+  const sum = document.getElementById('stats-summary');
+  sum.textContent = '';
+  const dashL = document.createElement('span'); dashL.setAttribute('aria-hidden', 'true'); dashL.textContent = '── ';
+  const dashR = document.createElement('span'); dashR.setAttribute('aria-hidden', 'true'); dashR.textContent = ' ──';
+  sum.appendChild(dashL);
+  sum.appendChild(document.createTextNode("Temps d'écoute (aujourd'hui : " + fmtListen(statsDayTotal(todayKey)) + ')'));
+  sum.appendChild(dashR);
+  // Replié, seul le résumé change : il avance toutes les cinq secondes.
+  if (!det.open) return;
+
+  // Les 31 derniers jours, du plus ancien à aujourd'hui.
+  const days = [];
+  for (let i = STATS_DAYS - 1; i >= 0; i--) {
+    const d = new Date(today);
+    d.setDate(d.getDate() - i);
+    days.push({ key: dayKey(d), date: d, total: statsDayTotal(dayKey(d)) });
+  }
+  const week = days.slice(-7).reduce((t, d) => t + d.total, 0);
+  const month = days.reduce((t, d) => t + d.total, 0);
+  document.getElementById('stats-totals').textContent =
+    "Aujourd'hui " + fmtListen(days[days.length - 1].total) + ' · 7 jours ' + fmtListen(week) + ' · 31 jours ' + fmtListen(month);
+
+  const max = Math.max(...days.map(d => d.total));
+  const bars = document.getElementById('stats-days');
+  bars.textContent = '';
+  const fmtDate = d => d.toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' });
+  for (const d of days) {
+    const bar = document.createElement('div');
+    bar.className = 'stats-bar' + (d.key === todayKey ? ' today' : '');
+    // Un jour d'écoute, même court, reste visible : un pixel au moins.
+    bar.style.height = d.total ? Math.max(1, Math.round(d.total / max * 100)) + '%' : '0';
+    bar.title = fmtDate(d.date) + ' : ' + (d.total ? fmtListen(d.total) : 'rien');
+    bars.appendChild(bar);
+  }
+  const busiest = days.reduce((a, b) => (b.total > a.total ? b : a));
+  bars.setAttribute('aria-label', 'Écoute par jour sur 31 jours : ' + fmtListen(month) + ' au total'
+    + (busiest.total ? ', jour le plus chargé ' + fmtDate(busiest.date) + ' avec ' + fmtListen(busiest.total) : '') + '.');
+  document.getElementById('stats-first').textContent = days[0].date.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' });
+
+  // Les stations les plus écoutées sur la période.
+  const byStation = new Map();
+  for (const d of days) {
+    const byUrl = listenStats.days[d.key];
+    if (!byUrl) continue;
+    for (const [url, sec] of Object.entries(byUrl)) byStation.set(url, (byStation.get(url) || 0) + sec);
+  }
+  const top = [...byStation].sort((a, b) => b[1] - a[1]).slice(0, STATS_TOP_SHOWN);
+  const ol = document.getElementById('stats-top');
+  ol.textContent = '';
+  const best = top.length ? top[0][1] : 1;
+  // En DOM : les noms viennent de l'annuaire ou de la saisie.
+  for (const [url, sec] of top) {
+    const li = document.createElement('li');
+    li.className = 'stats-row';
+    const name = document.createElement('span');
+    name.className = 'stats-name';
+    name.textContent = statsStationName(url);
+    const meter = document.createElement('span');
+    meter.className = 'stats-meter';
+    meter.setAttribute('aria-hidden', 'true');
+    const fill = document.createElement('span');
+    fill.style.width = Math.max(2, Math.round(sec / best * 100)) + '%';
+    meter.appendChild(fill);
+    const time = document.createElement('span');
+    time.className = 'stats-time';
+    time.textContent = fmtListen(sec);
+    li.append(name, meter, time);
+    ol.appendChild(li);
+  }
+}
+
+// Même garde que l'historique : effacer se confirme.
+function onStatsClear() {
+  const btn = document.getElementById('stats-clear');
+  if (statsConfirming) {
+    clearTimeout(statsConfirmTimer);
+    statsConfirming = false;
+    btn.textContent = '✕ Effacer';
+    listenStats = { days: Object.create(null), names: Object.create(null) };
+    if (statsWriteTimer) { clearTimeout(statsWriteTimer); statsWriteTimer = null; }
+    writeStats();
+    renderStats();
+    return;
+  }
+  statsConfirming = true;
+  btn.textContent = '✓ Confirmer';
+  statsConfirmTimer = setTimeout(() => {
+    statsConfirming = false;
+    btn.textContent = '✕ Effacer';
+  }, 5000);
+}
+
+window.addEventListener('pagehide', flushStats);
+document.addEventListener('visibilitychange', () => { if (document.hidden) flushStats(); });
+
 // ─── Export / import des stations custom ───
 // Le fichier est au format v2 depuis que l'application y a mis les réveils :
 // { version, stations, alarms } au lieu du simple tableau de stations. L'import
@@ -3099,6 +3399,7 @@ document.addEventListener('keydown', e => {
 
   // Replié, le volet ne rend pas ses lignes : les construire en l'ouvrant.
   document.getElementById('history').addEventListener('toggle', renderHistory);
+  document.getElementById('stats').addEventListener('toggle', renderStats);
 
   const historyQ = document.getElementById('history-q');
   historyQ.addEventListener('input', () => { historyQuery = historyQ.value; renderHistory(); });
@@ -3117,6 +3418,9 @@ document.addEventListener('keydown', e => {
 
   loadHistory();
   renderHistory();
+  loadStats();
+  renderStats();
+  setInterval(statsTick, STATS_TICK_MS);
   buildStationList();
   restoreLastStation();
   updateSleepBtn();

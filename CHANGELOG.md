@@ -9,6 +9,35 @@ Ordre : **entrée la plus récente en tête**. Plusieurs passes le même jour so
 suffixées `(2)`, `(3)`… la plus haute étant la plus récente (même convention que
 `TANDEM_LOG.md`).
 
+## 2026-09-23 (5) — site, le temps d'écoute
+
+Repris de l'écran STATS de [kleeamp](https://github.com/cliamp/kleeamp).
+
+### Ajouté
+- **Un volet « Temps d'écoute »** sous l'historique des titres, sur le même patron : replié, il
+  n'affiche que le total du jour. Ouvert : totaux du jour, de 7 et de 31 jours ; un
+  histogramme des 31 derniers jours (aujourd'hui en surbrillance, chaque barre donne sa date et
+  sa durée au survol, un résumé pour les lecteurs d'écran) ; les huit stations les plus
+  écoutées sur la période.
+- **Compté seulement quand le son sort** : ni en pause, ni pendant un tampon vide, ni pendant
+  une reconnexion. Le temps est mesuré à l'horloge et non au nombre de pas, parce qu'un onglet
+  en arrière-plan voit ses minuteries ralenties ; un écart de plus de 65 s (ordinateur mis en
+  veille) est plafonné.
+- Stocké dans ce navigateur seulement (`listenStats`), sur 31 jours glissants, et **pas dans
+  l'export** : c'est l'historique du navigateur, pas une partie de la bibliothèque. Le nom de la
+  station est gardé au moment de l'écoute, pour qu'une station supprimée reste lisible.
+  Effacement en deux temps, comme l'historique.
+
+### Vérifié
+- Edge sans interface piloté par `puppeteer-core`, avec 31 jours d'historique fictif : entrée
+  hors fenêtre et date invalide écartées au chargement ; environ 16 s de lecture réelle
+  comptées 15,5 s, rien pendant 11 s de pause ; volet rendu (31 barres, trois stations dont une
+  supprimée) à 700 et 360 px sans débordement ; écriture différée vidée ; effacement en deux
+  appuis ; aucune erreur de script.
+- La mesure a trouvé un défaut, corrigé : comptées au seul pas de 5 s, ces 16 s n'en faisaient
+  que 10 — la seconde de départ et la fin avant la pause se perdaient. Les évènements `playing`,
+  `pause` et `waiting` de l'élément bornent désormais le chronomètre.
+
 ## 2026-09-23 (4) — site, la pochette aussi dans la page
 
 ### Ajouté

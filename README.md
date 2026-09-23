@@ -182,7 +182,7 @@ audio file. When a station falls silent, it fell silent at the source.
 ## Data
 
 No account, no analytics, no cookie, no server of mine. Everything you set up — stations,
-groups, gains, screen colour — and the titles that went past stay in your browser's local storage and are never sent
+groups, gains, screen colour — the titles that went past and how long you listened to each station stay in your browser's local storage and are never sent
 anywhere, with one exception: a station you added yourself has its stream address looked up
 once in the Radio-Browser directory when you play it, to find its image. The export is a file
 you download yourself. Four third parties do see your IP address while you use the page: the
