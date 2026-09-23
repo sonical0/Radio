@@ -673,6 +673,10 @@
     padding: 1px 5px; margin: 0 1px;
     color: var(--green);
   }
+  /* Un écran tactile sans souris n'a pas de clavier sous la main : la légende y
+     occupait de la place pour des touches qu'on ne peut pas presser. Même choix
+     que l'application, qui ne l'affiche que sur la cible web. */
+  @media (hover: none) and (pointer: coarse) { .shortcuts { display: none; } }
   .ctrl-btn.armed { border-color: var(--green); color: var(--green-bright); }
 
   ::-webkit-scrollbar { width: 4px; }
