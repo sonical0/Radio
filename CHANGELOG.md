@@ -9,6 +9,40 @@ Ordre : **entrée la plus récente en tête**. Plusieurs passes le même jour so
 suffixées `(2)`, `(3)`… la plus haute étant la plus récente (même convention que
 `TANDEM_LOG.md`).
 
+## 2026-09-23 — site, une reconnexion qui ne renonce plus au premier tunnel
+
+Même politique que l'application le même jour (branche `react-native/dev`).
+
+### Modifié
+- **Les essais s'espacent au lieu de s'arrêter après trois** : 1, 2, 4, 8, 15 s, puis toutes
+  les 30 s tant que l'utilisateur n'a pas arrêté. Le statut de la station numérote l'essai
+  (« ⚠ RECONNEXION… 4 ») pour qu'une attente longue ne passe pas pour un gel.
+- **La nature de l'erreur décide du nombre d'essais** (`retryBudget()`). Réseau ou inconnue :
+  sans fin. `source` (404, mais aussi 502 passager) : trois. Décodeur en panne ou lecture
+  refusée par le navigateur : aucun. Les erreurs fatales de hls.js sont typées de même.
+- **Hors ligne, tout compte comme réseau.** Un flux injoignable s'y signale en code 4, comme un
+  format illisible : sans cette règle, une coupure réseau aurait épuisé le budget `source` et
+  abandonné au bout de trois essais.
+- Une même coupure remonte souvent deux fois (rejet de `play()`, puis `error` de l'élément) :
+  tant qu'un essai est en attente, le verdict le plus sévère l'emporte.
+- **Chien de garde de 20 s sur le tampon** : un flux qui garde la connexion ouverte sans plus
+  rien livrer reste en `waiting` sans erreur ; il est désormais relancé.
+- **Essai immédiat au retour du réseau** (évènement `online`), au lieu d'attendre la fin d'un
+  délai qui peut atteindre 30 s.
+
+### Corrigé
+- **Changer de station avant que la précédente ait démarré effaçait la nouvelle.** Le rejet
+  `AbortError` du premier `play()`, interrompu par le second chargement, passait pour une panne :
+  la nouvelle station jouait, mais l'écran affichait « <ancienne> — UNAVAILABLE » et plus rien
+  n'était sélectionné. Reproduit 3 fois sur 3 sur la version précédente, 0 sur 3 après.
+
+### Vérifié
+- Chromium, page servie en local, pannes simulées en remplaçant l'URL d'une station en cours
+  de lecture : `source` en ligne → trois essais (1, 2, 4 s) puis « FLUX INTERROMPU » ; hors
+  ligne → essais sans abandon, puis reprise 0,7 s après `online` au lieu d'attendre 8 s ;
+  `currentTime` figé en `waiting` → reconnexion à 20 s, lecture reprise 2 s plus tard ;
+  changement rapide de station, comparé à la version précédente.
+
 ## 2026-09-22 — le site rattrape l'application
 
 L'application a pris trois versions d'avance en trois jours (v1.2.0 à v1.4.0). Ce qui, de

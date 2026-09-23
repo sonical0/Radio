@@ -945,7 +945,11 @@ function attachStream(idx) {
     hls = new Hls({ enableWorker: true, backBufferLength: 30 });
     // hls.js gère seul les erreurs non fatales (trou de segment, 404 ponctuel) ;
     // seul le fatal rejoint la logique de reconnexion commune.
-    hls.on(Hls.Events.ERROR, (_e, data) => { if (data.fatal) handleStreamDrop(); });
+    hls.on(Hls.Events.ERROR, (_e, data) => {
+      if (!data.fatal) return;
+      handleStreamDrop(data.type === Hls.ErrorTypes.NETWORK_ERROR ? 'network'
+        : data.type === Hls.ErrorTypes.MEDIA_ERROR ? 'renderer' : 'source');
+    });
     hls.loadSource(s.url);
     hls.attachMedia(audio);
   } else if (s.hls && !canPlayHlsNatively()) {
@@ -958,48 +962,122 @@ function attachStream(idx) {
 }
 
 // ─── Détection flux mort / reconnexion ───
+// Une radio coupée par le réseau finit presque toujours par revenir : trois
+// essais à deux secondes d'écart s'épuisaient bien avant la fin d'une vraie
+// coupure. On espace les essais, puis on continue toutes les 30 s sans renoncer
+// tant que l'utilisateur n'a pas arrêté. Même politique que l'application.
+const RECONNECT_BACKOFF_MS = [1000, 2000, 4000, 8000, 15000];
+const RECONNECT_STEADY_MS = 30000;
+// `source` couvre un 404 mais aussi un 502 passager : quelques essais, pas plus.
+const MAX_SOURCE_RETRIES = 3;
+// Tampon qui ne se vide jamais : la connexion reste ouverte, plus rien n'arrive,
+// et aucun évènement d'erreur ne le signale.
+const BUFFER_WATCHDOG_MS = 20000;
+
 let reconnectTimer = null;
 let reconnectAttempts = 0;
+// Vrai tant qu'une tentative est programmée, faux dès qu'elle part.
 let reconnecting = false;
+let reconnectBudget = Infinity;
 let stallTimer = null;
-const MAX_RECONNECT_ATTEMPTS = 3;
+let bufferTimer = null;
 
 function clearReconnect() {
   clearTimeout(reconnectTimer);
   clearTimeout(stallTimer);
+  clearTimeout(bufferTimer);
   stallTimer = null;
+  bufferTimer = null;
   reconnecting = false;
   reconnectAttempts = 0;
 }
 
-function handleStreamDrop() {
-  if (current < 0 || reconnecting) return;
-  reconnecting = true;
-  setStationStatus(current, 'reconnect');
+/** Combien d'essais mérite une erreur de cette nature (Infinity = sans fin). */
+function retryBudget(kind) {
+  // Hors ligne, le navigateur signale un flux injoignable comme un format
+  // illisible (code 4) : ce n'est pas la station qui est en cause.
+  if (navigator.onLine === false) return Infinity;
+  if (kind === 'network' || kind === 'unknown') return Infinity;
+  if (kind === 'source') return MAX_SOURCE_RETRIES;
+  return 0; // décodeur en panne, lecture refusée : réessayer n'y changera rien
+}
+
+function mediaErrorKind() {
+  const code = audio.error?.code;
+  return code === 2 ? 'network' : code === 3 ? 'renderer' : code === 4 ? 'source' : 'unknown';
+}
+
+// Un rejet de play() n'est pas toujours une panne : AbortError signale seulement
+// qu'un nouveau chargement l'a interrompu — changer de station avant que la
+// précédente ait démarré suffit à le provoquer.
+function isAbort(err) {
+  return err?.name === 'AbortError';
+}
+
+function onPlayRejected(err) {
+  if (isAbort(err)) return;
+  handleStreamDrop(err?.name === 'NotAllowedError' ? 'not-allowed' : 'unknown');
+}
+
+function giveUp() {
+  const name = stations[current]?.name || '';
+  clearReconnect();
+  setUI(-1);
+  document.getElementById('np-station').textContent = name.toUpperCase() + ' — FLUX INTERROMPU';
+}
+
+function attemptReconnect() {
+  reconnecting = false;
+  if (current < 0) return;
+  if (!attachStream(current)) return;
+  audio.play().catch(onPlayRejected);
+}
+
+function handleStreamDrop(kind = 'unknown') {
+  if (current < 0) return;
+  const budget = retryBudget(kind);
+  if (reconnecting) {
+    // Une même coupure remonte souvent deux fois (rejet de play(), puis
+    // l'évènement 'error' de l'élément, plus précis) : on garde le verdict le
+    // plus sévère. Après un abandon, setUI(-1) remet current à -1 et les
+    // doublons tardifs s'arrêtent au premier test.
+    reconnectBudget = Math.min(reconnectBudget, budget);
+    if (reconnectAttempts > reconnectBudget) giveUp();
+    return;
+  }
+  reconnectBudget = budget;
+  clearTimeout(stallTimer);
+  clearTimeout(bufferTimer);
+  stallTimer = null;
+  bufferTimer = null;
   document.getElementById('progress-bar').className = 'progress-bar';
   stopVis();
 
-  if (reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) {
-    const name = stations[current]?.name || '';
-    clearReconnect();
-    setUI(-1);
-    document.getElementById('np-station').textContent = name.toUpperCase() + ' — FLUX INTERROMPU';
-    return;
-  }
+  if (reconnectAttempts >= budget) { giveUp(); return; }
 
+  reconnecting = true;
   reconnectAttempts++;
-  reconnectTimer = setTimeout(() => {
-    reconnecting = false;
-    if (current < 0) return;
-    if (!attachStream(current)) return;
-    audio.play().catch(handleStreamDrop);
-  }, 2000);
+  setStationStatus(current, 'reconnect', reconnectAttempts);
+  const delay = RECONNECT_BACKOFF_MS[reconnectAttempts - 1] ?? RECONNECT_STEADY_MS;
+  reconnectTimer = setTimeout(attemptReconnect, delay);
 }
 
-// 'error' est définitif → reconnexion immédiate. 'stalled' ne l'est pas : il se
+// Le réseau revient : inutile d'attendre la fin d'un délai de 30 s.
+window.addEventListener('online', () => {
+  if (!reconnecting) return;
+  clearTimeout(reconnectTimer);
+  attemptReconnect();
+});
+
+// 'error' est définitif → reconnexion. 'stalled' ne l'est pas : il se
 // déclenche sur une simple lenteur réseau, donc on laisse un délai de grâce et on
 // ne reconnecte que si la lecture n'a pas repris d'elle-même entre-temps.
-audio.addEventListener('error', handleStreamDrop);
+audio.addEventListener('error', () => {
+  // Détacher le flux vide l'attribut src, et load() lève alors un 'error' sans
+  // objet : ce n'est pas une coupure.
+  if (!audio.getAttribute('src') && !hls) return;
+  handleStreamDrop(mediaErrorKind());
+});
 audio.addEventListener('stalled', () => {
   if (current < 0 || reconnecting || stallTimer) return;
   const t0 = audio.currentTime;
@@ -1007,22 +1085,31 @@ audio.addEventListener('stalled', () => {
     stallTimer = null;
     if (current < 0 || reconnecting || audio.paused) return;
     if (audio.currentTime > t0) return; // le flux est reparti tout seul
-    handleStreamDrop();
+    handleStreamDrop('network');
   }, STALL_GRACE_MS);
 });
 // Remise en mémoire tampon : le flux n'est pas mort, mais laisser le visualiseur
-// s'agiter pendant un silence est trompeur.
+// s'agiter pendant un silence est trompeur. Pendant une reconnexion, le tampon
+// est la tentative elle-même : le libellé reste « reconnexion ».
 audio.addEventListener('waiting', () => {
   if (current < 0 || audio.paused || reconnecting) return;
-  setStationStatus(current, 'buffering');
+  if (reconnectAttempts) setStationStatus(current, 'reconnect', reconnectAttempts);
+  else setStationStatus(current, 'buffering');
   document.getElementById('progress-bar').className = 'progress-bar';
   stopVis();
+  if (bufferTimer) return;
+  const t0 = audio.currentTime;
+  bufferTimer = setTimeout(() => {
+    bufferTimer = null;
+    if (current < 0 || reconnecting || audio.paused) return;
+    if (audio.currentTime > t0) return;
+    handleStreamDrop('network');
+  }, BUFFER_WATCHDOG_MS);
 });
 audio.addEventListener('playing', () => {
-  reconnectAttempts = 0;
-  reconnecting = false;
-  clearTimeout(stallTimer);
-  stallTimer = null;
+  // Le flux est reparti : compteur à zéro, sinon des coupures espacées dans la
+  // journée allongeraient les délais de la suivante.
+  clearReconnect();
   applyPlayingState();
 });
 
@@ -1172,7 +1259,9 @@ const STATION_STATUS = {
 // renderStatus() prend l'élément, setStationStatus() le résout par id. La liste
 // est peuplée avant d'être attachée au document : un getElementById y renverrait
 // null et les statuts initiaux ne seraient jamais rendus.
-function renderStatus(el, key) {
+// `attempt` numérote la reconnexion à partir du deuxième essai : sans fin, elle
+// doit montrer qu'elle avance, pour qu'une longue attente ne passe pas pour un gel.
+function renderStatus(el, key, attempt) {
   const entry = STATION_STATUS[key];
   if (!el || !entry) return;
   el.textContent = '';
@@ -1180,11 +1269,11 @@ function renderStatus(el, key) {
   sym.setAttribute('aria-hidden', 'true');
   sym.textContent = entry[0] + ' ';
   el.appendChild(sym);
-  el.appendChild(document.createTextNode(entry[1]));
+  el.appendChild(document.createTextNode(entry[1] + (attempt > 1 ? ' ' + attempt : '')));
 }
 
-function setStationStatus(idx, key) {
-  renderStatus(document.getElementById('sst-' + idx), key);
+function setStationStatus(idx, key, attempt) {
+  renderStatus(document.getElementById('sst-' + idx), key, attempt);
 }
 
 // aria-pressed vit sur le bouton, pas sur le <li>.
@@ -1580,7 +1669,9 @@ function playStation(idx) {
   // Une station hors du lot interrogé en boucle n'a jamais eu son titre : le
   // demander à la volée dès qu'on l'écoute.
   refreshOne(idx);
-  audio.play().catch(() => {
+  audio.play().catch((err) => {
+    // Interrompu par le choix d'une autre station : ne pas effacer celle-ci.
+    if (isAbort(err)) return;
     setUI(-1);
     document.getElementById('np-station').textContent = stations[idx].name.toUpperCase() + ' — UNAVAILABLE';
   });
@@ -1593,7 +1684,7 @@ function togglePlay() {
     // pendant la pause est déjà périmé.
     if (!attachStream(current)) return;
     applyPlayingState();
-    audio.play().catch(handleStreamDrop);
+    audio.play().catch(onPlayRejected);
   } else {
     clearReconnect();
     audio.pause();
