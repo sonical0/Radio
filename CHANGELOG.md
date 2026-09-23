@@ -9,6 +9,24 @@ Ordre : **entrée la plus récente en tête**. Plusieurs passes le même jour so
 suffixées `(2)`, `(3)`… la plus haute étant la plus récente (même convention que
 `TANDEM_LOG.md`).
 
+## 2026-09-23 (4) — site, la pochette aussi dans la page
+
+### Ajouté
+- La pochette validée pour la Media Session s'affiche aussi **à côté du nom de la station**,
+  sur une plaque carrée de 52 px. Elle n'apparaissait que dans les contrôles média du système.
+- **Repassée à la couleur de l'écran** : une image en couleurs jurerait au milieu d'un Pip-Boy
+  monochrome. Niveaux de gris, puis la teinte d'accent en `multiply` : les clairs prennent la
+  couleur de l'écran, les sombres virent au noir. Le fond de plaque est teinté lui aussi, pour
+  qu'un logo sombre sur fond transparent ne se perde pas dans le noir. Image entière dans la
+  plaque (`contain`) : beaucoup sont des bandeaux, qu'un recadrage carré couperait.
+- Seulement pour la station sélectionnée. Afficher celles de toute la liste ferait contacter
+  l'hôte de chaque station sans qu'on l'écoute.
+
+### Vérifié
+- Edge sans interface piloté par `puppeteer-core` : captures du bloc dans les quatre couleurs
+  d'écran, plaque cachée pour une station sans image, réaffichée aussitôt au retour sur une
+  station déjà validée, cachée à l'arrêt ; aucun débordement à 360 px, aucune erreur de script.
+
 ## 2026-09-23 (3) — site, parcourir l'annuaire par pays et par genre
 
 Chercher suppose de savoir quoi taper. Repris de [cliamp](https://github.com/bjarneo/cliamp)
