@@ -820,9 +820,10 @@
     <p class="add-hint" id="add-meta-hint">Pour le titre en cours : AzuraCast <code>/api/nowplaying/…</code> ou Icecast <code>/status-json.xsl</code>. Vide, elle est déduite de l'URL quand c'est possible.</p>
     <div class="add-row" style="margin-top:8px;">
       <button class="add-btn" onclick="exportStations()">⇩ EXPORTER MES STATIONS</button>
-      <button class="add-btn" onclick="document.getElementById('import-file').click()">⇧ IMPORTER</button>
-      <input type="file" id="import-file" accept="application/json" style="display:none" onchange="importStations(this.files[0])">
+      <button class="add-btn" onclick="document.getElementById('import-file').click()" aria-describedby="import-hint">⇧ IMPORTER</button>
+      <input type="file" id="import-file" accept="application/json,.json,.m3u,.m3u8,.pls,audio/x-mpegurl,audio/x-scpls" style="display:none" onchange="importStations(this.files[0])">
     </div>
+    <p class="add-hint" id="import-hint">Une sauvegarde de cette page ou de l'application, ou une playlist <code>.m3u</code> / <code>.pls</code> d'un autre lecteur (VLC, Winamp…).</p>
     <div class="add-msg" id="add-msg" aria-live="polite"></div>
     </details>
 
@@ -3246,12 +3247,172 @@ function exportStations() {
   setTimeout(() => { msg.textContent = ''; msg.className = 'add-msg'; }, 3000);
 }
 
+// ─── Import de playlists M3U / PLS ───
+// Ce qu'exportent VLC, Winamp, foobar2000, cliamp — et Radio-Browser lui-même :
+// une liste d'adresses de flux, avec un nom par entrée. De quoi faire venir d'un
+// coup les stations d'un autre lecteur, en plus de la sauvegarde JSON de la page.
+// Au-delà, c'est une liste IPTV entière, pas une bibliothèque de radios.
+const PLAYLIST_MAX_ENTRIES = 200;
+const PLAYLIST_NAME_MAX = 120;
+
+function playlistKind(name, text) {
+  const head = text.replace(/^﻿/, '').trimStart();
+  if (/^\[playlist\]/i.test(head)) return 'pls';
+  if (/^#EXT(M3U|INF)/i.test(head)) return 'm3u';
+  // Sans en-tête, l'extension départage : une M3U simple n'est qu'une liste
+  // d'adresses, qu'aucun autre indice ne distingue.
+  if (/\.pls$/i.test(name)) return 'pls';
+  if (/\.m3u8?$/i.test(name)) return 'm3u';
+  return null;
+}
+
+// « #EXTINF:-1 tvg-logo="…" group-title="…",Nom » : la durée, des attributs entre
+// guillemets, puis le nom après la première virgule hors guillemets.
+function parseExtinf(line) {
+  const body = line.slice(line.indexOf(':') + 1);
+  let quoted = false;
+  let comma = -1;
+  for (let i = 0; i < body.length; i++) {
+    if (body[i] === '"') quoted = !quoted;
+    else if (body[i] === ',' && !quoted) { comma = i; break; }
+  }
+  const attrsPart = comma < 0 ? body : body.slice(0, comma);
+  const attrs = {};
+  for (const m of attrsPart.matchAll(/([\w-]+)="([^"]*)"/g)) attrs[m[1].toLowerCase()] = m[2];
+  return {
+    name: comma < 0 ? '' : body.slice(comma + 1).trim(),
+    group: attrs['group-title'] || '',
+    logo: attrs['tvg-logo'] || ''
+  };
+}
+
+function parseM3U(text) {
+  const entries = [];
+  let pending = null;
+  let extgrp = '';
+  for (const raw of text.replace(/^﻿/, '').split(/\r?\n/)) {
+    const line = raw.trim();
+    if (!line) continue;
+    if (/^#EXTINF:/i.test(line)) { pending = parseExtinf(line); continue; }
+    // VLC range le groupe sur sa propre ligne.
+    if (/^#EXTGRP:/i.test(line)) { extgrp = line.slice(8).trim(); continue; }
+    if (line.startsWith('#')) continue;
+    entries.push({
+      url: line,
+      name: pending?.name || '',
+      group: pending?.group || extgrp,
+      favicon: pending?.logo || ''
+    });
+    pending = null;
+  }
+  return entries;
+}
+
+// PLS : FileN=, TitleN=, groupés par numéro — l'ordre des lignes n'est pas garanti.
+function parsePLS(text) {
+  const byN = new Map();
+  for (const raw of text.split(/\r?\n/)) {
+    const m = raw.trim().match(/^(File|Title)(\d+)=(.*)$/i);
+    if (!m) continue;
+    const n = +m[2];
+    if (!byN.has(n)) byN.set(n, { url: '', name: '', group: '', favicon: '' });
+    byN.get(n)[m[1].toLowerCase() === 'file' ? 'url' : 'name'] = m[3].trim();
+  }
+  return [...byN.entries()].sort((a, b) => a[0] - b[0]).map(e => e[1]).filter(e => e.url);
+}
+
+// Sans nom dans la playlist, l'hôte du flux vaut mieux qu'une adresse entière.
+function fallbackStationName(url) {
+  try { return new URL(url).hostname.replace(/^www\./, ''); } catch { return url; }
+}
+
+// « Mes radios.m3u » → « Mes radios » : un lot importé reste regroupé, et
+// retrouvable sous le nom qu'on lui avait donné.
+function groupFromFileName(name) {
+  const base = String(name || '').replace(/\.[^.]+$/, '').trim().slice(0, 24);
+  return base || DEFAULT_GROUP;
+}
+
+async function importPlaylist(fileName, text, kind) {
+  const msg = document.getElementById('add-msg');
+  const say = (t, cls) => { msg.textContent = t; msg.className = 'add-msg' + (cls ? ' ' + cls : ''); };
+  // Un master HLS commence lui aussi par #EXTM3U, mais c'est un flux découpé en
+  // segments, pas une liste de stations : l'importer créerait des « stations »
+  // de dix secondes.
+  if (kind === 'm3u' && /#EXT-X-/i.test(text)) {
+    say('⚠ Ce fichier est un flux HLS, pas une liste de stations : ajoute son adresse avec le formulaire.', 'err');
+    return;
+  }
+  let entries = kind === 'pls' ? parsePLS(text) : parseM3U(text);
+  if (!entries.length) { say('⚠ Aucune station reconnue dans ce fichier.', 'err'); return; }
+  const truncated = entries.length > PLAYLIST_MAX_ENTRIES ? entries.length : 0;
+  entries = entries.slice(0, PLAYLIST_MAX_ENTRIES);
+
+  const fileGroup = groupFromFileName(fileName);
+  const existing = new Set(stations.map(s => s.url));
+  let added = 0, dup = 0, refused = 0, unverified = 0;
+  for (let i = 0; i < entries.length; i++) {
+    const e = entries[i];
+    // Même garde que la saisie : une playlist venue d'ailleurs ne doit pas faire
+    // pointer le lecteur vers le réseau local.
+    if (!isSafeHttpUrl(e.url)) { refused++; continue; }
+    let url = e.url;
+    let hls = isHlsUrl(url);
+    // Une entrée qui est elle-même une playlist (.pls, .m3u) serait muette dans
+    // <audio> : on la résout comme le formulaire d'ajout.
+    if (/\.(pls|m3u)(\?|#|$)/i.test(url)) {
+      say('⟳ Résolution des flux… ' + (i + 1) + '/' + entries.length);
+      const r = await resolveStreamUrl(url);
+      if (r.blocked) { refused++; continue; }
+      // Non résolue (CORS, réseau) : gardée telle quelle, comme le fait le
+      // formulaire, mais dite — elle risque d'être muette.
+      if (!r.verified) unverified++;
+      url = r.url;
+      hls = !!r.hls || isHlsUrl(url);
+    }
+    if (existing.has(url)) { dup++; continue; }
+    existing.add(url);
+    stations.push(normalizeStation({
+      group: e.group || fileGroup,
+      name: (e.name || fallbackStationName(url)).slice(0, PLAYLIST_NAME_MAX),
+      url,
+      hls,
+      favicon: e.favicon || null
+    }, true));
+    added++;
+  }
+  if (added) {
+    saveCustomStations();
+    buildStationList();
+    refreshNowPlaying();
+  }
+  const bits = [];
+  if (dup) bits.push(dup + ' déjà présente(s)');
+  if (refused) bits.push(refused + ' refusée(s) — adresse locale ou invalide');
+  if (unverified) bits.push(unverified + ' playlist(s) imbriquée(s) non vérifiée(s), à tester');
+  if (truncated) bits.push('seules les ' + PLAYLIST_MAX_ENTRIES + ' premières sur ' + truncated + ' ont été lues');
+  say((added ? '✓ ' + added + ' station(s) importée(s) de « ' + fileName + ' »' : '⚠ Aucune nouvelle station')
+    + (bits.length ? ' · ' + bits.join(' · ') : '') + '.', added ? 'ok' : 'err');
+}
+
 async function importStations(file) {
   const msg = document.getElementById('add-msg');
   const fileInput = document.getElementById('import-file');
   if (!file) return;
   try {
     const text = await file.text();
+    // Une playlist d'un autre lecteur passe par le même bouton : c'est le contenu
+    // qui décide, l'extension ne sert qu'à départager.
+    const kind = playlistKind(file.name, text);
+    if (kind) {
+      await importPlaylist(file.name, text, kind);
+      // Le reste de la fonction est sauté : le champ doit être vidé ici, sinon
+      // réimporter le même fichier ne déclencherait plus rien. Bilan plus long
+      // que celui d'une sauvegarde, il reste le double.
+      fileInput.value = '';
+      setTimeout(() => { msg.textContent = ''; msg.className = 'add-msg'; }, 6000);
+      return;
+    }
     const data = JSON.parse(text);
     let list;
     let alarms = [];
