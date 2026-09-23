@@ -3396,6 +3396,9 @@ function applyTheme(id) {
     const on = btn.dataset.theme === id;
     btn.setAttribute('aria-checked', on ? 'true' : 'false');
     btn.querySelector('.theme-check').textContent = on ? '✓' : '';
+    // Un seul arrêt de Tab pour tout le groupe, sur l'option cochée : les
+    // flèches font le reste (modèle ARIA des boutons radio).
+    btn.tabIndex = on ? 0 : -1;
   }
 }
 
@@ -3446,6 +3449,19 @@ function buildThemeOptions() {
     box.appendChild(btn);
   }
   updateCustomSwatch();
+  // Flèches : l'option voisine est cochée et prend le focus, en bouclant ;
+  // Début/Fin vont aux extrémités.
+  box.addEventListener('keydown', e => {
+    const opts = [...box.querySelectorAll('.theme-option')];
+    const at = opts.indexOf(document.activeElement);
+    if (at < 0) return;
+    const to = { ArrowDown: at + 1, ArrowRight: at + 1, ArrowUp: at - 1, ArrowLeft: at - 1, Home: 0, End: opts.length - 1 }[e.key];
+    if (to === undefined) return;
+    e.preventDefault();
+    const next = opts[(to + opts.length) % opts.length];
+    applyTheme(next.dataset.theme);
+    next.focus();
+  });
 }
 
 const themeOverlay = document.getElementById('theme-overlay');
