@@ -35,10 +35,18 @@ export async function resolveStreamUrl(url: string): Promise<Resolved> {
     const r = await fetchWithTimeout(url);
     if (!r.ok) return { url, verified: false, hls: isHlsUrl(lower) };
     const ct = (r.headers.get('content-type') || '').toLowerCase();
-    // HLS d'abord : un master .m3u8 est servi en audio/x-mpegurl, donc le test
-    // « ça commence par audio/ » ci-dessous le prendrait pour un flux direct.
-    if (ct.includes('mpegurl') || isHlsUrl(lower)) return { url, verified: true, hls: true };
-    if (ct.startsWith('audio/') || ct.startsWith('video/')) return { url, verified: true };
+    // Les playlists se servent sous un type audio/ : `audio/x-scpls` pour une
+    // PLS, `audio/x-mpegurl` pour une M3U — ou pour un HLS. Elles se lisent
+    // donc avant qu'on décide. Faute de quoi une PLS passait pour un flux
+    // direct (SomaFM : la station était créée muette), et toute M3U pour du
+    // HLS, que le lecteur ne sait pas lire. Un flux audio réel, lui, ne se lit
+    // jamais : il ne finit pas. Si un serveur en sert un sous un type de
+    // playlist, le délai de six secondes coupe et l'URL est gardée telle quelle.
+    const playlistType = ct.includes('scpls') || ct.includes('mpegurl');
+    if (!playlistType) {
+      if (isHlsUrl(lower)) return { url, verified: true, hls: true };
+      if (ct.startsWith('audio/') || ct.startsWith('video/')) return { url, verified: true };
+    }
     text = await r.text();
   } catch {
     // Timeout, réseau, ou CORS sur la cible web : on tente l'URL telle quelle.
