@@ -12,20 +12,32 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState, t
 import { StyleSheet } from 'react-native';
 
 import { setAlarmPalette } from '../../modules/alarm';
-import { KEY_THEME, readString, writeString } from '../store/storage';
+import { KEY_THEME, KEY_THEME_HUE, readString, writeString } from '../store/storage';
+import {
+  CUSTOM_HUE_DEFAULT,
+  CUSTOM_PALETTE_ID,
+  paletteFromHue,
+  sanitizeHue,
+  type Palette,
+} from './palette';
 
-export type Palette = {
-  id: string;
-  label: string;
-  base: string;
-  dim: string;
-  bright: string;
-  bg: string;
-  bg2: string;
-  bg3: string;
-  border: string;
-  red: string;
-};
+export type { Palette } from './palette';
+export {
+  CUSTOM_HUE_DEFAULT,
+  CUSTOM_PALETTE_ID,
+  paletteFromHue,
+  sanitizeHue,
+} from './palette';
+
+/**
+ * La même couleur, à l'opacité demandée. Le site écrit `rgba(var(--accent-rgb),
+ * 0.22)` ; ici les palettes sont en hexadécimal, et React Native accepte le
+ * `#rrggbbaa` sur les deux cibles.
+ */
+export function withAlpha(hex: string, alpha: number): string {
+  const a = Math.round(Math.max(0, Math.min(1, alpha)) * 255);
+  return hex + a.toString(16).padStart(2, '0');
+}
 
 export const PALETTES: Palette[] = [
   {
@@ -160,6 +172,10 @@ type ThemeValue = {
   p: Palette;
   t: ReturnType<typeof makeShared>;
   setPalette: (id: string) => void;
+  /** La teinte de l'écran LIBRE, et son réglage. */
+  hue: number;
+  previewHue: (h: number) => void;
+  commitHue: (h: number) => void;
 };
 
 const fallback = PALETTES[0];
@@ -167,14 +183,23 @@ const ThemeContext = createContext<ThemeValue>({
   p: fallback,
   t: makeShared(fallback),
   setPalette: () => {},
+  hue: CUSTOM_HUE_DEFAULT,
+  previewHue: () => {},
+  commitHue: () => {},
 });
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
   const [id, setId] = useState(fallback.id);
+  const [hue, setHue] = useState(CUSTOM_HUE_DEFAULT);
 
   useEffect(() => {
     readString(KEY_THEME).then((saved) => {
-      if (saved && PALETTES.some((x) => x.id === saved)) setId(saved);
+      if (saved === CUSTOM_PALETTE_ID || (saved && PALETTES.some((x) => x.id === saved))) {
+        setId(saved);
+      }
+    });
+    readString(KEY_THEME_HUE).then((saved) => {
+      if (saved != null) setHue(sanitizeHue(saved));
     });
   }, []);
 
@@ -183,10 +208,23 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     void writeString(KEY_THEME, next);
   }, []);
 
+  /** Pendant le geste : la page se recolore, rien n'est écrit. */
+  const previewHue = useCallback((h: number) => setHue(sanitizeHue(h)), []);
+
+  /** Au relâchement du curseur : c'est là seulement qu'on persiste. */
+  const commitHue = useCallback((h: number) => {
+    const v = sanitizeHue(h);
+    setHue(v);
+    void writeString(KEY_THEME_HUE, String(v));
+  }, []);
+
   const value = useMemo(() => {
-    const p = PALETTES.find((x) => x.id === id) ?? fallback;
-    return { p, t: makeShared(p), setPalette };
-  }, [id, setPalette]);
+    const p =
+      id === CUSTOM_PALETTE_ID
+        ? paletteFromHue(hue)
+        : (PALETTES.find((x) => x.id === id) ?? fallback);
+    return { p, t: makeShared(p), setPalette, hue, previewHue, commitHue };
+  }, [id, hue, setPalette, previewHue, commitHue]);
 
   // L'écran de réveil est une fenêtre native, posée alors que le runtime JS
   // dort : il ne peut pas lire ce contexte. On lui dépose les couleurs à

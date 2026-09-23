@@ -30,12 +30,24 @@ export async function exportJson(json: string): Promise<string> {
   return file.uri;
 }
 
-/** Renvoie le contenu du fichier choisi, ou null si l'utilisateur annule. */
-export async function pickJson(): Promise<string | null> {
+/** Un fichier choisi : son nom sert à départager M3U et PLS, et à grouper le lot. */
+export type PickedFile = { name: string; text: string };
+
+/**
+ * Le sélecteur n'est plus restreint au JSON : le même bouton accepte une
+ * playlist d'un autre lecteur. Les M3U et PLS arrivent sous des types très
+ * variables selon l'application qui les a écrites (`audio/x-mpegurl`,
+ * `audio/x-scpls`, souvent `application/octet-stream`) — un filtre par type les
+ * aurait rendues invisibles dans le sélecteur. C'est le contenu qui décide
+ * ensuite, et un fichier qui n'est ni l'un ni l'autre est refusé avec un
+ * message.
+ */
+export async function pickFile(): Promise<PickedFile | null> {
   const res = await DocumentPicker.getDocumentAsync({
-    type: 'application/json',
+    type: '*/*',
     copyToCacheDirectory: true,
   });
   if (res.canceled || !res.assets?.length) return null;
-  return new File(res.assets[0].uri).text();
+  const asset = res.assets[0];
+  return { name: asset.name ?? '', text: await new File(asset.uri).text() };
 }

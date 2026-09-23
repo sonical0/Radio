@@ -31,6 +31,7 @@ import { useKeyboardShortcuts } from './src/player/useKeyboardShortcuts';
 import { usePlayback } from './src/player/usePlayback';
 import { useAlarms } from './src/store/useAlarms';
 import { useHistory } from './src/store/useHistory';
+import { useListenStats } from './src/store/useListenStats';
 import { groupStations, knownGroups } from './src/store/library';
 import { useLibrary } from './src/store/useLibrary';
 import { AddStation } from './src/ui/AddStation';
@@ -39,6 +40,7 @@ import { Clock } from './src/ui/Clock';
 import { Crt } from './src/ui/Crt';
 import { Directory } from './src/ui/Directory';
 import { History } from './src/ui/History';
+import { ListenStats } from './src/ui/ListenStats';
 import { NowPlaying } from './src/ui/NowPlaying';
 import { StationRow } from './src/ui/StationRow';
 import { Trash } from './src/ui/Trash';
@@ -86,9 +88,12 @@ function Radio() {
     return () => { show.remove(); hide.remove(); };
   }, []);
   const lib = useLibrary();
-  const play = usePlayback(lib.stations);
+  const play = usePlayback(lib.stations, lib.attachCard);
   const { titles, refreshOne } = useNowPlaying(lib.stations, play.currentUrl);
   const history = useHistory(lib.stations, titles);
+  // Le son sort vraiment : ni pause, ni tampon vide, ni reconnexion en attente.
+  // `streamState` porte déjà ces trois cas, il n'y a rien à redériver.
+  const stats = useListenStats(play.current, play.playing && play.streamState === 'playing');
   const [fontsLoaded] = useFonts(FONTS);
   const updates = useUpdateCheck();
   const alarms = useAlarms();
@@ -153,7 +158,7 @@ function Radio() {
   // les alarmes sans rien dire.
   const onExport = useCallback(() => lib.exportStations(alarms.alarms), [alarms.alarms, lib]);
   const onImport = useCallback(
-    () =>
+    (onProgress: (m: string) => void) =>
       lib.importStations((raw) => {
         const list = raw.filter(
           (a): a is Alarm =>
@@ -163,7 +168,7 @@ function Radio() {
         // parce qu'il a restauré une sauvegarde la veille au soir.
         for (const a of list) alarms.save({ ...a, enabled: false });
         return list.length;
-      }),
+      }, onProgress),
     [alarms, lib],
   );
 
@@ -251,6 +256,7 @@ function Radio() {
 
         <NowPlaying
           station={play.current}
+          artwork={play.artwork}
           title={play.current ? (titles[play.current.url] ?? null) : null}
           playing={play.playing}
           streamState={play.streamState}
@@ -332,6 +338,8 @@ function Radio() {
                 />
                 <Directory onAdd={lib.addStation} onFieldFocus={onFieldFocus} />
                 <History entries={history.entries} onClear={history.clear} />
+
+        <ListenStats stats={stats.stats} stations={lib.stations} onClear={stats.clear} />
                 {/* Les raccourcis n existent que sur la cible web : ne pas les
                     annoncer sur un téléphone, qui n a pas de clavier. */}
                 {Platform.OS === 'web' ? (

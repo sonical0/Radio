@@ -97,6 +97,22 @@ export function playStation(s: Station, master: number, queue: Station[]): void 
   TrackPlayer.play();
 }
 
+/**
+ * Pose la pochette sur une piste de la file, sans interrompre la lecture.
+ *
+ * Elle n'est posée que sur la station écoutée, et seulement une fois l'image
+ * validée : la file contient toute la bibliothèque, et sonder chaque favicon
+ * ferait contacter l'hôte de chaque station sans qu'on l'écoute. La station
+ * retrouve son index par `mediaId`, l'URL du flux — l'index de la file peut
+ * avoir bougé depuis le sondage.
+ */
+export function setStationArtwork(url: string, artworkUrl: string): void {
+  ensure();
+  const i = TrackPlayer.getQueue().findIndex((x) => x.mediaId === url);
+  if (i < 0) return;
+  TrackPlayer.updateMetadata(i, { artworkUrl });
+}
+
 /** Zapper dans la file, sans la reconstruire. */
 export function skipNext(): void {
   ensure();

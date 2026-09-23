@@ -10,12 +10,19 @@ export const KEY_BUILTIN_PREFS = 'builtinStationPrefs';
 export const KEY_LAST_STATION = 'lastStationUrl';
 export const KEY_VOLUME = 'radioVolume';
 export const KEY_THEME = 'themePalette';
+/** La teinte de l'écran LIBRE, en degrés. Le site range un objet ; ici un entier suffit. */
+export const KEY_THEME_HUE = 'themeCustomHue';
 /** Dernière vérification de release : date, version vue, lien, version écartée. */
 export const KEY_UPDATE = 'updateCheck';
 /** Les alarmes du réveil. Le natif en tient sa propre copie, qu'on lui pousse. */
 export const KEY_ALARMS = 'alarms';
 /** Les titres passés, plafonnés : voir useHistory. */
 export const KEY_HISTORY = 'titleHistory';
+/** Le temps d'écoute par jour et par station, sur 31 jours glissants. Hors export. */
+export const KEY_LISTEN_STATS = 'listenStats';
+/** Tri des résultats d'annuaire, et pays épinglés du parcours. Mêmes clés que le site. */
+export const KEY_RB_ORDER = 'rbOrder';
+export const KEY_RB_PINNED = 'rbPinnedCountries';
 
 /**
  * Toute lecture peut échouer (stockage plein, mode privé, données corrompues

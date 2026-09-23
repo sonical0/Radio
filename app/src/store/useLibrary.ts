@@ -1,10 +1,22 @@
 // L'état de la bibliothèque et les gestes qu'on lui applique. Tout ce qui
 // touche au stockage passe par ici ; l'interface ne connaît que ces actions.
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
-import { exportJson, pickJson } from '../io/transfer';
 import {
+  fallbackStationName,
+  groupFromFileName,
+  isHlsManifest,
+  isNestedPlaylist,
+  parsePlaylist,
+  playlistKind,
+  PLAYLIST_MAX_ENTRIES,
+  PLAYLIST_NAME_MAX,
+  type PlaylistKind,
+} from '../io/playlist';
+import { exportJson, pickFile } from '../io/transfer';
+import {
+  isHlsUrl,
   isSafeHttpUrl,
   isValidStation,
   normalizeStation,
@@ -20,6 +32,10 @@ export type Outcome = { ok: boolean; message: string };
 export function useLibrary() {
   const [stations, setStations] = useState<Station[]>([]);
   const [loading, setLoading] = useState(true);
+  // L'import de playlist résout des flux un par un : sa boucle est longue, et
+  // `stations` y serait figé à la valeur du rendu qui l'a lancée.
+  const stationsRef = useRef(stations);
+  stationsRef.current = stations;
 
   useEffect(() => {
     loadLibrary().then((list) => {
@@ -83,7 +99,14 @@ export function useLibrary() {
    * d'entrer dans la bibliothèque.
    */
   const addStation = useCallback(
-    async (raw: { name: string; group: string; url: string; metaUrl?: string }): Promise<Outcome> => {
+    async (raw: {
+      name: string;
+      group: string;
+      url: string;
+      metaUrl?: string;
+      uuid?: string | null;
+      favicon?: string | null;
+    }): Promise<Outcome> => {
       const name = raw.name.trim();
       const url = raw.url.trim();
       // Le groupe est facultatif : une station sans groupe atterrit dans DIVERS
@@ -110,6 +133,10 @@ export function useLibrary() {
         meta: metaUrl
           ? { type: /status-json\.xsl/i.test(metaUrl) ? 'icecast' : 'azuracast', url: metaUrl }
           : undefined,
+        // Revalidés par normalizeStation() : ce qui arrive ici vient de
+        // l'annuaire, jamais d'une saisie de confiance.
+        uuid: raw.uuid ?? undefined,
+        favicon: raw.favicon ?? undefined,
       };
       if (!isValidStation(entry)) return { ok: false, message: '⚠ Station invalide.' };
 
@@ -168,15 +195,95 @@ export function useLibrary() {
     [stations],
   );
 
+  /**
+   * Import d'une playlist M3U ou PLS d'un autre lecteur. Chaque adresse passe
+   * par la même garde d'hôte que le formulaire ; une entrée qui est elle-même
+   * une playlist est résolue comme lui, et comptée à part si elle ne l'a pas pu.
+   */
+  const importPlaylist = useCallback(
+    async (fileName: string, text: string, kind: PlaylistKind, onProgress?: (m: string) => void): Promise<Outcome> => {
+      if (isHlsManifest(kind, text)) {
+        return {
+          ok: false,
+          message: "⚠ Ce fichier est un flux HLS, pas une liste de stations : ajoute son adresse avec le formulaire.",
+        };
+      }
+      const all = parsePlaylist(kind, text);
+      if (!all.length) return { ok: false, message: '⚠ Aucune station reconnue dans ce fichier.' };
+      const truncated = all.length > PLAYLIST_MAX_ENTRIES ? all.length : 0;
+      const entries = all.slice(0, PLAYLIST_MAX_ENTRIES);
+
+      const fileGroup = groupFromFileName(fileName);
+      // La résolution est asynchrone : on travaille sur une copie de la liste
+      // telle qu'elle est au départ, et on n'écrit qu'à la fin, en une passe.
+      const existing = new Set(stationsRef.current.map((x) => x.url));
+      const fresh: RawStation[] = [];
+      let dup = 0;
+      let refused = 0;
+      let unverified = 0;
+
+      for (let i = 0; i < entries.length; i++) {
+        const e = entries[i];
+        if (!isSafeHttpUrl(e.url)) { refused++; continue; }
+        let url = e.url;
+        let hls = isHlsUrl(url);
+        if (isNestedPlaylist(url)) {
+          onProgress?.(`⟳ Résolution des flux… ${i + 1}/${entries.length}`);
+          const r = await resolveStreamUrl(url);
+          if (r.blocked) { refused++; continue; }
+          // Non résolue (réseau, hôte muet) : gardée telle quelle comme le fait
+          // le formulaire, mais dite — elle risque d'être muette.
+          if (!r.verified) unverified++;
+          url = r.url;
+          hls = !!r.hls || isHlsUrl(url);
+        }
+        if (existing.has(url)) { dup++; continue; }
+        existing.add(url);
+        fresh.push({
+          group: e.group || fileGroup,
+          name: (e.name || fallbackStationName(url)).slice(0, PLAYLIST_NAME_MAX),
+          url,
+          hls,
+          favicon: e.favicon || undefined,
+        });
+      }
+
+      const added = fresh.length;
+      if (added) {
+        setStations((prev) => {
+          const next = [...prev, ...fresh.map((x: RawStation) => normalizeStation(x, true))];
+          void saveCustomStations(next);
+          return next;
+        });
+      }
+      const bits: string[] = [];
+      if (dup) bits.push(`${dup} déjà présente(s)`);
+      if (refused) bits.push(`${refused} refusée(s) — adresse locale ou invalide`);
+      if (unverified) bits.push(`${unverified} playlist(s) imbriquée(s) non vérifiée(s), à tester`);
+      if (truncated) bits.push(`seules les ${PLAYLIST_MAX_ENTRIES} premières sur ${truncated} ont été lues`);
+      const head = added
+        ? `✓ ${added} station(s) importée(s) de « ${fileName} »`
+        : '⚠ Aucune nouvelle station';
+      return { ok: added > 0, message: head + (bits.length ? ' · ' + bits.join(' · ') : '') + '.' };
+    },
+    [],
+  );
+
   const importStations = useCallback(
-    async (onAlarms?: (alarms: unknown[]) => number): Promise<Outcome> => {
-    let text: string | null;
+    async (onAlarms?: (alarms: unknown[]) => number, onProgress?: (m: string) => void): Promise<Outcome> => {
+    let picked: { name: string; text: string } | null;
     try {
-      text = await pickJson();
+      picked = await pickFile();
     } catch {
       return { ok: false, message: "⚠ Lecture du fichier impossible." };
     }
-    if (text == null) return { ok: true, message: '' };
+    if (picked == null) return { ok: true, message: '' };
+    const text = picked.text;
+
+    // Une playlist d'un autre lecteur passe par le même bouton : c'est le
+    // contenu qui décide, l'extension ne sert qu'à départager.
+    const kind = playlistKind(picked.name, text);
+    if (kind) return importPlaylist(picked.name, text, kind, onProgress);
 
     let list: RawStation[];
     let importedAlarms = 0;
@@ -235,11 +342,23 @@ export function useLibrary() {
       : importedAlarms
         ? { ok: true, message: `✓ ${importedAlarms} réveil(s) importé(s), stations déjà présentes.` }
         : { ok: false, message: '⚠ Aucune nouvelle station (déjà présentes).' };
-  }, []);
+  }, [importPlaylist]);
+
+  /**
+   * Pose sur une station la fiche que l'annuaire vient de rendre. Passe par
+   * `update`, donc la liste est persistée dans le bon des deux stockages.
+   */
+  const attachCard = useCallback(
+    (url: string, card: { uuid: string | null; favicon: string | null }) => {
+      update(url, card);
+    },
+    [update],
+  );
 
   return {
     stations,
     loading,
+    attachCard,
     previewGain,
     commitGain,
     hide,

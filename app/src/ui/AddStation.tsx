@@ -2,13 +2,14 @@ import { useMemo, useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import type { Outcome } from '../store/useLibrary';
-import { type Palette, useTheme } from './theme';
+import { FONT_BODY, type Palette, useTheme } from './theme';
 
 type Props = {
   groups: string[];
   onAdd: (raw: { name: string; group: string; url: string; metaUrl?: string }) => Promise<Outcome>;
   onExport: () => Promise<Outcome>;
-  onImport: () => Promise<Outcome>;
+  /** Reçoit de quoi dire où en est une playlist longue, résolue entrée par entrée. */
+  onImport: (onProgress: (m: string) => void) => Promise<Outcome>;
   onFieldFocus: () => void;
 };
 
@@ -114,14 +115,20 @@ export function AddStation({ groups, onAdd, onExport, onImport, onFieldFocus }: 
           <Pressable
             style={t.btn}
             disabled={busy}
-            onPress={() => run(onImport)}
+            onPress={() =>
+              run(() => onImport((m) => setMsg({ ok: true, message: m })))
+            }
             accessibilityRole="button"
             onFocus={onFieldFocus}
-          accessibilityLabel="Importer des stations">
+          accessibilityLabel="Importer une sauvegarde ou une playlist">
             <Text style={[t.btnText, busy && t.btnOff]}>⇧ IMPORTER</Text>
           </Pressable>
           {busy ? <ActivityIndicator color={p.base} /> : null}
         </View>
+
+        {/* Le bouton accepte deux choses, et rien ne le dirait sinon : une
+            sauvegarde de l'appli, ou la playlist d'un autre lecteur. */}
+        <Text style={s.hint}>IMPORTER accepte une sauvegarde .json ou une playlist .m3u / .pls.</Text>
 
         {/* Le message est une région vivante : l'ajout est asynchrone (la playlist
             est résolue avant), donc le résultat arrive après le geste. */}
@@ -141,4 +148,5 @@ const makeStyles = (p: Palette) =>
   wrap: { borderTopWidth: 1, borderTopColor: p.border, marginTop: 12 },
   body: { paddingHorizontal: 16, paddingTop: 8 },
   actions: { flexDirection: 'row', gap: 8, alignItems: 'center', marginTop: 2, marginBottom: 6 },
+  hint: { color: p.dim, fontFamily: FONT_BODY, fontSize: 10, marginBottom: 4 },
 });

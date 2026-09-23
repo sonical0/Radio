@@ -1,8 +1,17 @@
 import { useMemo } from 'react';
+import Slider from '@react-native-community/slider';
 import { Linking, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { CURRENT_VERSION, type Release } from '../net/updates';
-import { FONT_BODY, FONT_DISPLAY, PALETTES, useTheme, type Palette } from './theme';
+import {
+  CUSTOM_PALETTE_ID,
+  FONT_BODY,
+  FONT_DISPLAY,
+  PALETTES,
+  paletteFromHue,
+  useTheme,
+  type Palette,
+} from './theme';
 
 /**
  * Le choix de la couleur d'écran, comme sur un Pip-Boy. Chaque option est
@@ -22,7 +31,7 @@ export function Settings({
   checking: boolean;
   onCheckUpdate: () => void;
 }) {
-  const { p, t, setPalette } = useTheme();
+  const { p, t, setPalette, hue, previewHue, commitHue } = useTheme();
   const s = useMemo(() => makeStyles(p), [p]);
 
   return (
@@ -34,7 +43,7 @@ export function Settings({
           <Text style={s.title}>── RÉGLAGES ──</Text>
           <Text style={s.label}>COULEUR D'ÉCRAN</Text>
 
-          {PALETTES.map((option) => {
+          {[...PALETTES, paletteFromHue(hue)].map((option) => {
             const current = option.id === p.id;
             return (
               <Pressable
@@ -50,6 +59,29 @@ export function Settings({
               </Pressable>
             );
           })}
+
+          {/* Le curseur n'apparaît que sous LIBRE : hors de ce choix il ne
+              réglerait rien de visible. L'écran se recolore pendant le geste,
+              le choix s'écrit quand on lâche. */}
+          {p.id === CUSTOM_PALETTE_ID ? (
+            <View style={s.hueRow}>
+              <Text style={s.hueLabel}>TEINTE</Text>
+              <Slider
+                style={s.hueSlider}
+                minimumValue={0}
+                maximumValue={359}
+                step={1}
+                value={hue}
+                minimumTrackTintColor={p.dim}
+                maximumTrackTintColor={p.border}
+                thumbTintColor={p.base}
+                onValueChange={previewHue}
+                onSlidingComplete={commitHue}
+                accessibilityLabel="Teinte de l'écran"
+              />
+              <Text style={s.hueValue}>{hue}°</Text>
+            </View>
+          ) : null}
 
           <Text style={s.label}>RÉVEIL</Text>
           {/* Le réveil vit sur l'horloge de chevet : le dire ici, sinon
@@ -142,7 +174,11 @@ const makeStyles = (p: Palette) =>
     swatch: { width: 14, height: 14, borderRadius: 7, borderWidth: 1 },
     version: { flexDirection: 'row', alignItems: 'center', gap: 10 },
     versionText: { flex: 1, color: p.dim, fontFamily: FONT_BODY, fontSize: 12 },
-    hint: { color: p.dim, fontFamily: FONT_BODY, fontSize: 12 },
+    hueRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 6 },
+  hueLabel: { color: p.dim, fontFamily: FONT_DISPLAY, fontSize: 15, letterSpacing: 2 },
+  hueSlider: { flex: 1, height: 36 },
+  hueValue: { color: p.dim, fontFamily: FONT_BODY, fontSize: 11, minWidth: 36, textAlign: 'right' },
+  hint: { color: p.dim, fontFamily: FONT_BODY, fontSize: 12 },
     optionLabel: { flex: 1, fontFamily: FONT_DISPLAY, fontSize: 18, letterSpacing: 2, lineHeight: 22 },
     check: { fontFamily: FONT_BODY, fontSize: 14 },
     close: { alignSelf: 'flex-end', marginTop: 8 },

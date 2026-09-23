@@ -6,6 +6,8 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { AppState, Platform } from 'react-native';
 
 import type { Station } from '../model/station';
+import { loadArtwork, stationArtwork } from '../net/artwork';
+import { backfillFromDirectory, reportListen, type DirectoryCard } from '../net/rbStation';
 import {
   KEY_LAST_STATION,
   KEY_VOLUME,
@@ -18,6 +20,7 @@ import {
   setSleepTimer,
   setVolume,
   skipNext,
+  setStationArtwork,
   skipPrevious,
   stop as stopNative,
   togglePlay as togglePlayNative,
@@ -61,7 +64,11 @@ function backoffDelay(attempt: number): number {
   return BACKOFF_MS[attempt - 1] ?? STEADY_MS;
 }
 
-export function usePlayback(stations: Station[]) {
+/**
+ * `onCard` reçoit la fiche d'annuaire retrouvée pour une station qui n'en avait
+ * pas : c'est la bibliothèque qui la pose et la persiste, pas la lecture.
+ */
+export function usePlayback(stations: Station[], onCard?: (url: string, card: DirectoryCard) => void) {
   const playing = useIsPlaying();
   const [currentUrl, setCurrentUrl] = useState<string | null>(null);
   const [master, setMaster] = useState(DEFAULT_VOLUME);
@@ -69,6 +76,9 @@ export function usePlayback(stations: Station[]) {
   const [streamState, setStreamState] = useState<StreamState>('idle');
   const [sleepStep, setSleepStep] = useState(0);
   const [sleepLeft, setSleepLeft] = useState<number | null>(null);
+  // La pochette validée de la station écoutée, pour la plaque de la page. Null
+  // tant qu'aucune n'est validée : l'écran n'affiche rien plutôt qu'un cadre vide.
+  const [artwork, setArtwork] = useState<string | null>(null);
 
   const stationsRef = useRef(stations);
   stationsRef.current = stations;
@@ -239,6 +249,34 @@ export function usePlayback(stations: Station[]) {
     reload();
   }, [reload]);
 
+  const cardRef = useRef(onCard);
+  cardRef.current = onCard;
+
+  /**
+   * Ce qui accompagne le démarrage d'une station, sans jamais le retarder : on
+   * signale l'écoute à l'annuaire, on sonde la pochette, et on rattrape la
+   * fiche des stations ajoutées avant qu'on en garde une. Les trois sont
+   * silencieux en cas d'échec — aucun n'est nécessaire à la lecture.
+   */
+  const onStationStarted = useCallback((s: Station) => {
+    reportListen(s);
+    // Un sondage peut aboutir après un changement de station : la pochette
+    // n'est posée que si celle qu'on écoute est toujours la sienne.
+    const show = (src: string) => {
+      setStationArtwork(s.url, src);
+      if (currentRef.current === s.url) setArtwork(src);
+    };
+    setArtwork(stationArtwork(s)?.src ?? null);
+    loadArtwork(s, (art) => show(art.src));
+    void backfillFromDirectory(s).then((card) => {
+      if (!card?.uuid) return;
+      cardRef.current?.(s.url, card);
+      // La station de l'état a changé, mais celle qu'on tient est l'ancienne :
+      // on sonde la pochette avec la fiche qui vient d'arriver.
+      if (card.favicon) loadArtwork({ ...s, ...card }, (art) => show(art.src));
+    });
+  }, []);
+
   const select = useCallback(
     (s: Station) => {
       clearReconnect();
@@ -256,9 +294,10 @@ export function usePlayback(stations: Station[]) {
       // choix — la reconstruire à chaud relancerait le flux en cours.
       playNative(s, muted ? 0 : master, visibleRef.current);
       loadedUrl.current = s.url;
+      onStationStarted(s);
       void writeString(KEY_LAST_STATION, s.url);
     },
-    [clearReconnect, master, muted, playing],
+    [clearReconnect, master, muted, onStationStarted, playing],
   );
 
   const stop = useCallback(() => {
@@ -267,6 +306,7 @@ export function usePlayback(stations: Station[]) {
     loadedUrl.current = null;
     stopNative();
     setCurrentUrl(null);
+    setArtwork(null);
     setStreamState('idle');
   }, [clearReconnect]);
 
@@ -285,11 +325,12 @@ export function usePlayback(stations: Station[]) {
       wantPlay.current = true;
       playNative(s, muted ? 0 : master, visibleRef.current);
       loadedUrl.current = url;
+      onStationStarted(s);
       return;
     }
     wantPlay.current = !playing;
     togglePlayNative(playing, stationsRef.current.find((x) => x.url === currentRef.current)?.boost ?? 0);
-  }, [clearReconnect, master, muted, playing]);
+  }, [clearReconnect, master, muted, onStationStarted, playing]);
 
   /**
    * Zapper, c'est déplacer l'index dans la file du lecteur — pas recharger une
@@ -398,6 +439,10 @@ export function usePlayback(stations: Station[]) {
         // tourne. Application tuée, le zapping natif garde le gain de la
         // station précédente : ExoPlayer n'a qu'un volume, pas un par piste.
         setVolume(s, muted ? 0 : master);
+        // Le zapping natif n'est pas passé par select() : c'est ici que la
+        // station commence, y compris quand l'ordre vient de la notification,
+        // du casque ou du widget.
+        onStationStarted(s);
         void writeString(KEY_LAST_STATION, url);
       }),
       TrackPlayer.addEventListener(Event.SleepTimerTriggered, () => {
@@ -406,7 +451,7 @@ export function usePlayback(stations: Station[]) {
       }),
     ];
     return () => subs.forEach((s) => s.remove());
-  }, [clearReconnect, clearStall, scheduleReconnect, step]);
+  }, [clearReconnect, clearStall, onStationStarted, scheduleReconnect, step]);
 
   // Sans module réseau natif, le téléphone n'annonce pas le retour du signal ;
   // rouvrir l'appli en est le meilleur indice. Le navigateur, lui, le dit.
@@ -427,6 +472,7 @@ export function usePlayback(stations: Station[]) {
   return {
     current,
     currentUrl,
+    artwork,
     playing,
     streamState,
     reconnectAttempt,

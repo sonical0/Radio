@@ -9,6 +9,13 @@ export const API_BASE = 'https://stations.fallout.radio/api/nowplaying/';
 export const DEFAULT_GROUP = 'DIVERS';
 export const GAIN_MIN = 0.1;
 
+/**
+ * Un `stationuuid` de Radio-Browser. Validé comme le reste : la fiche vient
+ * d'un annuaire ouvert en écriture, et cet identifiant part ensuite dans une
+ * URL de compteur d'écoutes.
+ */
+export const RB_UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 export type MetaType = 'azuracast' | 'icecast' | 'shoutcast';
 export type MetaSource = { type: MetaType; url: string };
 
@@ -27,6 +34,13 @@ export type Station = {
   boost: number;
   hidden: boolean;
   isCustom: boolean;
+  /**
+   * Fiche Radio-Browser d'origine, quand la station en vient : l'identifiant
+   * sert à signaler les écoutes, le favicon de pochette. Null pour les stations
+   * livrées et pour tout ce qui a été saisi à la main.
+   */
+  uuid: string | null;
+  favicon: string | null;
 };
 
 /** Ce qui entre : stations.json, un export, le localStorage d'un navigateur. */
@@ -41,6 +55,8 @@ export type RawStation = {
   gain?: unknown;
   boost?: unknown;
   hidden?: unknown;
+  uuid?: unknown;
+  favicon?: unknown;
 };
 
 export function isValidStation(s: unknown): s is RawStation {
@@ -153,5 +169,19 @@ export function normalizeStation(s: RawStation, isCustom: boolean): Station {
     boost: sanitizeBoost(s.boost),
     hidden: s.hidden === true,
     isCustom,
+    uuid: sanitizeUuid(s.uuid),
+    favicon: sanitizeFavicon(s.favicon),
   };
+}
+
+/** Rien d'autre qu'un UUID en minuscules n'entre : le reste vaut absence. */
+export function sanitizeUuid(v: unknown): string | null {
+  return typeof v === 'string' && RB_UUID_RE.test(v) ? v.toLowerCase() : null;
+}
+
+/** Même garde d'hôte que les flux : une pochette est une requête sortante. */
+export function sanitizeFavicon(v: unknown): string | null {
+  if (typeof v !== 'string') return null;
+  const u = v.trim();
+  return u && isSafeHttpUrl(u) ? u : null;
 }

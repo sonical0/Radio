@@ -31,6 +31,10 @@ export function serializeStation(s: Station) {
   // Seulement quand il est vrai : un export ne contient que des stations
   // visibles, autant ne pas y traîner un `hidden: false` sur chaque entrée.
   if (s.hidden) out.hidden = true;
+  // La fiche d'annuaire suit la station dans le stockage et dans un export :
+  // sans elle, une sauvegarde relue perdrait la pochette et le compteur.
+  if (s.uuid) out.uuid = s.uuid;
+  if (s.favicon) out.favicon = s.favicon;
   return out;
 }
 

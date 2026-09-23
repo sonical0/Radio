@@ -14,11 +14,16 @@ export async function exportJson(json: string): Promise<string> {
   return 'téléchargé';
 }
 
-export async function pickJson(): Promise<string | null> {
+/** Un fichier choisi : son nom sert à départager M3U et PLS, et à grouper le lot. */
+export type PickedFile = { name: string; text: string };
+
+export async function pickFile(): Promise<PickedFile | null> {
   return new Promise((resolve) => {
     const input = document.createElement('input');
     input.type = 'file';
-    input.accept = 'application/json,.json';
+    // La sauvegarde JSON et les playlists d'autres lecteurs passent par le même
+    // bouton : c'est le contenu qui décide, l'extension ne sert qu'à départager.
+    input.accept = 'application/json,.json,.m3u,.m3u8,.pls';
     // Un utilisateur qui ferme le sélecteur sans rien choisir ne déclenche aucun
     // événement fiable selon les navigateurs : on résout sur 'cancel' quand il
     // existe, et on laisse la promesse en suspens sinon — inoffensif, l'appel
@@ -26,7 +31,7 @@ export async function pickJson(): Promise<string | null> {
     input.addEventListener('cancel', () => resolve(null));
     input.addEventListener('change', async () => {
       const f = input.files?.[0];
-      resolve(f ? await f.text() : null);
+      resolve(f ? { name: f.name, text: await f.text() } : null);
     });
     input.click();
   });

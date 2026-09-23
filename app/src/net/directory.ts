@@ -1,13 +1,41 @@
 // Annuaire Radio-Browser : ~50 000 stations, sans clé d'API. Porté du site,
-// règles comprises.
+// règles comprises — la recherche, puis le parcours par pays et par genre et
+// le tri des résultats, portés le 23/09/2026.
 
 import { Platform } from 'react-native';
 
-import { isHlsUrl, isSafeHttpUrl } from '../model/station';
+import countriesFr from '../data/countries.fr.json';
+import { isHlsUrl, isSafeHttpUrl, sanitizeFavicon, sanitizeUuid } from '../model/station';
+import { rbJson } from './radioBrowser';
 
-const RB_API = 'https://all.api.radio-browser.info/json/stations/search';
 const RB_LIMIT = 15;
-const TIMEOUT_MS = 10000;
+/**
+ * Parcourir ramène plus large que chercher : on choisit parmi beaucoup, et la
+ * liste défile. Chercher vise une station précise, quinze suffisent.
+ */
+export const RB_BROWSE_LIMIT = 40;
+/** Les tags les plus portés. Au-delà, la queue de l'index est du bruit de saisie. */
+const RB_TAG_INDEX_SIZE = 500;
+
+/**
+ * Les ordres de l'API, avec le sens qui a du sens pour chacun : les compteurs
+ * du plus grand au plus petit, les noms de A à Z.
+ */
+export const RB_ORDERS = {
+  clickcount: { label: 'plus écoutées', reverse: true },
+  votes: { label: 'plus votées', reverse: true },
+  clicktrend: { label: 'tendance', reverse: true },
+  name: { label: 'par nom', reverse: false },
+  random: { label: 'au hasard', reverse: false },
+} as const;
+
+export type RbOrder = keyof typeof RB_ORDERS;
+export const RB_ORDER_IDS = Object.keys(RB_ORDERS) as RbOrder[];
+export const RB_ORDER_DEFAULT: RbOrder = 'clickcount';
+
+export function isRbOrder(v: unknown): v is RbOrder {
+  return typeof v === 'string' && Object.prototype.hasOwnProperty.call(RB_ORDERS, v);
+}
 
 export type DirectoryHit = {
   name: string;
@@ -16,6 +44,9 @@ export type DirectoryHit = {
   countryCode: string;
   /** Pays · codec · débit · tags, déjà assemblé pour l'affichage. */
   detail: string;
+  /** Fiche d'origine, gardée avec la station : compteur d'écoutes et pochette. */
+  uuid: string | null;
+  favicon: string | null;
 };
 
 type RawHit = {
@@ -27,6 +58,8 @@ type RawHit = {
   codec?: string;
   bitrate?: number;
   tags?: string;
+  stationuuid?: string;
+  favicon?: string;
 };
 
 /**
@@ -43,28 +76,21 @@ export function isPlayableStreamUrl(raw: string): boolean {
   return typeof location !== 'undefined' && location.protocol !== 'https:';
 }
 
-async function rbQuery(params: Record<string, string>): Promise<DirectoryHit[]> {
-  const qs = new URLSearchParams({
+async function rbQuery(
+  params: Record<string, string>,
+  order: RbOrder,
+  limit: number,
+): Promise<DirectoryHit[]> {
+  const data = await rbJson<unknown>('/stations/search', {
     ...params,
     // On demande large puis on filtre : une bonne moitié des fiches de
-    // l'annuaire est éliminée ci-dessous, et couper à RB_LIMIT côté serveur
+    // l'annuaire est éliminée ci-dessous, et couper à `limit` côté serveur
     // laisserait souvent une poignée de résultats affichables.
-    limit: String(RB_LIMIT * 4),
+    limit: String(limit * 4),
     hidebroken: 'true',
-    order: 'clickcount',
-    reverse: 'true',
+    order,
+    reverse: String(RB_ORDERS[order].reverse),
   });
-
-  const ctrl = new AbortController();
-  const t = setTimeout(() => ctrl.abort(), TIMEOUT_MS);
-  let data: unknown;
-  try {
-    const r = await fetch(RB_API + '?' + qs, { signal: ctrl.signal });
-    if (!r.ok) throw new Error('HTTP ' + r.status);
-    data = await r.json();
-  } finally {
-    clearTimeout(t);
-  }
   if (!Array.isArray(data)) return [];
 
   // L annuaire liste plusieurs fois le même flux — une fiche par nom donné par
@@ -79,7 +105,7 @@ async function rbQuery(params: Record<string, string>): Promise<DirectoryHit[]> 
       seen.add(url);
       return true;
     })
-    .slice(0, RB_LIMIT)
+    .slice(0, limit)
     .map((s) => {
       const url = String(s.url_resolved || s.url).trim();
       const detail = [
@@ -101,18 +127,159 @@ async function rbQuery(params: Record<string, string>): Promise<DirectoryHit[]> 
         hls: isHlsUrl(url),
         countryCode: String(s.countrycode || '').toUpperCase(),
         detail,
+        // Validés ici plutôt qu'à l'ajout : une fiche d'annuaire est saisie par
+        // n'importe qui, et `favicon` devient une requête sortante.
+        uuid: sanitizeUuid(s.stationuuid),
+        favicon: sanitizeFavicon(s.favicon),
       };
     });
+}
+
+/**
+ * Une interrogation de l'annuaire : une suite de tentatives essayées dans
+ * l'ordre, la première qui rend quelque chose l'emporte. Chercher en a deux
+ * (nom puis tag) ; parcourir n'en a qu'une.
+ */
+export type DirectoryQuery = {
+  /** Ce qui est affiché en tête des résultats : « Norvège », « jazz »… */
+  label: string;
+  attempts: Record<string, string>[];
+  limit: number;
+};
+
+export async function runDirectoryQuery(
+  q: DirectoryQuery,
+  order: RbOrder = RB_ORDER_DEFAULT,
+): Promise<DirectoryHit[]> {
+  for (const attempt of q.attempts) {
+    const hits = await rbQuery(attempt, order, q.limit);
+    if (hits.length) return hits;
+  }
+  return [];
 }
 
 /**
  * Cherche par nom, puis par tag quand le nom ne donne rien : « jazz » ou
  * « classique » sont des genres, pas des noms de station.
  */
-export async function searchDirectory(query: string): Promise<DirectoryHit[]> {
+export function searchQuery(query: string): DirectoryQuery {
   const q = query.trim();
-  if (!q) return [];
-  const byName = await rbQuery({ name: q });
-  if (byName.length) return byName;
-  return rbQuery({ tag: q });
+  return { label: q, attempts: [{ name: q }, { tag: q }], limit: RB_LIMIT };
+}
+
+/** Toutes les stations d'un pays. Le code ISO, pas le nom : celui-ci varie. */
+export function countryQuery(code: string, label: string): DirectoryQuery {
+  return { label, attempts: [{ countrycode: code }], limit: RB_BROWSE_LIMIT };
+}
+
+/**
+ * Les stations d'un genre. `tagExact` : « rock » ne ramène pas « classic
+ * rock ». Une station qui porte les deux apparaît dans les deux.
+ */
+export function tagQuery(tag: string): DirectoryQuery {
+  return { label: tag, attempts: [{ tag, tagExact: 'true' }], limit: RB_BROWSE_LIMIT };
+}
+
+// ─── Index de parcours : pays et genres ───
+// Chercher suppose de savoir quoi taper. Les deux index sont chargés une fois
+// par lancement et gardés en mémoire : deux listes figées de quelques centaines
+// d'entrées, que l'annuaire ne bouge pas d'une minute à l'autre.
+
+export type BrowseEntry = {
+  /** Le code ISO pour un pays, le tag lui-même pour un genre. */
+  id: string;
+  label: string;
+  count: number;
+  /** Le libellé réduit pour la frappe : sans accent ni casse. */
+  key: string;
+};
+
+/**
+ * Le nom français du pays. L'API ne les donne qu'en anglais, et le site les
+ * traduit avec `Intl.DisplayNames` — **qui n'existe pas sur Hermes** : mesuré
+ * le 23/09/2026 sur RN 0.86, `Intl.DisplayNames` y est `undefined`, et la
+ * liste s'affichait « Albania », « United Arab Emirates ». (`normalize`, lui,
+ * est bien là : le filtre sans accent fonctionne.)
+ *
+ * La table est donc calculée une fois par Node, qui a l'ICU complet, et
+ * embarquée — 279 codes, 5 Ko. `Intl.DisplayNames` reste consulté d'abord pour
+ * la cible web, où il existe et suit la langue du navigateur.
+ */
+const FR_NAMES = countriesFr as Record<string, string>;
+
+function countryLabel(code: string, fallback: string): string {
+  try {
+    const v = new Intl.DisplayNames(['fr'], { type: 'region' }).of(code);
+    if (v && v !== code) return v;
+  } catch {}
+  return FR_NAMES[code] || fallback;
+}
+
+const COMBINING = /[̀-ͯ]/g;
+
+/**
+ * Réduit une chaîne à ce qui se tape : sans accent, sans casse — « emirats »
+ * doit trouver les Émirats arabes unis. `normalize` manque sur certaines
+ * versions d'Hermes, auquel cas on se contente de la casse.
+ */
+export function normalizeSearch(v: string): string {
+  const lower = v.toLocaleLowerCase();
+  try {
+    return lower.normalize('NFD').replace(COMBINING, '');
+  } catch {
+    return lower;
+  }
+}
+
+type RawCountry = { name?: string; iso_3166_1?: string; stationcount?: number };
+type RawTag = { name?: string; stationcount?: number };
+
+let countriesCache: BrowseEntry[] | null = null;
+let tagsCache: BrowseEntry[] | null = null;
+
+export async function loadCountries(): Promise<BrowseEntry[]> {
+  if (countriesCache) return countriesCache;
+  const data = await rbJson<unknown>('/countries', { hidebroken: 'true' });
+  const list = (Array.isArray(data) ? (data as RawCountry[]) : [])
+    .filter((c) => c && /^[A-Z]{2}$/.test(String(c.iso_3166_1)) && Number(c.stationcount) > 0)
+    .map((c) => {
+      const code = String(c.iso_3166_1);
+      const label = countryLabel(code, String(c.name || code));
+      return {
+        id: code,
+        label,
+        count: Number(c.stationcount),
+        key: normalizeSearch(label + ' ' + code),
+      };
+    })
+    .sort((a, b) => a.label.localeCompare(b.label, 'fr'));
+  countriesCache = list;
+  return list;
+}
+
+export async function loadTags(): Promise<BrowseEntry[]> {
+  if (tagsCache) return tagsCache;
+  const data = await rbJson<unknown>('/tags', {
+    order: 'stationcount',
+    reverse: 'true',
+    hidebroken: 'true',
+    limit: String(RB_TAG_INDEX_SIZE),
+  });
+  // Des tags ne diffèrent que par la casse, ou sont vides : l'index est rempli
+  // par les contributeurs, pas par une taxonomie.
+  const seen = new Set<string>();
+  const list = (Array.isArray(data) ? (data as RawTag[]) : [])
+    .filter((t) => {
+      const name = String(t?.name ?? '').trim();
+      const k = name.toLocaleLowerCase();
+      if (!name || Number(t.stationcount) <= 0 || seen.has(k)) return false;
+      seen.add(k);
+      return true;
+    })
+    .map((t) => {
+      const name = String(t.name).trim();
+      return { id: name, label: name, count: Number(t.stationcount), key: normalizeSearch(name) };
+    });
+  tagsCache = list;
+  return list;
 }
