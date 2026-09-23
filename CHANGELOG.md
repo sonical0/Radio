@@ -9,6 +9,55 @@ Ordre : **entrée la plus récente en tête**. Plusieurs passes le même jour so
 suffixées `(2)`, `(3)`… la plus haute étant la plus récente (même convention que
 `TANDEM_LOG.md`).
 
+## 2026-09-23 (7) — site, passe QA complète
+
+Six fonctionnalités livrées le même jour, testées chacune seule, jamais ensemble. Passe
+exhaustive dans un vrai navigateur (Edge sans interface piloté par `puppeteer-core`) :
+console, structure, accessibilité, parcours au clavier, téléphone à 360 px, et 26 parcours
+fonctionnels croisés. Un commit par correctif.
+
+### Corrigé — élevé
+- **Curseurs sans focus visible** (volume, gains, teinte) : `outline: none` retirait l'anneau
+  du navigateur sans le remplacer (WCAG 2.4.7).
+- **Le dialogue des réglages laissait fuir le focus** : il se déclarait modal, mais Tab passait
+  à la page dessous, toujours active. Le reste de la page est désormais inerte pendant
+  l'ouverture. Premier essai rejeté au re-test : rendre inerte le conteneur de la page
+  rendait aussi le panneau inerte, qui y vit.
+
+### Corrigé — moyen
+- **La première connexion abandonnait au premier refus** : le démarrage avait sa propre sortie
+  (« UNAVAILABLE »), qui annulait la reconnexion que l'erreur venait de programmer. Le serveur
+  d'Enclave Radio refuse environ une première connexion sur cinq : la page renonçait 2 fois
+  sur 10, elle démarre maintenant 10 fois sur 10. Trouvé parce que deux parcours de test
+  échouaient par intermittence.
+- **Le visualiseur ignorait `prefers-reduced-motion`** : animé en JS, il échappait à la règle
+  de la feuille. Il se fige en un profil fixe, et suit la préférence si elle change.
+- **Le groupe des couleurs n'était pas un vrai groupe radio** : cinq arrêts de Tab, aucune
+  flèche. Un seul arrêt désormais, les flèches cochent la voisine, Début/Fin les extrémités.
+- **Pas de titre de niveau 1** : le titre de la page est un `<h1>`.
+
+### Corrigé — faible
+- Anneau de 2 px à 11:1 au focus des champs et du menu de tri (une bordure à 3,1:1 avant).
+- Pastille de groupe vide cachée — elle tronquait « SELECT A STATION » à 360 px.
+- Légende des raccourcis masquée sur écran tactile sans souris.
+- Placeholders du formulaire d'ajout entiers à 360 px, formats en aide visible sous les champs
+  (`aria-describedby`).
+- Bouton « Ajouter une station » porté à 25 px de haut (WCAG 2.5.8).
+- Curseurs stylés aussi sous Firefox (`::-moz-range-*`) — **non vérifié**, Firefox absent du
+  poste.
+- L'import distingue JSON illisible, fichier sans station et erreur de la page, et journalise
+  cette dernière.
+
+### Différé
+- Noms de station tronqués à 360 px : gagner la place, c'est masquer le libellé d'état ou
+  passer le nom sur deux lignes — un arbitrage de design, pas une correction.
+
+### Vérifié
+- QA finale sur la page corrigée : aucune erreur de console, aucun élément sans focus
+  visible, focus contenu dans le dialogue, aucun débordement à 360 px, 26 parcours sur 26 à
+  deux passages consécutifs. Pas de test de régression automatisé : le projet n'a pas de
+  framework de test.
+
 ## 2026-09-23 (6) — site, la couleur d'écran libre
 
 ### Ajouté
