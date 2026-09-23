@@ -1294,17 +1294,28 @@ for (let i = 0; i < VIS_BAR_COUNT; i++) {
   const b = document.createElement('div'); b.className = 'vis-bar'; vis.appendChild(b); visBars.push(b);
 }
 let visInt = null;
+// La feuille coupe ses animations sous prefers-reduced-motion ; ces barres-ci
+// sont animées en JS, neuf fois par seconde, et y échappaient. Figées, elles
+// disent encore que ça joue, sans bouger.
+const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
 function startVis() {
   stopVis();
   if (document.hidden) return; // inutile de repeindre 34 barres dans un onglet masqué
+  if (reduceMotion.matches) {
+    visBars.forEach((b, i) => { b.style.height = Math.round(6 + 12 * Math.abs(Math.sin(i * 0.55))) + 'px'; b.classList.add('active'); });
+    return;
+  }
   visInt = setInterval(() => {
     for (const b of visBars) { b.style.height = (3 + Math.random() * 24) + 'px'; b.classList.add('active'); }
   }, VIS_UPDATE_INTERVAL_MS);
 }
 function stopVis() {
   clearInterval(visInt);
+  visInt = null;
   for (const b of visBars) { b.style.height = '3px'; b.classList.remove('active'); }
 }
+// La préférence peut changer en cours d'écoute (réglage système).
+reduceMotion.addEventListener('change', () => { if (current >= 0 && !audio.paused) startVis(); });
 
 // ─── Now Playing ───
 // Deux familles de sources seulement, les seules qui envoient un en-tête CORS de
