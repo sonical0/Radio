@@ -24,7 +24,9 @@ Pas d'étape de build, pas de gestionnaire de paquets, pas de framework. On sert
   tout seul : l'endpoint de l'API est déduit de l'URL. Les serveurs Icecast se renseignent
   à la main.
 - **Un annuaire intégré.** Cherche sur [Radio-Browser](https://www.radio-browser.info/) par
-  nom ou par genre, et ajoute une station en un clic.
+  nom ou par genre, ou parcours-le par pays (épingle ceux que tu reviens chercher) ou par
+  genre, trié par écoutes, votes, tendance, nom ou au hasard — et ajoute une station en un
+  clic.
 - **Tes propres regroupements.** Un groupe est un libellé libre — un jeu, un genre, un
   pays — et non une liste figée.
 - **Gain par station**, mesuré et non estimé : la sonie de chaque station a été relevée à

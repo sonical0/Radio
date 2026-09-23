@@ -461,6 +461,36 @@
   }
   .rb-add:hover, .rb-add:focus-visible { border-color: var(--green-dim); background: var(--bg2); }
   .rb-status { font-size: 12px; color: var(--green-dim); padding: 4px 2px; }
+  /* Parcourir : pays et genres, filtrables. */
+  .rb-tools { margin-top: 8px; align-items: center; }
+  /* Libellé et menu passent à la ligne ensemble : séparés sur un téléphone,
+     « TRI » restait en bout de ligne et son menu partait seul dessous. */
+  .rb-order-wrap { display: flex; align-items: center; gap: 6px; margin-left: auto; }
+  .rb-order-label { color: var(--green-dim); font-size: 11px; letter-spacing: 1px; }
+  .rb-order { flex: 0 1 auto; min-width: 0; cursor: pointer; }
+  .rb-order option { background: var(--bg); color: var(--green); }
+  .rb-browse { margin-top: 8px; }
+  .rb-browse[hidden] { display: none; }
+  .rb-browse > .add-input { width: 100%; box-sizing: border-box; }
+  .rb-browse-list { margin-top: 6px; max-height: 260px; overflow-y: auto; }
+  .rb-browse-row { display: flex; align-items: stretch; border-bottom: 1px solid var(--border); }
+  .rb-browse-row:last-child { border-bottom: none; }
+  .rb-browse-btn {
+    flex: 1; min-width: 0; display: flex; justify-content: space-between; gap: 10px;
+    background: none; border: none; color: var(--green); text-align: left;
+    font-family: 'Share Tech Mono', monospace; font-size: 13px; padding: 5px 6px; cursor: pointer;
+  }
+  .rb-browse-btn > span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .rb-browse-btn:hover, .rb-browse-btn:focus-visible { background: var(--bg2); outline: none; }
+  .rb-browse-btn:focus-visible { box-shadow: inset 0 0 0 1px var(--green); }
+  .rb-count { color: var(--green-dim); font-size: 11px; flex-shrink: 0; }
+  .rb-pin {
+    background: none; border: none; color: var(--green-dim); cursor: pointer;
+    font-size: 15px; padding: 0 6px; flex-shrink: 0;
+  }
+  .rb-pin[aria-pressed="true"] { color: var(--green); }
+  .rb-pin:hover, .rb-pin:focus-visible { color: var(--green-bright); outline: none; }
+  .rb-pin:focus-visible { box-shadow: inset 0 0 0 1px var(--green); }
   .add-msg.ok { color: var(--green); }
   .add-msg.err { color: #ff6b6b; }
 
@@ -668,6 +698,25 @@
       <button class="add-btn" onclick="searchDirectory()">⌕ CHERCHER</button>
       <button class="add-btn" id="rb-clear" onclick="clearDirectory()" hidden>✕ EFFACER</button>
     </div>
+    <div class="add-row rb-tools">
+      <button class="add-btn" id="rb-countries" onclick="openBrowse('countries')" aria-expanded="false" aria-controls="rb-browse">◉ PAYS</button>
+      <button class="add-btn" id="rb-tags" onclick="openBrowse('tags')" aria-expanded="false" aria-controls="rb-browse"># GENRES</button>
+      <span class="rb-order-wrap">
+        <label class="rb-order-label" for="rb-order">TRI</label>
+        <select class="add-input rb-order" id="rb-order" onchange="changeRbOrder(this.value)">
+          <option value="clickcount">plus écoutées</option>
+          <option value="votes">plus votées</option>
+          <option value="clicktrend">tendance</option>
+          <option value="name">par nom</option>
+          <option value="random">au hasard</option>
+        </select>
+      </span>
+    </div>
+    <div class="rb-browse" id="rb-browse" hidden>
+      <label class="sr-only" id="rb-filter-label" for="rb-filter">Filtrer</label>
+      <input class="add-input" id="rb-filter" autocomplete="off" />
+      <div class="rb-browse-list" id="rb-browse-list"></div>
+    </div>
     <div class="rb-results" id="rb-results" aria-live="polite"></div>
   </div>
 
@@ -689,8 +738,14 @@
 <script>
 const API_BASE = 'https://stations.fallout.radio/api/nowplaying/';
 // Annuaire public : ~50 000 stations, sans clé d'API, en-tête CORS permissif.
-const RB_BASE = 'https://all.api.radio-browser.info/json';
-const RB_API = RB_BASE + '/stations/search';
+// `all.api` est un nom tournant sur les miroirs de l'annuaire. Il n'en reste
+// qu'un (de1, relevé le 2026-09-23 sur /json/servers) : le repli direct ne
+// sauve que du cas où le nom tournant lui-même ne répond plus.
+const RB_HOSTS = ['all.api.radio-browser.info', 'de1.api.radio-browser.info'];
+const RB_TIMEOUT_MS = 10000;
+// Une recherche vise une station précise ; parcourir un pays ou un genre, c'est
+// choisir parmi beaucoup — la liste défile.
+const RB_BROWSE_LIMIT = 40;
 const RB_UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const RB_LIMIT = 15;
 const DEFAULT_GROUP = 'DIVERS';
@@ -2078,21 +2133,91 @@ function addToLibrary(raw) {
 // ne donne que la fiche (nom, pays, codec, URL du flux) : jamais le titre en
 // cours, que detectMeta() récupère ensuite quand l'hôte est un AzuraCast.
 let rbSeq = 0;
+// L'hôte qui a répondu en dernier : on ne repasse pas par un hôte en panne à
+// chaque requête.
+let rbHost = RB_HOSTS[0];
+
+/** GET sur l'API, avec repli sur l'autre hôte si le premier ne répond pas. */
+async function rbFetch(path, params) {
+  const qs = params ? '?' + new URLSearchParams(params) : '';
+  const hosts = [rbHost, ...RB_HOSTS.filter(h => h !== rbHost)];
+  let lastErr;
+  for (const host of hosts) {
+    try {
+      const r = await fetch('https://' + host + '/json' + path + qs,
+        { signal: AbortSignal.timeout(RB_TIMEOUT_MS) });
+      // Un 4xx est une réponse : la demande est en cause, pas l'hôte.
+      if (r.status >= 500) throw new Error('HTTP ' + r.status);
+      rbHost = host;
+      return r;
+    } catch (e) { lastErr = e; }
+  }
+  throw lastErr;
+}
+
+async function rbJson(path, params) {
+  const r = await rbFetch(path, params);
+  if (!r.ok) throw new Error('HTTP ' + r.status);
+  return r.json();
+}
+
+// ─── Tri des résultats ───
+// Les ordres de l'API, avec le sens qui a du sens pour chacun : les compteurs
+// du plus grand au plus petit, les noms de A à Z.
+const RB_ORDERS = {
+  clickcount: { label: 'plus écoutées', reverse: true },
+  votes:      { label: 'plus votées',   reverse: true },
+  clicktrend: { label: 'tendance',      reverse: true },
+  name:       { label: 'par nom',       reverse: false },
+  random:     { label: 'au hasard',     reverse: false }
+};
+const RB_ORDER_KEY = 'rbOrder';
+let rbOrder = 'clickcount';
+// La dernière requête de stations, pour la relancer quand on change le tri.
+let rbLastQuery = null;
+
+function loadRbOrder() {
+  try {
+    const v = localStorage.getItem(RB_ORDER_KEY);
+    if (v && Object.hasOwn(RB_ORDERS, v)) rbOrder = v;
+  } catch {}
+  document.getElementById('rb-order').value = rbOrder;
+}
+
+function changeRbOrder(v) {
+  if (!Object.hasOwn(RB_ORDERS, v)) return;
+  rbOrder = v;
+  try { localStorage.setItem(RB_ORDER_KEY, v); } catch {}
+  if (rbLastQuery) runDirectoryQuery(rbLastQuery);
+}
 
 // Vide la liste de résultats. Chercher à vide le faisait déjà, mais rien ne le
 // disait : un bouton dédié, affiché seulement quand il y a quelque chose à
 // effacer, vaut mieux qu une astuce à connaître.
 function clearDirectory() {
   rbSeq++;
+  rbLastQuery = null;
   document.getElementById('rb-q').value = '';
   document.getElementById('rb-results').textContent = '';
   document.getElementById('rb-clear').hidden = true;
+  closeBrowse();
 }
 
-async function searchDirectory() {
-  const q = document.getElementById('rb-q').value.trim();
+function rbStatus(text) {
+  const el = document.createElement('div');
+  el.className = 'rb-status';
+  el.textContent = text;
+  return el;
+}
+
+/**
+ * Lance une requête de stations et affiche le résultat. `query` porte les
+ * tentatives successives (`attempts`, essayées dans l'ordre jusqu'à la première
+ * qui ramène quelque chose), un libellé et une limite.
+ */
+async function runDirectoryQuery(query) {
+  rbLastQuery = query;
   const box = document.getElementById('rb-results');
-  if (!q) { clearDirectory(); return; }
   // Dès qu il y a quelque chose à l écran — résultats ou message — l effacement
   // devient possible.
   document.getElementById('rb-clear').hidden = false;
@@ -2101,17 +2226,15 @@ async function searchDirectory() {
   // après elle : seul le dernier numéro de séquence a le droit d'écrire.
   const seq = ++rbSeq;
   box.textContent = '';
-  const status = document.createElement('div');
-  status.className = 'rb-status';
-  status.textContent = '⟳ Recherche…';
+  const status = rbStatus('⟳ ' + query.label + '…');
   box.appendChild(status);
 
-  let list;
+  let list = [];
   try {
-    // Le champ `name` ne cherche que dans les noms : « jazz » ou « classique »
-    // sont des genres, d'où le repli sur `tag` quand le nom ne donne rien.
-    list = await rbQuery({ name: q });
-    if (!list.length) list = await rbQuery({ tag: q });
+    for (const params of query.attempts) {
+      list = await rbQuery(params, query.limit);
+      if (list.length) break;
+    }
   } catch {
     if (seq === rbSeq) status.textContent = '⚠ Annuaire injoignable.';
     return;
@@ -2120,17 +2243,196 @@ async function searchDirectory() {
 
   box.textContent = '';
   if (!list.length) {
-    const none = document.createElement('div');
-    none.className = 'rb-status';
-    none.textContent = 'Aucun résultat pour « ' + q + ' ».';
-    box.appendChild(none);
+    box.appendChild(rbStatus('Aucun résultat pour « ' + query.label + ' ».'));
     return;
   }
+  box.appendChild(rbStatus(query.label + ' · ' + RB_ORDERS[rbOrder].label + ' · ' + list.length));
   list.forEach(r => box.appendChild(buildDirectoryRow(r)));
 }
 
+function searchDirectory() {
+  const q = document.getElementById('rb-q').value.trim();
+  if (!q) { clearDirectory(); return; }
+  closeBrowse();
+  // Le champ `name` ne cherche que dans les noms : « jazz » ou « classique »
+  // sont des genres, d'où le repli sur `tag` quand le nom ne donne rien.
+  runDirectoryQuery({ label: q, attempts: [{ name: q }, { tag: q }], limit: RB_LIMIT });
+}
+
+// ─── Parcourir par pays ou par genre ───
+// Chercher suppose de savoir quoi taper. Parcourir répond à « qu'est-ce qu'on
+// écoute en Norvège ? » ou « montre-moi du jazz », sans connaître un seul nom.
+// Les deux index sont chargés à la demande, une fois par page : 244 pays et
+// les 500 tags les plus portés, une vingtaine de Ko chacun.
+const RB_TAG_INDEX_SIZE = 500;
+// Au-delà, le filtre est là pour ça : 244 boutons d'un coup noient la page.
+const RB_BROWSE_SHOWN = 80;
+const RB_PINNED_KEY = 'rbPinnedCountries';
+let rbIndex = { countries: null, tags: null };
+let rbBrowseKind = null;
+
+// Noms de pays en français quand le navigateur sait les donner : l'annuaire les
+// fournit en anglais (« The United Arab Emirates »).
+const regionNames = (() => {
+  try { return new Intl.DisplayNames(['fr'], { type: 'region' }); } catch { return null; }
+})();
+function countryLabel(c) {
+  try { return regionNames?.of(c.code) || c.name; } catch { return c.name; }
+}
+
+function loadPinnedCountries() {
+  try {
+    const v = JSON.parse(localStorage.getItem(RB_PINNED_KEY) || '[]');
+    return new Set(Array.isArray(v) ? v.filter(x => /^[A-Z]{2}$/.test(x)) : []);
+  } catch { return new Set(); }
+}
+let rbPinned = loadPinnedCountries();
+
+function togglePinnedCountry(code) {
+  if (rbPinned.has(code)) rbPinned.delete(code); else rbPinned.add(code);
+  try { localStorage.setItem(RB_PINNED_KEY, JSON.stringify([...rbPinned])); } catch {}
+  renderBrowseList();
+}
+
+async function loadBrowseIndex(kind) {
+  if (rbIndex[kind]) return rbIndex[kind];
+  if (kind === 'countries') {
+    const data = await rbJson('/countries', { hidebroken: 'true' });
+    rbIndex.countries = (Array.isArray(data) ? data : [])
+      .filter(c => c && /^[A-Z]{2}$/.test(c.iso_3166_1) && c.stationcount > 0)
+      .map(c => {
+        const entry = { code: c.iso_3166_1, name: String(c.name || c.iso_3166_1), count: c.stationcount };
+        entry.label = countryLabel(entry);
+        entry.key = normalizeSearch(entry.label + ' ' + entry.name + ' ' + entry.code);
+        return entry;
+      })
+      .sort((a, b) => a.label.localeCompare(b.label, 'fr'));
+  } else {
+    const data = await rbJson('/tags', {
+      order: 'stationcount', reverse: 'true', hidebroken: 'true', limit: String(RB_TAG_INDEX_SIZE)
+    });
+    // Des tags ne diffèrent que par la casse ou sont vides : l'index est rempli
+    // par les contributeurs, pas par une taxonomie.
+    const seen = new Set();
+    rbIndex.tags = (Array.isArray(data) ? data : [])
+      .filter(t => {
+        const name = String(t?.name ?? '').trim();
+        const k = name.toLocaleLowerCase();
+        if (!name || t.stationcount <= 0 || seen.has(k)) return false;
+        seen.add(k);
+        return true;
+      })
+      .map(t => ({ name: String(t.name).trim(), count: t.stationcount, key: normalizeSearch(t.name) }));
+  }
+  return rbIndex[kind];
+}
+
+function closeBrowse() {
+  rbBrowseKind = null;
+  document.getElementById('rb-browse').hidden = true;
+  document.getElementById('rb-countries').setAttribute('aria-expanded', 'false');
+  document.getElementById('rb-tags').setAttribute('aria-expanded', 'false');
+}
+
+async function openBrowse(kind) {
+  if (rbBrowseKind === kind) { closeBrowse(); return; }
+  rbBrowseKind = kind;
+  document.getElementById('rb-countries').setAttribute('aria-expanded', String(kind === 'countries'));
+  document.getElementById('rb-tags').setAttribute('aria-expanded', String(kind === 'tags'));
+  const panel = document.getElementById('rb-browse');
+  const filter = document.getElementById('rb-filter');
+  panel.hidden = false;
+  filter.value = '';
+  filter.placeholder = kind === 'countries' ? 'Filtrer les pays…' : 'Filtrer les genres…';
+  document.getElementById('rb-filter-label').textContent =
+    kind === 'countries' ? 'Filtrer les pays' : 'Filtrer les genres';
+  const list = document.getElementById('rb-browse-list');
+  list.textContent = '';
+  list.appendChild(rbStatus('⟳ Chargement…'));
+  try {
+    await loadBrowseIndex(kind);
+  } catch {
+    if (rbBrowseKind === kind) {
+      list.textContent = '';
+      list.appendChild(rbStatus('⚠ Annuaire injoignable.'));
+    }
+    return;
+  }
+  if (rbBrowseKind !== kind) return;
+  renderBrowseList();
+  filter.focus();
+}
+
+function renderBrowseList() {
+  const kind = rbBrowseKind;
+  const list = document.getElementById('rb-browse-list');
+  if (!kind || !rbIndex[kind]) return;
+  const q = normalizeSearch(document.getElementById('rb-filter').value);
+  let items = rbIndex[kind].filter(x => !q || x.key.includes(q));
+  // Les pays épinglés d'abord : ce sont ceux qu'on revient chercher.
+  if (kind === 'countries') {
+    items = [...items.filter(c => rbPinned.has(c.code)), ...items.filter(c => !rbPinned.has(c.code))];
+  }
+  list.textContent = '';
+  if (!items.length) {
+    list.appendChild(rbStatus('Rien ne correspond.'));
+    return;
+  }
+  items.slice(0, RB_BROWSE_SHOWN).forEach(x => list.appendChild(
+    kind === 'countries' ? buildCountryRow(x) : buildTagRow(x)));
+  if (items.length > RB_BROWSE_SHOWN) {
+    list.appendChild(rbStatus('… et ' + (items.length - RB_BROWSE_SHOWN) + ' autres : filtrer pour les voir.'));
+  }
+}
+
+// Construites en DOM, jamais en innerHTML : noms et tags viennent de l'annuaire.
+function buildBrowseButton(text, count, onClick) {
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.className = 'rb-browse-btn';
+  const name = document.createElement('span');
+  name.textContent = text;
+  const n = document.createElement('span');
+  n.className = 'rb-count';
+  n.textContent = count.toLocaleString('fr-FR');
+  btn.append(name, n);
+  btn.setAttribute('aria-label', text + ', ' + count + ' stations');
+  btn.addEventListener('click', onClick);
+  return btn;
+}
+
+function buildCountryRow(c) {
+  const row = document.createElement('div');
+  row.className = 'rb-browse-row';
+  const pinned = rbPinned.has(c.code);
+  const pin = document.createElement('button');
+  pin.type = 'button';
+  pin.className = 'rb-pin';
+  pin.textContent = pinned ? '★' : '☆';
+  pin.setAttribute('aria-pressed', String(pinned));
+  pin.setAttribute('aria-label', 'Épingler ' + c.label);
+  pin.addEventListener('click', () => togglePinnedCountry(c.code));
+  row.append(pin, buildBrowseButton(c.label, c.count, () => {
+    closeBrowse();
+    runDirectoryQuery({ label: c.label, attempts: [{ countrycode: c.code }], limit: RB_BROWSE_LIMIT });
+  }));
+  return row;
+}
+
+function buildTagRow(t) {
+  const row = document.createElement('div');
+  row.className = 'rb-browse-row';
+  // `tagExact` : « rock » ne ramène pas « classic rock ». Une station qui porte
+  // les deux apparaît dans les deux.
+  row.appendChild(buildBrowseButton(t.name, t.count, () => {
+    closeBrowse();
+    runDirectoryQuery({ label: t.name, attempts: [{ tag: t.name, tagExact: 'true' }], limit: RB_BROWSE_LIMIT });
+  }));
+  return row;
+}
+
 // Signaler l'écoute d'une station de l'annuaire : c'est le compteur qui classe
-// ses résultats par popularité — celui-là même qu'utilise rbQuery() — et
+// ses résultats par popularité — celui-là même qu'utilise le tri par défaut — et
 // l'usage que Radio-Browser demande à ses clients. Une fois par station et par
 // chargement de page ; le serveur ne compte de toute façon qu'une écoute par
 // adresse IP et par jour.
@@ -2138,8 +2440,7 @@ const rbReported = new Set();
 function reportListen(s) {
   if (!s?.uuid || rbReported.has(s.uuid)) return;
   rbReported.add(s.uuid);
-  fetch(RB_BASE + '/url/' + encodeURIComponent(s.uuid), { signal: AbortSignal.timeout(10000) })
-    .catch(() => {});
+  rbFetch('/url/' + encodeURIComponent(s.uuid)).catch(() => {});
 }
 
 // Les stations ajoutées depuis l'annuaire avant qu'on en garde la fiche n'ont
@@ -2151,10 +2452,7 @@ async function backfillFromDirectory(s) {
   if (!s?.isCustom || s.uuid || rbLookedUp.has(s.url)) return;
   rbLookedUp.add(s.url);
   try {
-    const r = await fetch(RB_BASE + '/stations/byurl?' + new URLSearchParams({ url: s.url }),
-      { signal: AbortSignal.timeout(10000) });
-    if (!r.ok) return;
-    const data = await r.json();
+    const data = await rbJson('/stations/byurl', { url: s.url });
     const hit = Array.isArray(data) ? data.find(x => RB_UUID_RE.test(x?.stationuuid ?? '')) : null;
     if (!hit) return;
     // Repassée par normalizeStation() : la fiche vient d'un annuaire ouvert en
@@ -2175,20 +2473,18 @@ function onStationStarted(s) {
   backfillFromDirectory(s);
 }
 
-async function rbQuery(params) {
-  const qs = new URLSearchParams({
+async function rbQuery(params, limit = RB_LIMIT) {
+  const order = RB_ORDERS[rbOrder];
+  const data = await rbJson('/stations/search', {
     ...params,
     // On demande large puis on filtre : une bonne moitié des fiches de l'annuaire
-    // est éliminée ci-dessous, et couper à RB_LIMIT côté serveur laisserait
+    // est éliminée ci-dessous, et couper à `limit` côté serveur laisserait
     // souvent une poignée de résultats affichables.
-    limit: String(RB_LIMIT * 4),
+    limit: String(limit * 4),
     hidebroken: 'true',
-    order: 'clickcount',
-    reverse: 'true'
+    order: rbOrder,
+    reverse: String(order.reverse)
   });
-  const r = await fetch(RB_API + '?' + qs, { signal: AbortSignal.timeout(10000) });
-  if (!r.ok) throw new Error('HTTP ' + r.status);
-  const data = await r.json();
   if (!Array.isArray(data)) return [];
   // L annuaire liste plusieurs fois le même flux — une fiche par nom donné par
   // les contributeurs. On garde la première : deux lignes identiques n apportent rien.
@@ -2199,7 +2495,7 @@ async function rbQuery(params) {
     if (!isPlayableStreamUrl(u) || vues.has(u)) return false;
     vues.add(u);
     return true;
-  }).slice(0, RB_LIMIT);
+  }).slice(0, limit);
 }
 
 // url_resolved suit les redirections et les playlists ; l'annuaire référence
@@ -2735,6 +3031,19 @@ document.addEventListener('keydown', e => {
   document.getElementById('rb-q').addEventListener('keydown', e => {
     if (e.key === 'Enter') { e.preventDefault(); searchDirectory(); }
   });
+
+  // Le filtre des pays et des genres agit à chaque frappe : il ne fait que
+  // réduire un index déjà chargé, rien ne part sur le réseau. Échap referme.
+  const rbFilter = document.getElementById('rb-filter');
+  rbFilter.addEventListener('input', renderBrowseList);
+  rbFilter.addEventListener('keydown', e => {
+    if (e.key === 'Escape') {
+      const back = document.getElementById(rbBrowseKind === 'tags' ? 'rb-tags' : 'rb-countries');
+      closeBrowse();
+      back.focus();
+    }
+  });
+  loadRbOrder();
 
   // Replié, le volet ne rend pas ses lignes : les construire en l'ouvrant.
   document.getElementById('history').addEventListener('toggle', renderHistory);

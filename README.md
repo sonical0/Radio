@@ -25,7 +25,8 @@ No build step, no package manager, no framework. Serve the folder and it runs.
   appears on its own — the API endpoint is derived from the URL. Icecast servers can be
   pointed at by hand.
 - **A directory built in.** Search [Radio-Browser](https://www.radio-browser.info/) by name
-  or genre and add a station in one click.
+  or genre, or browse it by country (pin the ones you come back to) or by genre, sorted by
+  listens, votes, trend, name or at random — and add a station in one click.
 - **Your own groupings.** A group is a free label — a game, a genre, a country — not a fixed
   list.
 - **Per-station gain**, measured rather than guessed: every station's loudness was sampled

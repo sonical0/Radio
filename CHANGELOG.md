@@ -9,6 +9,41 @@ Ordre : **entrée la plus récente en tête**. Plusieurs passes le même jour so
 suffixées `(2)`, `(3)`… la plus haute étant la plus récente (même convention que
 `TANDEM_LOG.md`).
 
+## 2026-09-23 (3) — site, parcourir l'annuaire par pays et par genre
+
+Chercher suppose de savoir quoi taper. Repris de [cliamp](https://github.com/bjarneo/cliamp)
+(`docs/radio.md`), adapté à une page.
+
+### Ajouté
+- **◉ PAYS** : les 244 pays de l'annuaire avec leur nombre de stations, **en français**
+  (`Intl.DisplayNames` ; l'API les donne en anglais), filtrables à la frappe sans accent ni
+  casse (« emirats » trouve les Émirats arabes unis). ☆/★ épingle un pays, qui remonte en tête
+  et le reste d'une visite à l'autre.
+- **# GENRES** : les 500 tags les plus portés, du plus au moins courant, filtrables de même.
+  Choisir « rock » ne ramène pas « classic rock » (`tagExact`) ; les doublons de casse et les
+  tags vides sont écartés — l'index est rempli par les contributeurs, pas par une taxonomie.
+- **TRI** : plus écoutées (défaut, l'ordre d'avant), plus votées, tendance, par nom, au
+  hasard. Il vaut pour la recherche comme pour le parcours, relance la dernière requête quand
+  il change, et se retient. Chaque ordre porte son sens : le nom de A à Z, les compteurs du
+  plus grand au plus petit.
+- Parcourir ramène 40 stations au lieu des 15 d'une recherche : on choisit parmi beaucoup,
+  la liste défile. En tête des résultats, ce qui a été demandé : « Norvège · par nom · 40 ».
+- **Repli de miroir** : toutes les requêtes passent par `rbFetch()`, qui retente sur
+  `de1.api.radio-browser.info` quand le nom tournant `all.api` ne répond pas, et s'en
+  souvient. Un seul miroir figure encore sur `/json/servers` : le repli ne couvre que la panne
+  du nom tournant lui-même, pas celle du service.
+
+### Vérifié
+- Chromium, page servie en local : liste des pays en français, filtre sans accent, épinglage
+  persistant, Norvège (40 stations, `countrycode=NO`), passage au tri par nom (requête relancée
+  en `order=name&reverse=false`), genres (« jazz », `tagExact=true`), Échap qui referme et rend
+  le focus au bouton, recherche avec `all.api` bloqué (servie par `de1`). Aucune erreur de
+  script.
+- Mise en page mesurée dans une iframe à 300, 360 et 700 px : aucun débordement horizontal.
+  La mesure a trouvé un défaut, corrigé : sur téléphone, « TRI » restait en bout de ligne et
+  son menu passait seul à la ligne suivante. Les deux sont maintenant groupés
+  (`.rb-order-wrap`) et passent à la ligne ensemble.
+
 ## 2026-09-23 (2) — site, la pochette des stations de l'annuaire
 
 ### Ajouté
