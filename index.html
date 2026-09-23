@@ -1965,12 +1965,13 @@ function playStation(idx) {
   // demander à la volée dès qu'on l'écoute.
   refreshOne(idx);
   onStationStarted(stations[idx]);
-  audio.play().catch((err) => {
-    // Interrompu par le choix d'une autre station : ne pas effacer celle-ci.
-    if (isAbort(err)) return;
-    setUI(-1);
-    document.getElementById('np-station').textContent = stations[idx].name.toUpperCase() + ' — UNAVAILABLE';
-  });
+  // Le démarrage passe par la même politique que la reprise en cours d'écoute.
+  // Il avait sa propre sortie — « UNAVAILABLE » et la station désélectionnée —
+  // qui annulait l'essai que l'évènement 'error' venait de programmer : un
+  // serveur qui refuse une première connexion sur cinq suffisait à faire
+  // renoncer la page. Une station réellement morte aboutit au même verdict,
+  // après ses trois essais.
+  audio.play().catch(onPlayRejected);
 }
 
 function togglePlay() {
