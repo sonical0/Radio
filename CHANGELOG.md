@@ -9,6 +9,30 @@ Ordre : **entrée la plus récente en tête**. Plusieurs passes le même jour so
 suffixées `(2)`, `(3)`… la plus haute étant la plus récente (même convention que
 `TANDEM_LOG.md`).
 
+## 2026-09-23 (6) — site, la couleur d'écran libre
+
+### Ajouté
+- **Un cinquième écran, LIBRE**, avec un curseur de teinte : le Pip-Boy de Fallout 4 laisse
+  régler sa couleur, ce que les quatre écrans fixes ne permettaient pas. La page se recolore
+  pendant le geste ; le choix s'écrit quand on lâche le curseur.
+- **Toute la palette est calculée depuis la teinte**, avec les exigences des écrans fixes. La
+  luminosité est montée jusqu'au contraste visé plutôt que fixée : à luminosité égale, un bleu
+  pur est trois fois plus sombre à l'œil qu'un vert, et un Pip-Boy bleu nuit serait illisible.
+  Texte principal à 11:1 (le niveau de l'ambre, l'écran fixe le moins contrasté), texte
+  secondaire à 5,5:1 — vérifié sur les 360 teintes.
+- Réappliquée avant le premier rendu, comme les écrans fixes : la palette calculée est
+  stockée entière, et le script de l'en-tête la recopie sans refaire le calcul, en contrôlant
+  chaque nom et chaque valeur.
+
+### Vérifié
+- Edge sans interface : choix de LIBRE, teintes 0 et 240, rechargement (couleur posée dès
+  l'analyse du document, sans passage par le vert), retour à l'ambre (variables retirées),
+  stockage corrompu (valeur injectée ignorée, page intacte), panneau à 360 px ; aucune erreur.
+- La capture a trouvé un défaut, corrigé : le curseur restait à 90 px de large, la règle
+  globale des curseurs l'emportant sur sa classe.
+- Premier réglage du contraste principal à 13:1, redescendu à 11 après mesure des écrans
+  fixes (11,2 à 19,2:1) : à 13, les rouges et les bleus tournaient au pastel.
+
 ## 2026-09-23 (5) — site, le temps d'écoute
 
 Repris de l'écran STATS de [kleeamp](https://github.com/cliamp/kleeamp).

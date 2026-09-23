@@ -74,7 +74,9 @@ Four palettes ship: green (the default), amber, blue and white. They are plain `
 
 The choice is stored in `localStorage.themePalette` — the same key the React Native app uses — and applied by a short script in `<head>`, not by the main script at the end of the body: otherwise the page paints green before switching. Green is represented by the *absence* of `data-theme`, so a page that has never been set carries no attribute and no override.
 
-Each palette's `--green-dim` sits between 5.5 and 8.0:1 against its own `--bg3`, matching the green's 5.9:1. Check a new palette against that before adding it — the dim tone is what the secondary text uses everywhere.
+Each palette's `--green-dim` sits between 5.5 and 8.0:1 against its own `--bg3`, matching the green's 5.9:1. Check a new palette against that before adding it — the dim tone is what the secondary text uses everywhere. The main tone runs from 11.2:1 (amber) to 19.2:1 (white).
+
+A fifth choice, **LIBRE**, derives the palette from one hue (`paletteFromHue()`): lightness is *raised until a contrast is reached*, not fixed, because equal HSL lightness is not equal legibility — pure blue at 60 % is a third as bright as green. Targets: `--green` 11:1 (the amber, no more: every point above costs saturation on reds and blues, down to pastel), `--green-dim` 5.5:1; checked over all 360 hues (11.0–18.5 and 5.5–5.8). The variables are set inline on `<html>` (`setCustomVars()`), which beats the sheet — `applyTheme()` removes them when a fixed screen is picked. The computed palette is stored whole in `localStorage.themeCustom` (`{ h, vars }`) so the `<head>` script only copies it, validating each name and value (`#rrggbb` or `r,g,b`) before use. The slider recolours live and writes on `change`. `input[type=range].theme-hue`, not `.theme-hue`: the global range rule is more specific than a class. The app has no LIBRE; its `themePalette` lives in its own storage.
 
 While the settings dialog is open the global keyboard shortcuts stand down and only Escape is handled; stopping the radio by typing "s" in a dialog would be a nasty surprise.
 

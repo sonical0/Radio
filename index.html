@@ -21,6 +21,20 @@
     var saved = localStorage.getItem('themePalette');
     if (saved && ['vert', 'ambre', 'bleu', 'blanc'].indexOf(saved) >= 0) {
       document.documentElement.dataset.theme = saved;
+    } else if (saved === 'libre') {
+      // La couleur libre est calculée par le script principal, qui stocke le
+      // résultat : ici on ne fait que le recopier, sans refaire le calcul. Chaque
+      // valeur est contrôlée — le stockage n'est pas une source de confiance.
+      var custom = JSON.parse(localStorage.getItem('themeCustom') || 'null');
+      var ok = /^(#[0-9a-f]{6}|\d{1,3},\d{1,3},\d{1,3})$/i;
+      if (custom && custom.vars) {
+        for (var k in custom.vars) {
+          if (/^--(green|green-dim|green-bright|bg|bg2|bg3|border|accent-rgb)$/.test(k) && ok.test(custom.vars[k])) {
+            document.documentElement.style.setProperty(k, custom.vars[k]);
+          }
+        }
+        document.documentElement.dataset.theme = 'libre';
+      }
     }
   } catch (e) {}
 </script>
@@ -206,6 +220,17 @@
   .theme-name { flex: 1; }
   .theme-check { font-family: 'Share Tech Mono', monospace; font-size: 14px; }
   .theme-close { display: block; margin-left: auto; margin-top: 8px; }
+  /* Couleur libre : une teinte, le reste de la palette en découle. */
+  .theme-custom[hidden] { display: none; }
+  .theme-hue-bar {
+    height: 6px; margin: 2px 0 4px;
+    background: linear-gradient(to right,
+      hsl(0,100%,62%), hsl(60,100%,55%), hsl(120,100%,55%), hsl(180,100%,55%),
+      hsl(240,100%,70%), hsl(300,100%,65%), hsl(359,100%,62%));
+  }
+  /* input[type=range].theme-hue et non .theme-hue : la règle globale des
+     curseurs (90 px) est plus spécifique qu'une simple classe. */
+  input[type=range].theme-hue { width: 100%; margin: 6px 0 2px; }
 
   #clock { font-family: 'VT323', monospace; font-size: 22px; color: var(--green-dim); letter-spacing: 2px; }
 
@@ -659,6 +684,11 @@
       <div class="theme-title" id="theme-title">── RÉGLAGES ──</div>
       <div class="theme-label" id="theme-legend">Couleur d'écran</div>
       <div id="theme-options" role="radiogroup" aria-labelledby="theme-legend"></div>
+      <div class="theme-custom" id="theme-custom" hidden>
+        <label class="theme-label" for="theme-hue">Teinte</label>
+        <div class="theme-hue-bar" aria-hidden="true"></div>
+        <input type="range" class="theme-hue" id="theme-hue" min="0" max="359" step="1">
+      </div>
       <button type="button" class="add-btn theme-close" id="theme-close">FERMER</button>
     </div>
   </div>
@@ -3234,12 +3264,106 @@ const THEMES = [
   { id: 'vert',  label: 'VERT',  swatch: '#39ff6a' },
   { id: 'ambre', label: 'AMBRE', swatch: '#ffb642' },
   { id: 'bleu',  label: 'BLEU',  swatch: '#41d4ff' },
-  { id: 'blanc', label: 'BLANC', swatch: '#e8fff0' }
+  { id: 'blanc', label: 'BLANC', swatch: '#e8fff0' },
+  // Le Pip-Boy de Fallout 4 laisse régler sa couleur au curseur : une teinte
+  // au choix, dont toute la palette est calculée.
+  { id: 'libre', label: 'LIBRE', swatch: null }
 ];
 const THEME_KEY = 'themePalette';
+const CUSTOM_THEME_KEY = 'themeCustom';
+const CUSTOM_THEME_VARS = ['--green', '--green-dim', '--green-bright', '--bg', '--bg2', '--bg3', '--border', '--accent-rgb'];
+// Une teinte qu'aucun écran fixe ne propose, pour que choisir LIBRE change
+// visiblement quelque chose.
+const CUSTOM_HUE_DEFAULT = 300;
+let customHue = CUSTOM_HUE_DEFAULT;
 
 function currentTheme() {
   return document.documentElement.dataset.theme || 'vert';
+}
+
+// ─── Palette calculée depuis une teinte ───
+function hslToRgb(h, s, l) {
+  s /= 100; l /= 100;
+  const k = n => (n + h / 30) % 12;
+  const a = s * Math.min(l, 1 - l);
+  const f = n => l - a * Math.max(-1, Math.min(k(n) - 3, Math.min(9 - k(n), 1)));
+  return [f(0), f(8), f(4)].map(v => Math.round(v * 255));
+}
+const rgbHex = rgb => '#' + rgb.map(v => v.toString(16).padStart(2, '0')).join('');
+function luminance(rgb) {
+  const [r, g, b] = rgb.map(v => {
+    v /= 255;
+    return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4;
+  });
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+}
+function contrast(a, b) {
+  const [hi, lo] = [luminance(a), luminance(b)].sort((x, y) => y - x);
+  return (hi + 0.05) / (lo + 0.05);
+}
+
+/**
+ * Les mêmes rôles que les quatre écrans fixes, avec les mêmes exigences. À
+ * luminosité égale, les teintes ne se valent pas : un bleu pur à 60 % est trois
+ * fois plus sombre à l'œil qu'un vert. On monte donc la luminosité jusqu'au
+ * contraste visé plutôt que de la fixer — sans quoi un Pip-Boy bleu nuit serait
+ * illisible.
+ */
+function paletteFromHue(h) {
+  const bg3 = hslToRgb(h, 30, 3);
+  const reach = (s, from, target, max) => {
+    let l = from;
+    let rgb = hslToRgb(h, s, l);
+    while (contrast(rgb, bg3) < target && l < max) rgb = hslToRgb(h, s, ++l);
+    return { rgb, l };
+  };
+  // Texte principal : les écrans fixes vont de 11,2:1 (ambre) à 19,2:1 (blanc).
+  // On vise l'ambre et pas plus : chaque point de contraste gagné sur un rouge
+  // ou un bleu se paie en saturation, jusqu'au pastel.
+  const main = reach(100, 50, 11, 90);
+  // Texte secondaire : 5,5:1 au moins, comme --green-dim partout ailleurs.
+  const dim = reach(60, 25, 5.5, 70);
+  return {
+    '--green': rgbHex(main.rgb),
+    '--green-dim': rgbHex(dim.rgb),
+    '--green-bright': rgbHex(hslToRgb(h, 100, Math.min(main.l + 16, 94))),
+    '--bg': rgbHex(hslToRgb(h, 22, 4.5)),
+    '--bg2': rgbHex(hslToRgb(h, 28, 7)),
+    '--bg3': rgbHex(bg3),
+    '--border': rgbHex(hslToRgb(h, 45, 20)),
+    '--accent-rgb': main.rgb.join(',')
+  };
+}
+
+function setCustomVars(vars) {
+  const style = document.documentElement.style;
+  for (const k of CUSTOM_THEME_VARS) {
+    if (vars) style.setProperty(k, vars[k]);
+    else style.removeProperty(k);
+  }
+}
+
+function loadCustomHue() {
+  try {
+    const v = JSON.parse(localStorage.getItem(CUSTOM_THEME_KEY) || 'null');
+    if (v && Number.isInteger(v.h) && v.h >= 0 && v.h < 360) customHue = v.h;
+  } catch {}
+}
+
+// La palette calculée est stockée entière : le script de l'en-tête la recopie
+// avant le premier affichage, sans avoir à refaire le calcul.
+function saveCustomHue() {
+  try {
+    localStorage.setItem(CUSTOM_THEME_KEY, JSON.stringify({ h: customHue, vars: paletteFromHue(customHue) }));
+  } catch {}
+}
+
+function updateCustomSwatch() {
+  const btn = document.querySelector('.theme-option[data-theme="libre"]');
+  if (!btn) return;
+  const color = paletteFromHue(customHue)['--green'];
+  btn.style.color = color;
+  btn.querySelector('.theme-swatch').style.background = color;
 }
 
 function applyTheme(id) {
@@ -3247,12 +3371,33 @@ function applyTheme(id) {
   // surcharger, et une page qui n'a jamais été réglée reste telle qu'elle est.
   if (id === 'vert') delete document.documentElement.dataset.theme;
   else document.documentElement.dataset.theme = id;
+  // La couleur libre vit dans des variables posées sur <html>, qui l'emportent
+  // sur les feuilles : il faut les retirer pour qu'un écran fixe reprenne la main.
+  setCustomVars(id === 'libre' ? paletteFromHue(customHue) : null);
+  if (id === 'libre') saveCustomHue();
+  document.getElementById('theme-custom').hidden = id !== 'libre';
   try { localStorage.setItem(THEME_KEY, id); } catch {}
   for (const btn of document.querySelectorAll('.theme-option')) {
     const on = btn.dataset.theme === id;
     btn.setAttribute('aria-checked', on ? 'true' : 'false');
     btn.querySelector('.theme-check').textContent = on ? '✓' : '';
   }
+}
+
+// Le curseur recolore la page pendant le geste ; l'écriture attend qu'on le
+// lâche, comme le gain par station.
+function initCustomHue() {
+  loadCustomHue();
+  const slider = document.getElementById('theme-hue');
+  slider.value = customHue;
+  slider.setAttribute('aria-valuetext', customHue + '°');
+  slider.addEventListener('input', () => {
+    customHue = parseInt(slider.value, 10) || 0;
+    slider.setAttribute('aria-valuetext', customHue + '°');
+    setCustomVars(paletteFromHue(customHue));
+    updateCustomSwatch();
+  });
+  slider.addEventListener('change', saveCustomHue);
 }
 
 function buildThemeOptions() {
@@ -3285,6 +3430,7 @@ function buildThemeOptions() {
     btn.addEventListener('click', () => applyTheme(theme.id));
     box.appendChild(btn);
   }
+  updateCustomSwatch();
 }
 
 const themeOverlay = document.getElementById('theme-overlay');
@@ -3312,6 +3458,8 @@ document.getElementById('theme-close').addEventListener('click', closeThemePanel
 // Cliquer hors du panneau referme ; cliquer dedans ne doit pas.
 themeOverlay.addEventListener('click', e => { if (e.target === themeOverlay) closeThemePanel(); });
 
+// La teinte d'abord : la pastille de l'option LIBRE en dépend.
+initCustomHue();
 buildThemeOptions();
 applyTheme(currentTheme());
 

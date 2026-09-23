@@ -41,8 +41,10 @@ No build step, no package manager, no framework. Serve the folder and it runs.
 - **Hide any station you don't listen to**, built-in ones included. Hiding is reversible: a
   "hidden stations" drawer at the bottom of the list brings them back one by one.
 - **A screen colour you choose.** The ⚙ button next to the clock swaps the phosphor between
-  green, amber, blue and white, like a Pip-Boy. The choice is stored and re-applied by a
-  script in the `<head>`, before the first paint, so the page never flashes the wrong colour.
+  green, amber, blue and white, like a Pip-Boy — or, as Fallout 4 allows, any hue on a
+  slider, with the whole palette derived from it and kept as readable as the fixed screens.
+  The choice is stored and re-applied by a script in the `<head>`, before the first paint,
+  so the page never flashes the wrong colour.
 - **Sleep timer** with a slow fade-out, **media keys** and lock-screen controls via the Media
   Session API, **keyboard shortcuts**, and automatic reconnection when a stream drops.
 - **Import / export** your custom stations as JSON, in the same file the Android app reads
