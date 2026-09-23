@@ -294,6 +294,8 @@
     letter-spacing: 1px;
     flex-shrink: 0;
   }
+  /* Sans station, le groupe est vide : le cadre restait seul au bout de la ligne. */
+  .np-badge:empty { display: none; }
   .np-song-row { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; overflow: hidden; }
   .np-song-label { color: var(--green-dim); font-size: 11px; white-space: nowrap; }
   .np-song-ticker {
