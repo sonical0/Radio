@@ -476,7 +476,9 @@
      trois boutons repoussent l'annuaire hors de l'écran pour un geste rare.
      L'annuaire, lui, reste hors du <details> — ce sont deux choses distinctes
      malgré leur cadre commun. */
-  .add-fold > summary { cursor: pointer; list-style: none; }
+  /* 19 px de haut, sous les 24 px d'une cible tactile (WCAG 2.5.8) : le
+     rembourrage l'agrandit sans décaler le texte. */
+  .add-fold > summary { cursor: pointer; list-style: none; padding: 3px 0; margin: -3px 0 7px; }
   .add-fold > summary::-webkit-details-marker { display: none; }
   .add-fold > summary::before { content: '▸ '; }
   .add-fold[open] > summary::before { content: '▾ '; }
