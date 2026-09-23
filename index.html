@@ -484,7 +484,9 @@
   .add-fold > summary:focus-visible { outline: 2px solid var(--green); outline-offset: 2px; }
 
   .add-input::placeholder { color: var(--green-dim); opacity: 0.6; }
-  .add-input:focus { border-color: var(--green-dim); }
+  /* La seule bordure de 1 px qui s'éclaircit (3,1:1 contre le repos) se voyait
+     mal : un anneau de 2 px dans la teinte principale, à 11:1 au moins. */
+  .add-input:focus { border-color: var(--green); box-shadow: 0 0 0 1px var(--green); }
   .add-btn {
     background: none;
     border: 1px solid var(--green-dim);
