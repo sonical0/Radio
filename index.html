@@ -810,7 +810,7 @@
       <datalist id="group-list"></datalist>
       <label class="sr-only" for="add-url">URL du flux</label>
       <input class="add-input" id="add-url" placeholder="URL du flux" aria-describedby="add-url-hint" />
-      <button class="add-btn" onclick="addStation()">+ AJOUTER</button>
+      <button class="add-btn" id="add-submit" onclick="addStation()">+ AJOUTER</button>
     </div>
     <p class="add-hint" id="add-url-hint">Flux direct (.mp3, .aac, .ogg), HLS (.m3u8) ou playlist (.m3u, .pls).</p>
     <div class="add-row" style="margin-top:8px;">
@@ -2209,7 +2209,10 @@ async function addStation() {
   const url  = document.getElementById('add-url').value.trim();
   const metaUrl = document.getElementById('add-meta').value.trim();
   const msg  = document.getElementById('add-msg');
-  const btn  = document.querySelector('.add-btn');
+  // Par son id : `.add-btn` désignait le premier bouton de cette classe dans la
+  // page, qui est devenu le FERMER du dialogue des réglages — c'est lui qui se
+  // désactivait pendant la résolution, pendant qu'AJOUTER restait cliquable.
+  const btn  = document.getElementById('add-submit');
 
   // Le groupe est facultatif depuis qu'il est libre : une station sans groupe
   // atterrit dans DIVERS plutôt que d'être refusée.
