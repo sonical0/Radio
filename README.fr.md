@@ -81,14 +81,16 @@ trois pour jouer du son en arrière-plan (`FOREGROUND_SERVICE`,
 (`USE_EXACT_ALARM` et `SCHEDULE_EXACT_ALARM` pour sonner à l'heure, `RECEIVE_BOOT_COMPLETED`
 pour survivre à un redémarrage, `WAKE_LOCK` pour tenir le processeur le temps d'ouvrir le
 flux, `USE_FULL_SCREEN_INTENT` pour l'écran de réveil par-dessus le verrouillage,
-`POST_NOTIFICATIONS` pour sa notification). Ni contacts, ni position, ni stockage. Trois tiers
+`POST_NOTIFICATIONS` pour sa notification). Ni contacts, ni position, ni stockage. Quatre tiers
 voient en revanche
 ton adresse IP pendant que tu t'en sers : le serveur de la station que tu écoutes
-(fallout.radio, ou celle que tu as ajoutée), l'API Radio-Browser quand tu cherches dans
-l'annuaire, et l'API des releases GitHub, interrogée au plus une fois par jour pour savoir
+(fallout.radio, ou celle que tu as ajoutée), l'API Radio-Browser quand tu cherches ou
+parcours l'annuaire — et aussi quand tu écoutes une station qui en vient, dont l'écoute lui
+est signalée une fois, parce que c'est le compteur par lequel il classe ses résultats —,
+l'hôte qui sert l'image de cette station, affichée en pochette, et l'API des releases GitHub, interrogée au plus une fois par jour pour savoir
 s'il existe un APK plus récent — l'application ne passant par aucun store, rien d'autre ne
 te le dirait. Cette requête ne porte aucun identifiant, n'installe rien, et son échec est
-silencieux. Le téléphone parle aux trois directement, rien ne passe par moi. Leurs politiques
+silencieux. Le téléphone parle aux quatre directement, rien ne passe par moi. Leurs politiques
 s'appliquent. Ce projet n'en a pas, puisqu'il ne collecte rien.
 
 Fallout est une marque de Bethesda Softworks. Projet de fan, sans affiliation.

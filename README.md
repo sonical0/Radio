@@ -81,13 +81,15 @@ one of them reaches your data: three to play audio in the background (`FOREGROUN
 (`USE_EXACT_ALARM` and `SCHEDULE_EXACT_ALARM` to ring on time, `RECEIVE_BOOT_COMPLETED` to
 survive a reboot, `WAKE_LOCK` to hold the CPU while the stream opens,
 `USE_FULL_SCREEN_INTENT` for the alarm screen over the lock screen, `POST_NOTIFICATIONS` for
-its notification). No contacts, no location, no storage. Three third
+its notification). No contacts, no location, no storage. Four third
 parties do see your IP address while you use it: the server of the station you are listening
-to (fallout.radio, or one you added yourself), the Radio-Browser API when you search the
-directory, and GitHub's release API, which the app queries at most once a day to find out
+to (fallout.radio, or one you added yourself), the Radio-Browser API when you search or
+browse the directory — and when you listen to a station that came from it, whose play is
+reported once, because that is the counter it ranks its own results by —, the host serving
+that station's image, shown as artwork, and GitHub's release API, which the app queries at most once a day to find out
 whether a newer APK exists — since it comes from no store, nothing else would tell you. That
 request carries no identifier, installs nothing, and a failure is silent. The phone talks to
-all three directly; nothing passes through me. Their own policies apply. This project has
+all four directly; nothing passes through me. Their own policies apply. This project has
 none, because it collects nothing.
 
 Fallout is a trademark of Bethesda Softworks. This is an unaffiliated fan project.

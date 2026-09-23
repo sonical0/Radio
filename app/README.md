@@ -6,7 +6,7 @@ Portage mobile du site. Le site en HTML pur reste sur `main` et n'est pas touch�
 
 **Deux branches, pas une.** `react-native/dev` porte le travail, `react-native/main` ne reçoit que ce qui a tourné sur un appareil. Git refuse une branche `react-native` à côté de `react-native/main` — un nom ne peut pas être à la fois une référence et un dossier de références — d'où ce préfixe plutôt qu'une branche parente. Les fichiers du site présents ici sont une copie de `main` : ils s'alignent par `cherry-pick`, **jamais par `git checkout main -- index.html`**, qui écrase au lieu de reporter (fait une fois, trois fonctions perdues et mises en ligne dans cet état).
 
-## État : parité atteinte avec le site (jalons 1 à 5)
+## État : parité atteinte avec le site (jalons 1 à 7)
 
 **Jalon 1 — la lecture.** Les stations jouent, la lecture **continue quand l app passe en arrière-plan**, avec notification média et contrôles de l écran verrouillé. Le titre y vient des métadonnées **ICY lues dans le flux** par le natif. Côté web, `navigator.mediaSession` est renseigné.
 
@@ -41,6 +41,23 @@ Le reste de ce jalon vient de l'APK installé, pas de l'émulateur. Sept défaut
 - **Le formulaire d'ajout** se replie, comme la corbeille — repris ensuite sur le site.
 - **Une recherche d'annuaire ne se refermait pas** : un bouton l'efface, sur les deux cibles.
 - **L'icône de l'application** est la favicon du site, adaptative et monochrome comprises.
+
+**Jalon 7 — l'application rattrape le site.** Le 23/09/2026, le site a pris neuf entrées de CHANGELOG dans la journée et l'application deux. Ce jalon porte les six qui avaient un sens sur un téléphone ; les deux autres — la passe QA et les noms de station en entier — sont des corrections de CSS et de mise en page propres au navigateur.
+
+- **La fiche Radio-Browser suit la station.** `uuid` et `favicon` sont gardés à l'ajout, persistés et exportés ; l'écoute est signalée à l'annuaire (`/url/{uuid}`), et une station ajoutée avant ce jalon est retrouvée par son URL de flux à la première écoute. Les trois gestes partent de `onStationStarted()`, appelé aussi depuis `MediaItemTransition` : le zapping natif ne passe pas par le bouton de l'écran.
+- **La pochette** est posée sur la seule piste écoutée par `updateMetadata()` — la file contient toute la bibliothèque, et sonder chaque favicon ferait contacter l'hôte de chaque station sans qu'on l'écoute. Elle s'affiche aussi dans la page, sur une plaque de 52 px à gauche des deux lignes de l'en-tête : niveaux de gris, puis la teinte d'accent en `multiply`. La plaque porte `isolation: 'isolate'`, sans quoi le mélange d'Android déborderait sur ce qu'il y a derrière.
+- **Parcourir l'annuaire** par pays (épinglables) ou par genre, avec cinq ordres de tri qui valent pour la recherche comme pour le parcours. Toutes les requêtes passent par `rbFetch()`, qui retombe sur `de1.api.radio-browser.info` : l'application tapait `all.api` en dur, et le nom tournant en panne plus rien ne répondait.
+- **Le temps d'écoute** par jour et par station, sur 31 jours glissants, compté seulement quand le son sort. Hors export : c'est l'histoire de cet appareil, pas une partie de la bibliothèque.
+- **La couleur d'écran libre**, un cinquième écran avec curseur de teinte. Le calcul vit dans `src/ui/palette.ts`, qui ne dépend de rien de React Native — isolé, il se vérifie sur les 360 teintes sans monter l'application (mesuré : 11,00:1 et 5,50:1 au pire, les deux cibles atteintes exactement).
+- **L'import de playlists M3U et PLS** par le même bouton que la sauvegarde JSON, avec les analyseurs et les garde-fous du site. Il a fait apparaître le même défaut que sur le site : une PLS servie en `audio/x-scpls` passait pour un flux direct, une M3U en `audio/x-mpegurl` pour du HLS — `resolveStreamUrl()` décidait sur le type avant d'avoir lu.
+
+> **`Intl.DisplayNames` n'existe pas sur Hermes.** Le site traduit les noms de pays avec lui. Sondé sur l'émulateur (RN 0.86) : `Intl` est un objet, `Intl.DisplayNames` est `undefined`, le constructeur lève, et la liste s'affichait « Albania », « United Arab Emirates ». La table française est donc calculée une fois par Node, qui a l'ICU complet, et embarquée dans `src/data/countries.fr.json` (279 codes, 5 Ko) ; `Intl.DisplayNames` reste consulté d'abord pour la cible web. `String.prototype.normalize`, lui, est bien là — le filtre sans accent fonctionne.
+>
+> Pour la régénérer, depuis `app/` :
+>
+> ```bash
+> node -e "const dn=new Intl.DisplayNames(['fr'],{type:'region'}),o={};for(let a=65;a<=90;a++)for(let b=65;b<=90;b++){const c=String.fromCharCode(a,b);let v;try{v=dn.of(c)}catch{continue}if(v&&v!==c)o[c]=v};const s={};for(const k of Object.keys(o).sort())s[k]=o[k];require('fs').writeFileSync('src/data/countries.fr.json',JSON.stringify(s)+'\n')"
+> ```
 
 ## Ce que l'app fait et que le site ne peut pas
 

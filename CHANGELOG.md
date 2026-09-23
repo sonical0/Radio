@@ -9,6 +9,124 @@ Ordre : **entrée la plus récente en tête**. Plusieurs passes le même jour so
 suffixées `(2)`, `(3)`… la plus haute étant la plus récente (même convention que
 `TANDEM_LOG.md`).
 
+## 2026-09-23 (3) — app, jalon 7 : l'application rattrape le site
+
+Le site a pris neuf entrées dans la journée, l'application deux. Ce jalon porte les six qui
+avaient un sens sur un téléphone ; les deux autres — la passe QA et les noms de station en
+entier — sont des corrections de CSS et de mise en page propres au navigateur.
+
+### Ajouté — la fiche Radio-Browser et la pochette
+- **Une station ajoutée depuis l'annuaire garde sa fiche** : `uuid` et `favicon`, validés par
+  `normalizeStation()`, persistés et exportés. Jusqu'ici l'application ne gardait que le nom,
+  l'URL et le pays — et le CHANGELOG du site notait qu'une sauvegarde passant par elle les
+  perdait. Ce n'est plus le cas.
+- **Pochette dans la notification et sur l'écran verrouillé**, posée par `updateMetadata()` sur
+  la seule piste écoutée : la file contient toute la bibliothèque, et sonder chaque favicon
+  ferait contacter l'hôte de chaque station sans qu'on l'écoute.
+- **La même pochette dans la page**, sur une plaque de 52 px à gauche des deux lignes de
+  l'en-tête. Niveaux de gris, puis la teinte d'accent en `multiply` : les clairs prennent la
+  couleur de l'écran, les sombres virent au noir. `filter` et `mixBlendMode` de React Native
+  0.76+ font ce que le site fait en CSS ; la plaque porte `isolation: 'isolate'`, sans quoi le
+  `multiply` d'Android déborderait sur ce qu'il y a derrière.
+- `Image.getSize` remplace le `new Image()` du site : il charge et rend les dimensions d'un
+  seul geste, donc il valide le lien **et** le seuil de 64 px. Il n'a pas de délai propre — un
+  hôte muet laisserait la promesse en suspens — d'où le nôtre, à 8 s.
+- **Les écoutes sont signalées à Radio-Browser** (`/url/{uuid}`), une fois par station et par
+  lancement, et **les stations ajoutées avant** sont retrouvées par leur URL de flux
+  (`/stations/byurl`) à la première écoute. Les trois gestes partent au démarrage d'une
+  station, y compris quand l'ordre vient de la notification, du casque ou du widget — c'est
+  `MediaItemTransition` qui les déclenche, pas le bouton de l'écran.
+
+### Ajouté — parcourir l'annuaire par pays et par genre
+- **◉ PAYS** : les pays de l'annuaire avec leur nombre de stations, **en français**,
+  filtrables à la frappe sans accent ni casse. ☆/★ épingle un pays, qui remonte en tête et le
+  reste d'un lancement à l'autre.
+- **# GENRES** : les 500 tags les plus portés. `tagExact` : « rock » ne ramène pas « classic
+  rock » ; les doublons de casse et les tags vides sont écartés.
+- **TRI** : plus écoutées (défaut), plus votées, tendance, par nom, au hasard — un groupe de
+  boutons radio, React Native n'ayant pas de menu déroulant. Il vaut pour la recherche comme
+  pour le parcours, relance la dernière requête et se retient. Parcourir ramène 40 stations
+  contre 15 pour une recherche.
+- **Repli de miroir** : toutes les requêtes passent par `rbFetch()`, qui retente sur
+  `de1.api.radio-browser.info` quand `all.api` ne répond pas, et s'en souvient. L'application
+  tapait `all.api` en dur : le nom tournant en panne, plus rien ne répondait.
+
+### Ajouté — le temps d'écoute
+- **Un volet « Temps d'écoute »** sous l'historique, sur le même patron : replié, il n'affiche
+  que le total du jour. Ouvert : totaux du jour, de 7 et de 31 jours, un histogramme des 31
+  derniers jours (aujourd'hui en surbrillance, résumé pour les lecteurs d'écran), et les huit
+  stations les plus écoutées.
+- **Compté seulement quand le son sort** : ni pause, ni tampon vide, ni reconnexion — les trois
+  cas que `streamState` porte déjà. Mesuré à l'horloge et non au nombre de pas ; un écart de
+  plus de 65 s (téléphone endormi, processus suspendu) est plafonné. Le nettoyage de l'effet
+  solde le temps jusqu'à l'instant de l'arrêt, sans quoi jusqu'à cinq secondes se perdraient
+  au début et à la fin de chaque écoute.
+- Stocké sous `listenStats` sur 31 jours glissants, **hors export** — c'est l'histoire de cet
+  appareil, pas une partie de la bibliothèque. L'écriture différée est vidée au passage en
+  arrière-plan, le moment où le processus peut être tué.
+
+### Ajouté — la couleur d'écran libre
+- **Un cinquième écran, LIBRE**, avec un curseur de teinte. La page se recolore pendant le
+  geste ; le choix s'écrit quand on lâche. Le calcul est celui du site : la luminosité est
+  montée jusqu'au contraste visé plutôt que fixée, texte principal à 11:1, secondaire à 5,5:1.
+- Le calcul vit dans `src/ui/palette.ts`, qui ne dépend de rien de React Native : isolé, il se
+  vérifie sur les 360 teintes sans monter l'application.
+
+### Ajouté — import de playlists M3U et PLS
+- **Le bouton IMPORTER accepte aussi une playlist** `.m3u` ou `.pls` d'un autre lecteur, en
+  plus de la sauvegarde JSON. C'est le contenu qui décide (`[playlist]`, `#EXTM3U`),
+  l'extension ne fait que départager.
+- Mêmes analyseurs que le site : `#EXTINF` avec `tvg-logo` et `group-title`, `#EXTGRP` de VLC,
+  virgule entre guillemets qui ne coupe pas le nom, `FileN`/`TitleN` rapprochés par numéro.
+  Mêmes garde-fous : contrôle d'hôte, doublons ignorés, 200 entrées au plus, master HLS refusé,
+  playlist imbriquée résolue et comptée à part si elle ne l'a pas pu.
+- Le sélecteur de fichiers n'est plus restreint au JSON. Les M3U et PLS arrivent sous des types
+  très variables selon l'application qui les a écrites, souvent `application/octet-stream` : un
+  filtre par type les aurait rendues invisibles dans le sélecteur.
+
+### Corrigé
+- **Une PLS servie en `audio/x-scpls` était prise pour un flux direct**, et toute M3U servie en
+  `audio/x-mpegurl` déclarée HLS sans être lue. Même défaut que le site, trouvé le même jour :
+  `resolveStreamUrl()` décidait sur le type avant d'avoir lu. Les types de playlist sont
+  désormais lus d'abord. Touchait le formulaire d'ajout depuis toujours.
+- **`sanitizeHue()` rendait 0 — du rouge — au lieu du défaut** pour une valeur absente :
+  `Number(null)` vaut 0, qui est fini et dans la plage. Le type est vérifié avant la valeur.
+  Trouvé par la mesure sur les 360 teintes, pas à l'œil.
+
+### Mesuré — `Intl.DisplayNames` n'existe pas sur Hermes
+Le site traduit les noms de pays avec `Intl.DisplayNames`. Sondé sur l'émulateur (RN 0.86,
+Hermes) : `Intl` est un objet, `Intl.DisplayNames` est `undefined`, et le constructeur lève.
+La liste s'affichait « Albania », « United Arab Emirates ». La table française est donc
+calculée une fois par Node, qui a l'ICU complet, et embarquée — `src/data/countries.fr.json`,
+279 codes, 5 Ko. `Intl.DisplayNames` reste consulté d'abord, pour la cible web où il existe.
+(`String.prototype.normalize`, lui, est bien là : le filtre sans accent fonctionne.)
+
+### Vérifié
+- 19 tests des analyseurs de playlist hors application (en-têtes, BOM, CRLF, attributs, virgule
+  entre guillemets, `#EXTGRP`, PLS dans le désordre, noms et groupes de repli, master HLS).
+- Palette sur les **360 teintes** : aucune couleur invalide, pire contraste principal 11,00:1,
+  pire contraste secondaire 5,50:1 — les deux cibles, atteintes exactement.
+- Émulateur API 36, APK debug, de bout en bout : LIBRE choisi puis teinte portée à 57°, toute
+  la page recolorée, choix retrouvé après redémarrage ; parcours des pays en français, filtre
+  « emirats » → « Émirats arabes unis », résultat « Émirats arabes unis · plus écoutées · 40 » ;
+  tri passé à « par nom », requête relancée ; genres chargés et ordonnés par nombre de stations.
+- Station de l'annuaire ajoutée : `uuid` **et** `favicon` relus dans le stockage, pochette FIP
+  affichée dans la page et dans la notification média.
+- Playlist de six entrées importée : « 3 importée(s) · 1 déjà présente(s) · 2 refusée(s) —
+  adresse locale ou invalide », groupes « Jazz, et autres » (virgule gardée) et « Ambiance »
+  (`#EXTGRP`), et la PLS SomaFM imbriquée résolue en `ice6.somafm.com/groovesalad-128-mp3` —
+  aucune entrée « non vérifiée », donc la correction du type `audio/x-scpls` tient.
+- Temps d'écoute : 1 min compté, retrouvé après un arrêt forcé de l'application, arrêté net à
+  la pause.
+- Deux défauts trouvés en regardant l'écran, corrigés : les lignes de parcours tombaient sur la
+  police système au lieu de celle du Pip-Boy, et la plaque de pochette, posée dans la seule
+  ligne STATION, en décalait le libellé au lieu d'encadrer les deux lignes comme sur le site.
+
+### Non vérifié
+Le repli de miroir : il demande que `all.api` tombe, ce qu'on ne peut pas provoquer depuis
+l'émulateur. Le code est celui du site, dont le repli a été vérifié en bloquant le nom tournant
+dans le navigateur.
+
 ## 2026-09-23 (2) — app, l'APK se construit en CI
 
 ### Ajouté — `.github/workflows/android.yml`
