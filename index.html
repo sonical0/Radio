@@ -3442,8 +3442,23 @@ const themeBtn = document.getElementById('theme-btn');
 
 function themePanelOpen() { return !themeOverlay.hidden; }
 
+// Un dialogue qui se dit modal (aria-modal) doit l'être : sans ça, Tab sortait
+// du panneau vers la page dessous, toujours active. Rendre le reste inerte
+// garde le focus dans le panneau et le cache aux lecteurs d'écran. On remonte
+// de l'overlay jusqu'à <body> en rendant inertes ses frères à chaque niveau,
+// jamais ses ancêtres : l'overlay vit dans le conteneur de la page, et rendre
+// ce conteneur inerte rendrait le panneau inerte avec lui.
+function setPageInert(on) {
+  for (let node = themeOverlay; node && node !== document.body; node = node.parentElement) {
+    for (const sib of node.parentElement.children) {
+      if (sib !== node && sib.tagName !== 'SCRIPT') sib.inert = on;
+    }
+  }
+}
+
 function openThemePanel() {
   themeOverlay.hidden = false;
+  setPageInert(true);
   themeBtn.setAttribute('aria-expanded', 'true');
   const checked = themeOverlay.querySelector('[aria-checked="true"]') || themeOverlay.querySelector('.theme-option');
   checked?.focus();
@@ -3451,6 +3466,8 @@ function openThemePanel() {
 
 function closeThemePanel() {
   themeOverlay.hidden = true;
+  // Avant de rendre le focus : un élément inerte ne peut pas le recevoir.
+  setPageInert(false);
   themeBtn.setAttribute('aria-expanded', 'false');
   // Rendre le focus au bouton qui a ouvert : sans ça, il repart au début du
   // document et la navigation au clavier recommence de zéro.
