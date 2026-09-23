@@ -9,6 +9,32 @@ Ordre : **entrée la plus récente en tête**. Plusieurs passes le même jour so
 suffixées `(2)`, `(3)`… la plus haute étant la plus récente (même convention que
 `TANDEM_LOG.md`).
 
+## 2026-09-23 (2) — app, l'APK se construit en CI
+
+### Ajouté — `.github/workflows/android.yml`
+- **Build release à chaque push** sur `react-native/**`, sous Linux : aucun des pièges Windows
+  (espace dans le chemin du SDK, 260 caractères, JDK 25), et `expo prebuild --clean` à chaque
+  fois — le manifeste périmé qui a produit deux APK faux le 19/09 ne peut plus se produire.
+  CMake 3.30.5 et `cmake.dir` posés comme sur le poste. Release plutôt que debug : seul le
+  release embarque le bundle JS et passe par la signature.
+- **Sans secrets, une clé jetable** : le build va au bout et l'APK sort en artefact, nommé
+  `-cle-jetable` pour qu'on ne le prenne pas pour une version installable.
+- **Un tag `v*` crée une release en brouillon** signée de la vraie clé (secrets obligatoires).
+  Brouillon parce que l'app surveille l'API des releases : rien n'est annoncé aux téléphones
+  avant qu'on ait écrit les notes et publié à la main.
+- **Refusé plutôt que découvert sur le téléphone** : version de l'APK différente d'`app.json`,
+  tag différent de la version, signature de debug, clé différente de la dernière release
+  publiée, `versionCode` qui ne la dépasse pas, release déjà existante.
+
+### À faire une fois
+- Poser les quatre secrets de signature (`app/README.md`, section « La CI »). Tant qu'ils
+  manquent, les push construisent avec la clé jetable et les tags échouent — volontairement.
+
+### Vérifié
+- YAML validé, les neuf scripts passent `bash -n`, et le piège `yes | sdkmanager` sous
+  `pipefail` (échec 141) mesuré puis contourné. **Pas encore exécuté sur GitHub** : il le sera
+  au premier push de cette branche.
+
 ## 2026-09-23 — app, une reconnexion qui ne renonce plus au premier tunnel
 
 ### Modifications

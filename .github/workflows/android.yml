@@ -1,0 +1,209 @@
+# APK Android : un build release à chaque push, une release brouillon à chaque tag.
+#
+# Pourquoi release et pas debug à chaque push : seul le release embarque le bundle
+# JS et passe par la configuration de signature — c'est lui qui casse, et on veut
+# le savoir au push, pas le jour du tag.
+#
+# Les deux pièges qui ont produit des APK faux le 19/09/2026 ne peuvent pas se
+# reproduire ici : `expo prebuild --clean` régénère android/ à chaque fois (plus de
+# manifeste périmé), et la version lue dans l'APK est comparée à app.json.
+#
+# Actions de premier rang uniquement (actions/*) : ce workflow manipule la clé de
+# signature.
+
+name: Android APK
+
+on:
+  push:
+    branches: ['react-native/**']
+    tags: ['v*']
+  pull_request:
+    branches: ['react-native/**']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: android-${{ github.ref }}
+  # Un push chasse le build du précédent ; un tag, jamais.
+  cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/') }}
+
+env:
+  # RN 0.86 exige CMake 3.30.5 ; sans cmake.dir, AGP retombe sur la 3.22.1 du SDK et
+  # le lien échoue sur des symboles absents (voir app/README.md).
+  CMAKE_VERSION: '3.30.5'
+
+jobs:
+  apk:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    outputs:
+      version: ${{ steps.check.outputs.version }}
+      version_code: ${{ steps.check.outputs.version_code }}
+      cert: ${{ steps.check.outputs.cert }}
+      apk: ${{ steps.check.outputs.apk }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          # JDK 17 : AGP ne supporte pas le 25 qu'embarque Android Studio.
+          java-version: '17'
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: gradle-${{ runner.os }}-${{ hashFiles('app/package-lock.json') }}
+          restore-keys: gradle-${{ runner.os }}-
+
+      - name: CMake ${{ env.CMAKE_VERSION }}
+        # `yes |` ferait échouer l'étape : bash tourne en pipefail, et yes meurt de
+        # SIGPIPE (141) quand sdkmanager a fini. La substitution n'entre pas dans le
+        # statut du pipeline.
+        run: '"$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "cmake;$CMAKE_VERSION" < <(yes) > /dev/null'
+
+      - name: Dépendances
+        working-directory: app
+        run: npm ci
+
+      # La vraie clé si les secrets existent ; sinon une clé jetable, pour que le
+      # build release aille au bout quand même. Un tag exige la vraie : un APK signé
+      # d'une autre clé ne s'installe pas par-dessus l'app existante.
+      - name: Clé de signature
+        working-directory: app
+        env:
+          KEYSTORE_B64: ${{ secrets.RADIO_KEYSTORE_BASE64 }}
+          KEY_ALIAS: ${{ secrets.RADIO_KEY_ALIAS }}
+          STORE_PASSWORD: ${{ secrets.RADIO_STORE_PASSWORD }}
+          KEY_PASSWORD: ${{ secrets.RADIO_KEY_PASSWORD }}
+        run: |
+          mkdir -p keystore
+          if [ -n "$KEYSTORE_B64" ]; then
+            echo "$KEYSTORE_B64" | base64 -d > keystore/release.jks
+            printf 'RADIO_STORE_FILE=release.jks\nRADIO_KEY_ALIAS=%s\nRADIO_STORE_PASSWORD=%s\nRADIO_KEY_PASSWORD=%s\n' \
+              "$KEY_ALIAS" "$STORE_PASSWORD" "$KEY_PASSWORD" > keystore/credentials.properties
+            echo "SIGNING=release" >> "$GITHUB_ENV"
+          elif [[ "$GITHUB_REF" == refs/tags/* ]]; then
+            echo "::error::Tag sans clé de release : ajouter les secrets RADIO_KEYSTORE_BASE64, RADIO_KEY_ALIAS, RADIO_STORE_PASSWORD et RADIO_KEY_PASSWORD."
+            exit 1
+          else
+            pass="ci-$(openssl rand -hex 16)"
+            keytool -genkeypair -keystore keystore/release.jks -alias ci -keyalg RSA -keysize 2048 \
+              -validity 2 -storepass "$pass" -keypass "$pass" -dname "CN=Radio CI throwaway" -noprompt
+            printf 'RADIO_STORE_FILE=release.jks\nRADIO_KEY_ALIAS=ci\nRADIO_STORE_PASSWORD=%s\nRADIO_KEY_PASSWORD=%s\n' \
+              "$pass" "$pass" > keystore/credentials.properties
+            echo "SIGNING=throwaway" >> "$GITHUB_ENV"
+            echo "::notice::Pas de clé de release dans les secrets : APK signé avec une clé jetable, à ne pas installer."
+          fi
+
+      - name: Prebuild
+        working-directory: app
+        run: |
+          npx expo prebuild --platform android --clean --no-install
+          # Le prebuild emporte local.properties : sans cmake.dir, retour à la 3.22.1.
+          printf 'sdk.dir=%s\ncmake.dir=%s\n' "$ANDROID_HOME" "$ANDROID_HOME/cmake/$CMAKE_VERSION" > android/local.properties
+
+      - name: assembleRelease
+        working-directory: app/android
+        run: ./gradlew assembleRelease --no-daemon --stacktrace
+
+      # Vérifier l'APK, pas l'intention : version et signature lues dans le fichier.
+      - name: Vérification de l'APK
+        id: check
+        run: |
+          BT=$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)
+          APK=app/android/app/build/outputs/apk/release/app-release.apk
+          test -f "$APK" || { echo "::error::APK release introuvable"; ls -R app/android/app/build/outputs/apk; exit 1; }
+
+          badging=$("$BT/aapt2" dump badging "$APK")
+          name=$(grep -oP "versionName='\K[^']+" <<< "$badging")
+          code=$(grep -oP "versionCode='\K[0-9]+" <<< "$badging")
+          want_name=$(node -p "require('./app/app.json').expo.version")
+          want_code=$(node -p "require('./app/app.json').expo.android.versionCode")
+          echo "APK : $name ($code) — app.json : $want_name ($want_code)"
+          [ "$name" = "$want_name" ] || { echo "::error::versionName $name ≠ app.json $want_name"; exit 1; }
+          [ "$code" = "$want_code" ] || { echo "::error::versionCode $code ≠ app.json $want_code"; exit 1; }
+          if [[ "$GITHUB_REF" == refs/tags/* ]]; then
+            [ "v$name" = "$GITHUB_REF_NAME" ] || { echo "::error::tag $GITHUB_REF_NAME ≠ version v$name"; exit 1; }
+          fi
+
+          certs=$("$BT/apksigner" verify --print-certs "$APK")
+          if grep -q 'CN=Android Debug' <<< "$certs"; then
+            echo "::error::APK signé avec la clé de debug"; exit 1
+          fi
+          cert=$(grep -oP 'certificate SHA-256 digest: \K[0-9a-f]+' <<< "$certs" | head -1)
+          echo "Certificat SHA-256 : $cert"
+
+          out="fallout-radio-$name.apk"
+          [ "$SIGNING" = release ] || out="fallout-radio-$name-cle-jetable.apk"
+          cp "$APK" "$out"
+          {
+            echo "version=$name"
+            echo "version_code=$code"
+            echo "cert=$cert"
+            echo "apk=$out"
+          } >> "$GITHUB_OUTPUT"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.check.outputs.apk }}
+          path: ${{ steps.check.outputs.apk }}
+          retention-days: 14
+          if-no-files-found: error
+
+  # Brouillon, jamais publié d'office : l'app interroge l'API des releases pour
+  # annoncer une mise à jour, et un brouillon y est invisible. Les notes s'écrivent
+  # depuis CHANGELOG.md, puis on publie à la main.
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: apk
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      TAG: ${{ github.ref_name }}
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: ${{ needs.apk.outputs.apk }}
+
+      - name: Refuser une release existante
+        run: |
+          if gh release view "$TAG" > /dev/null 2>&1; then
+            echo "::error::La release $TAG existe déjà : rien n'est remplacé d'office."
+            exit 1
+          fi
+
+      # Android n'installe une mise à jour que signée par la même clé et de
+      # versionCode supérieur. On le vérifie contre la dernière release publiée,
+      # plutôt que de le découvrir sur le téléphone.
+      - name: Comparer à la dernière release
+        run: |
+          prev=$(gh release list --exclude-drafts --exclude-pre-releases --limit 1 --json tagName -q '.[0].tagName')
+          if [ -z "$prev" ]; then echo "Aucune release précédente."; exit 0; fi
+          gh release download "$prev" --pattern '*.apk' --dir prev
+          old=$(ls prev/*.apk | head -1)
+          BT=$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)
+          old_cert=$("$BT/apksigner" verify --print-certs "$old" | grep -oP 'certificate SHA-256 digest: \K[0-9a-f]+' | head -1)
+          old_code=$("$BT/aapt2" dump badging "$old" | grep -oP "versionCode='\K[0-9]+")
+          echo "$prev : versionCode $old_code, certificat $old_cert"
+          [ "$old_cert" = "${{ needs.apk.outputs.cert }}" ] || { echo "::error::Clé différente de $prev : l'APK ne s'installerait pas par-dessus."; exit 1; }
+          [ "${{ needs.apk.outputs.version_code }}" -gt "$old_code" ] || { echo "::error::versionCode ${{ needs.apk.outputs.version_code }} ≤ $old_code ($prev)."; exit 1; }
+
+      - name: Release brouillon
+        run: |
+          gh release create "$TAG" "${{ needs.apk.outputs.apk }}" --draft --verify-tag \
+            --title "FO Radio ${{ needs.apk.outputs.version }}" \
+            --notes "Brouillon créé par la CI. Écrire les notes depuis CHANGELOG.md, puis publier."

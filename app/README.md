@@ -91,6 +91,28 @@ La signature est injectée par `plugins/withReleaseSigning.js`, un plugin de con
 
 **Le dossier `keystore/` est hors dépôt, et doit le rester.** Il contient le trousseau et son mot de passe. Android n'accepte une mise à jour que signée par la même clé : perdre ce fichier, c'est ne plus pouvoir mettre à jour l'app installée — il faudrait la désinstaller et repartir de zéro, en perdant les stations ajoutées. À sauvegarder ailleurs que sur ce seul disque.
 
+### La CI : `.github/workflows/android.yml`
+
+GitHub Actions bâtit l'APK sous Linux, donc sans aucun des pièges Windows de cette page, et d'un `expo prebuild --clean` à chaque fois, donc sans manifeste périmé.
+
+- **À chaque push** sur `react-native/**` : build release complet. Sans secrets, il est signé d'une **clé jetable** générée pour l'occasion — l'APK (`fallout-radio-<version>-cle-jetable.apk`, en artefact 14 jours) prouve que le build passe, mais ne s'installe pas par-dessus l'app.
+- **À chaque tag `v*`** : build signé de la vraie clé (les secrets sont alors obligatoires), puis **release en brouillon** avec `fallout-radio-<version>.apk`. Brouillon parce que l'app interroge l'API des releases pour annoncer une mise à jour, et qu'un brouillon y est invisible : on écrit les notes depuis `CHANGELOG.md`, puis on publie à la main.
+
+Ce que la CI refuse, plutôt que de le découvrir sur le téléphone : un `versionName`/`versionCode` lu dans l'APK qui diffère d'`app.json` ; un tag qui ne correspond pas à la version ; un APK signé de la clé de debug ; une clé différente de celle de la dernière release publiée, ou un `versionCode` qui ne la dépasse pas — Android refuserait la mise à jour dans les deux cas ; une release qui existe déjà.
+
+**Les quatre secrets**, à poser une fois (Settings → Secrets and variables → Actions, ou `gh`) depuis le poste qui détient `keystore/`. Les valeurs sont celles de `keystore/credentials.properties` :
+
+```bash
+base64 -w0 keystore/<RADIO_STORE_FILE> | gh secret set RADIO_KEYSTORE_BASE64
+gh secret set RADIO_KEY_ALIAS        # valeur de RADIO_KEY_ALIAS
+gh secret set RADIO_STORE_PASSWORD   # valeur de RADIO_STORE_PASSWORD
+gh secret set RADIO_KEY_PASSWORD     # valeur de RADIO_KEY_PASSWORD
+```
+
+C'est aussi une seconde copie du trousseau, hors de ce seul disque. **Mais c'est la confier à GitHub** : un workflow modifié sur une branche du dépôt peut lire ces secrets. Le dépôt n'a qu'un auteur ; s'il en gagne, restreindre les secrets à un environnement protégé.
+
+Publier une version : monter `version` et `android.versionCode` dans `app.json`, commiter, puis `git tag -a v<version> -m "…" && git push origin v<version>`.
+
 ### Le piège Windows : 260 caractères
 
 Le build release échoue avec `ninja: error: mkdir(...): No such file or directory` sur un chemin interminable. CMake reflète le chemin source complet dans l'arborescence de ses fichiers objets, et le seul mot `RelWithDebInfo` suffit à faire déborder la limite de Windows. Le build debug, lui, passe : son dossier s'appelle `Debug`.
