@@ -484,6 +484,10 @@
   .add-fold > summary:focus-visible { outline: 2px solid var(--green); outline-offset: 2px; }
 
   .add-input::placeholder { color: var(--green-dim); opacity: 0.6; }
+  /* Le détail des formats vivait dans les placeholders, tronqués dès 360 px et
+     effacés à la première lettre : il passe dessous, visible et relié au champ. */
+  .add-hint { color: var(--green-dim); font-size: 11px; margin: 4px 2px 0; line-height: 1.5; }
+  .add-hint code { font-family: 'Share Tech Mono', monospace; color: var(--green); }
   /* La seule bordure de 1 px qui s'éclaircit (3,1:1 contre le repos) se voyait
      mal : un anneau de 2 px dans la teinte principale, à 11:1 au moins. */
   .add-input:focus { border-color: var(--green); box-shadow: 0 0 0 1px var(--green); }
@@ -785,18 +789,20 @@
       <summary class="add-title">── AJOUTER UNE STATION ──</summary>
     <div class="add-row">
       <label class="sr-only" for="add-name">Nom de la station</label>
-      <input class="add-input" id="add-name" placeholder="Nom (ex: Fallout 4 - Far Harbor Radio)" />
+      <input class="add-input" id="add-name" placeholder="Nom de station" />
       <label class="sr-only" for="add-group">Groupe</label>
-      <input class="add-input" id="add-group" list="group-list" placeholder="Groupe (ex: FO4, JAZZ)" style="max-width:150px" />
+      <input class="add-input" id="add-group" list="group-list" placeholder="Groupe (FO4…)" style="max-width:150px" />
       <datalist id="group-list"></datalist>
       <label class="sr-only" for="add-url">URL du flux</label>
-      <input class="add-input" id="add-url" placeholder="URL stream (.mp3, .aac, .ogg, .m3u8, .m3u, .pls…)" />
+      <input class="add-input" id="add-url" placeholder="URL du flux" aria-describedby="add-url-hint" />
       <button class="add-btn" onclick="addStation()">+ AJOUTER</button>
     </div>
+    <p class="add-hint" id="add-url-hint">Flux direct (.mp3, .aac, .ogg), HLS (.m3u8) ou playlist (.m3u, .pls).</p>
     <div class="add-row" style="margin-top:8px;">
       <label class="sr-only" for="add-meta">URL des métadonnées (optionnel)</label>
-      <input class="add-input" id="add-meta" placeholder="Métadonnées (optionnel) — AzuraCast /api/nowplaying/… ou Icecast /status-json.xsl" />
+      <input class="add-input" id="add-meta" placeholder="Métadonnées (optionnel)" aria-describedby="add-meta-hint" />
     </div>
+    <p class="add-hint" id="add-meta-hint">Pour le titre en cours : AzuraCast <code>/api/nowplaying/…</code> ou Icecast <code>/status-json.xsl</code>. Vide, elle est déduite de l'URL quand c'est possible.</p>
     <div class="add-row" style="margin-top:8px;">
       <button class="add-btn" onclick="exportStations()">⇩ EXPORTER MES STATIONS</button>
       <button class="add-btn" onclick="document.getElementById('import-file').click()">⇧ IMPORTER</button>
