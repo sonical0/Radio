@@ -331,6 +331,7 @@
   .vol-label { color: var(--green-dim); font-size: 12px; }
   input[type=range] {
     -webkit-appearance: none;
+    appearance: none;
     width: 90px; height: 3px;
     background: var(--border);
     outline: none;
@@ -340,6 +341,18 @@
     -webkit-appearance: none;
     width: 13px; height: 13px;
     background: var(--green);
+    border-radius: 50%;
+    cursor: pointer;
+    box-shadow: 0 0 5px var(--green);
+  }
+  /* Firefox ignore les pseudo-éléments -webkit- : sans ces deux règles, il
+     garde le curseur du système, hors palette. Non vérifié sur Firefox, absent
+     du poste de développement. */
+  input[type=range]::-moz-range-track { height: 3px; background: var(--border); border: none; }
+  input[type=range]::-moz-range-thumb {
+    width: 13px; height: 13px;
+    background: var(--green);
+    border: none;
     border-radius: 50%;
     cursor: pointer;
     box-shadow: 0 0 5px var(--green);
