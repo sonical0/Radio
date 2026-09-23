@@ -42,7 +42,6 @@ jobs:
       version: ${{ steps.check.outputs.version }}
       version_code: ${{ steps.check.outputs.version_code }}
       cert: ${{ steps.check.outputs.cert }}
-      apk: ${{ steps.check.outputs.apk }}
     steps:
       - uses: actions/checkout@v4
 
@@ -76,9 +75,16 @@ jobs:
         working-directory: app
         run: npm ci
 
-      # La vraie clé si les secrets existent ; sinon une clé jetable, pour que le
-      # build release aille au bout quand même. Un tag exige la vraie : un APK signé
-      # d'une autre clé ne s'installe pas par-dessus l'app existante.
+      # La vraie clé pour un tag seulement ; partout ailleurs une clé jetable, pour que
+      # le build release aille au bout quand même. Un tag l'exige : un APK signé d'une
+      # autre clé ne s'installe pas par-dessus l'app existante.
+      #
+      # Le test sur la référence n'est pas redondant avec la présence des secrets. Sans
+      # lui, poser les secrets suffisait à signer **tous** les builds de branche de la
+      # vraie clé, et l'artefact perdait son suffixe `-cle-jetable` : sur un dépôt
+      # public, où les artefacts se téléchargent, chaque push devenait installable
+      # par-dessus l'app. La clé ne fuit pas ; c'est le garde-fou de nommage qui
+      # tombait.
       - name: Clé de signature
         working-directory: app
         env:
@@ -88,7 +94,7 @@ jobs:
           KEY_PASSWORD: ${{ secrets.RADIO_KEY_PASSWORD }}
         run: |
           mkdir -p keystore
-          if [ -n "$KEYSTORE_B64" ]; then
+          if [ -n "$KEYSTORE_B64" ] && [[ "$GITHUB_REF" == refs/tags/* ]]; then
             echo "$KEYSTORE_B64" | base64 -d > keystore/release.jks
             printf 'RADIO_STORE_FILE=release.jks\nRADIO_KEY_ALIAS=%s\nRADIO_STORE_PASSWORD=%s\nRADIO_KEY_PASSWORD=%s\n' \
               "$KEY_ALIAS" "$STORE_PASSWORD" "$KEY_PASSWORD" > keystore/credentials.properties
@@ -175,9 +181,14 @@ jobs:
       GH_REPO: ${{ github.repository }}
       TAG: ${{ github.ref_name }}
     steps:
+      # Le nom de l'artefact ne vient plus d'une sortie du job : `needs.apk.outputs.apk`
+      # arrivait vide alors que les trois autres sorties du meme step arrivaient, et
+      # `gh release create` recevait un chemin vide (« no matches found »). Le run n'a
+      # qu'un artefact d'APK : on le prend par motif, et le nom se lit sur le fichier.
       - uses: actions/download-artifact@v4
         with:
-          name: ${{ needs.apk.outputs.apk }}
+          pattern: '*.apk'
+          merge-multiple: true
 
       - name: Refuser une release existante
         run: |
@@ -204,6 +215,9 @@ jobs:
 
       - name: Release brouillon
         run: |
-          gh release create "$TAG" "${{ needs.apk.outputs.apk }}" --draft --verify-tag \
+          APK=$(ls fallout-radio-*.apk 2>/dev/null | head -1)
+          [ -n "$APK" ] || { echo "::error::APK introuvable apres telechargement de l'artefact"; ls -la; exit 1; }
+          echo "APK joint : $APK"
+          gh release create "$TAG" "$APK" --draft --verify-tag \
             --title "FO Radio ${{ needs.apk.outputs.version }}" \
             --notes "Brouillon créé par la CI. Écrire les notes depuis CHANGELOG.md, puis publier."

@@ -9,6 +9,40 @@ Ordre : **entrée la plus récente en tête**. Plusieurs passes le même jour so
 suffixées `(2)`, `(3)`… la plus haute étant la plus récente (même convention que
 `TANDEM_LOG.md`).
 
+## 2026-09-24 — app v1.5.0 publiée, et le premier tag casse la CI
+
+Première release passée par la CI. Les secrets de signature ont été posés, le tag `v1.5.0`
+poussé, et le build a révélé un défaut du workflow que seul un tag pouvait montrer.
+
+### Publié
+- **v1.5.0** (`versionCode` 11), le jalon 7. APK signé de la clé de release, vérifié avant
+  publication : `versionName 1.5.0`, `versionCode 11`, certificat
+  `dffa0e18…05a7` — **le même que v1.4.1**, donc la mise à jour s'installe par-dessus.
+
+### Corrigé — `.github/workflows/android.yml`
+- **Le job `release` joignait un chemin vide.** `needs.apk.outputs.apk` arrivait vide alors que
+  les trois autres sorties du même step (`version`, `version_code`, `cert`) arrivaient bien :
+  `gh release create "$TAG" ""` échouait sur « no matches found ». Le nom de l'artefact ne
+  vient plus d'une sortie du job — le run n'en a qu'un, on le prend par motif et le nom se lit
+  sur le fichier téléchargé, avec un refus explicite s'il manque.
+- Les deux contrôles de sûreté, eux, avaient bien tourné et étaient passés avant l'échec : même
+  certificat que la dernière release publiée, et `versionCode` 11 > 10. C'est ce qui a permis
+  de créer la release à la main sans rien deviner.
+
+### Corrigé — la vraie clé n'est plus utilisée que sur un tag
+- **Poser les secrets suffisait à signer tous les builds de branche de la clé de release.**
+  `if [ -n "$KEYSTORE_B64" ]` ne testait pas la référence : dès les secrets en place,
+  chaque push sur `react-native/**` produisait un APK signé pour de vrai, sans son suffixe
+  `-cle-jetable` ni la notice « à ne pas installer ». Sur un dépôt public, où les artefacts
+  se téléchargent, un build de branche devenait installable par-dessus l'app. La clé ne
+  fuit pas — c'est le garde-fou de nommage qui tombait. Le test de tag est donc ajouté, et
+  le refus d'un tag sans clé reste intact.
+
+### Non vérifié
+Le correctif du workflow : il demande un tag pour s'exercer, et le prochain viendra avec la
+prochaine version. La logique est lisible (le fichier téléchargé est listé, et son absence est
+une erreur explicite), mais elle n'a pas tourné.
+
 ## 2026-09-23 (3) — app, jalon 7 : l'application rattrape le site
 
 Le site a pris neuf entrées dans la journée, l'application deux. Ce jalon porte les six qui
