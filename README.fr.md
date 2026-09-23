@@ -52,7 +52,9 @@ Pas d'étape de build, pas de gestionnaire de paquets, pas de framework. On sert
   quand un flux tombe.
 - **Import / export** de tes stations personnelles en JSON, dans le même fichier que
   l'application Android. Les réveils qu'elle y met traversent la page sans être lus ni
-  perdus : exporter depuis le navigateur ne mutile pas la sauvegarde du téléphone.
+  perdus : exporter depuis le navigateur ne mutile pas la sauvegarde du téléphone. Le même
+  bouton accepte aussi une playlist `.m3u` ou `.pls` d'un autre lecteur (VLC, Winamp,
+  foobar2000…), noms, logos et groupes compris.
 - **Une application Android**, en React Native, qui partage cette liste de stations. Elle fait
   deux choses que cette page ne peut pas : amplifier les stations diffusées trop bas pour être
   rattrapées en baissant les autres, et lire le titre dans le flux lui-même. Le réveil radio

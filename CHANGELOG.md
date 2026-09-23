@@ -9,6 +9,47 @@ Ordre : **entrée la plus récente en tête**. Plusieurs passes le même jour so
 suffixées `(2)`, `(3)`… la plus haute étant la plus récente (même convention que
 `TANDEM_LOG.md`).
 
+## 2026-09-23 (8) — site, import de playlists M3U et PLS
+
+### Ajouté
+- **Le bouton IMPORTER accepte aussi une playlist** `.m3u` ou `.pls` d'un autre lecteur (VLC,
+  Winamp, foobar2000, cliamp, ou un export de Radio-Browser), en plus de la sauvegarde JSON.
+  C'est le contenu qui décide (`[playlist]`, `#EXTM3U`), l'extension ne fait que départager :
+  une sauvegarde n'emprunte jamais ce chemin.
+- **M3U** : le nom de chaque `#EXTINF`, ses attributs `tvg-logo` (gardé comme pochette) et
+  `group-title`, et le `#EXTGRP` de VLC. Une virgule dans un nom entre guillemets ne le coupe
+  pas. **PLS** : les couples `FileN` / `TitleN`, rapprochés par numéro et non par ordre des
+  lignes.
+- Chaque station prend le groupe de la playlist, sinon le nom du fichier : un lot importé
+  reste regroupé.
+- **Garde-fous** : chaque adresse passe par le même contrôle d'hôte que le formulaire ; les
+  doublons sont ignorés ; lecture limitée à 200 entrées (au-delà, c'est une liste IPTV) ; un
+  master HLS est refusé avec une explication — c'est un flux découpé, l'importer créerait des
+  stations de dix secondes ; une entrée qui est elle-même une playlist est résolue comme dans
+  le formulaire, et comptée à part si elle n'a pas pu l'être.
+- Bilan en une ligne : importées, déjà présentes, refusées, non vérifiées, tronquées.
+
+### Corrigé
+- **Une PLS servie en `audio/x-scpls` était prise pour un flux direct.** `resolveStreamUrl()`
+  ne lisait aucune réponse de type `audio/*` : ajouter `https://somafm.com/groovesalad.pls`
+  créait une station muette. De même, toute M3U servie en `audio/x-mpegurl` était déclarée HLS
+  sans être lue, et confiée à hls.js qui ne sait pas la lire. Les types de playlist sont
+  désormais lus avant de décider. Touchait aussi le formulaire d'ajout, depuis toujours ;
+  trouvé en important une PLS imbriquée.
+
+### Vérifié
+- 13 tests unitaires des analyseurs (en-têtes, BOM, CRLF, attributs, virgule entre guillemets,
+  `#EXTGRP`, PLS dans le désordre, noms et groupes de repli).
+- Edge sans interface : M3U mixte (station réelle avec logo et groupe, doublon d'une station
+  livrée, hôte privé et `javascript:` refusés, PLS imbriquée SomaFM résolue vers le vrai flux),
+  réimport (tout en doublon), PLS, master HLS refusé, liste de 250 entrées plafonnée à 200,
+  champ fichier remis à zéro, station importée qui joue, sauvegarde JSON toujours importée.
+- `resolveStreamUrl()` sur un serveur de cas limites : PLS `audio/x-scpls` résolue, M3U simple
+  `audio/x-mpegurl` non marquée HLS, master HLS reconnu, flux sans fin servi en type
+  playlist coupé à 6 s.
+- Piège de test noté : SomaFM refuse l'agent utilisateur `HeadlessChrome` (code 4 en 0,6 s) ;
+  avec celui d'un navigateur ordinaire, la station ajoutée joue.
+
 ## 2026-09-23 (7) — site, passe QA complète
 
 Six fonctionnalités livrées le même jour, testées chacune seule, jamais ensemble. Passe

@@ -49,7 +49,9 @@ No build step, no package manager, no framework. Serve the folder and it runs.
   Session API, **keyboard shortcuts**, and automatic reconnection when a stream drops.
 - **Import / export** your custom stations as JSON, in the same file the Android app reads
   and writes. The alarms it puts there cross the page unread and unharmed: exporting from the
-  browser does not amputate the phone's backup.
+  browser does not amputate the phone's backup. The same button also takes an `.m3u` or
+  `.pls` playlist from another player (VLC, Winamp, foobar2000…), names, logos and groups
+  included.
 - **An Android app**, in React Native, sharing this station list. It does two things this page
   cannot: it amplifies the stations that are broadcast too quietly to be fixed by attenuating
   the others, and it reads the title out of the stream itself. The radio alarm clock and the
