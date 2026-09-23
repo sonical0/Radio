@@ -13,6 +13,7 @@ type Props = {
   title: string | null;
   playing: boolean;
   streamState: StreamState;
+  reconnectAttempt: number;
   master: number;
   muted: boolean;
   sleepMinutes: number;
@@ -48,7 +49,12 @@ export function NowPlaying(np: Props) {
   const { p, t } = useTheme();
   const s = useMemo(() => makeStyles(p), [p]);
 
-  const status = STREAM_LABEL[np.streamState];
+  // Sans fin, la reconnexion doit montrer qu'elle avance : le numéro de
+  // l'essai distingue « ça tente encore » de « c'est figé ».
+  const status =
+    np.streamState === 'reconnecting' && np.reconnectAttempt > 1
+      ? `${STREAM_LABEL.reconnecting} ${np.reconnectAttempt}`
+      : STREAM_LABEL[np.streamState];
   const disabled = !np.station;
 
   return (

@@ -9,6 +9,33 @@ Ordre : **entrée la plus récente en tête**. Plusieurs passes le même jour so
 suffixées `(2)`, `(3)`… la plus haute étant la plus récente (même convention que
 `TANDEM_LOG.md`).
 
+## 2026-09-23 — app, une reconnexion qui ne renonce plus au premier tunnel
+
+### Modifications
+- **La reconnexion espace ses essais au lieu de s'arrêter après trois.** 1, 2, 4, 8, 15 s,
+  puis toutes les 30 s tant que l'utilisateur n'a pas arrêté : trois essais à 2 s d'écart
+  s'épuisaient bien avant la fin d'une coupure réelle. Le libellé affiche le numéro de
+  l'essai (« ⟳ RECONNEXION… 4 ») pour qu'une attente longue ne passe pas pour un gel.
+- **La nature de l'erreur décide du nombre d'essais.** Réseau ou inconnue : sans fin.
+  `source` (404, mais aussi 502 passager) : trois. Décodeur, sortie audio ou lecture refusée
+  par le navigateur : aucun, réessayer n'y changerait rien. Sur le web, une même coupure
+  remonte deux fois (rejet de `play()` classé `unknown`, puis l'erreur de l'élément) : le
+  verdict le plus sévère l'emporte, et un abandon n'est plus relancé par l'erreur en double.
+- **Chien de garde de 20 s sur le tampon.** Un flux qui garde la connexion ouverte sans plus
+  rien livrer laisse le lecteur en tampon sans erreur ; il est désormais rechargé. Recharger
+  reconstruit la file : `retry()` n'est qu'un `prepare()`, sans effet sur un lecteur en tampon.
+- **Essai immédiat au retour du réseau** (événement `online` sur le web) et au retour de
+  l'appli au premier plan sur le téléphone, faute de module réseau natif.
+
+### Corrections
+- L'horloge de chevet n'affichait jamais « … CONNEXION » : elle comparait l'état du flux à
+  `'loading'`, qui n'existe pas. Elle suit maintenant le tampon et la reconnexion.
+
+Vérifié sur la cible web (station à domaine `.invalid`, erreurs forcées) : trois essais puis
+abandon sur `source`, délais croissants sans abandon sur `network`, arrêt qui coupe les
+essais, essai immédiat sur `online`. **Non vérifié** : le chien de garde de tampon, et tout le
+comportement sur Android — pas de SDK sur le poste de développement.
+
 ## 2026-09-22 — app v1.4.1, zapper depuis l'horloge de chevet
 
 ### Ajouts

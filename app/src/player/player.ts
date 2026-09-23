@@ -139,16 +139,6 @@ export function stop(): void {
   TrackPlayer.clear();
 }
 
-/**
- * Relance le flux après une coupure. Sur le site, il fallait réattacher la
- * source à la main et compter les tentatives ; ici le natif sait reprendre, on
- * ne garde que la politique (combien de fois, à quel rythme), dans usePlayback.
- */
-export function retry(): void {
-  ensure();
-  TrackPlayer.retry();
-}
-
 // ─── Minuterie de veille ───
 // Les paliers du site, en minutes. 0 = éteinte.
 export const SLEEP_STEPS_MIN = [0, 15, 30, 60, 90];

@@ -254,6 +254,7 @@ function Radio() {
           title={play.current ? (titles[play.current.url] ?? null) : null}
           playing={play.playing}
           streamState={play.streamState}
+          reconnectAttempt={play.reconnectAttempt}
           master={play.master}
           muted={play.muted}
           sleepMinutes={play.sleepMinutes}

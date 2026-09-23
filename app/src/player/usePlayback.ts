@@ -1,9 +1,9 @@
 // L'état de lecture : station courante, volume maître, sourdine, état du flux,
 // minuterie de veille. L'interface ne connaît que ce qui sort d'ici.
 
-import TrackPlayer, { Event, PlaybackState, useIsPlaying } from '@rntp/player';
+import TrackPlayer, { Event, PlaybackState, type PlaybackErrorCode, useIsPlaying } from '@rntp/player';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Platform } from 'react-native';
+import { AppState, Platform } from 'react-native';
 
 import type { Station } from '../model/station';
 import {
@@ -15,7 +15,6 @@ import {
 import {
   SLEEP_STEPS_MIN,
   playStation as playNative,
-  retry,
   setSleepTimer,
   setVolume,
   skipNext,
@@ -31,10 +30,36 @@ export type StreamState = 'idle' | 'buffering' | 'playing' | 'reconnecting' | 'd
 // niveau et laisse les touches physiques faire leur travail. Sur le web, où la
 // page n'a pas de bouton de volume, le réglage existe et vaut 0,7 par défaut.
 const DEFAULT_VOLUME = Platform.OS === 'web' ? 0.7 : 1;
-// Mêmes valeurs que sur le site : trois tentatives espacées de deux secondes
-// avant de renoncer et de le dire.
-const MAX_RECONNECT = 3;
-const RECONNECT_DELAY_MS = 2000;
+// Une radio coupée par le réseau finit presque toujours par revenir : dans un
+// train, trois essais à deux secondes d'écart s'épuisaient bien avant la sortie
+// du tunnel. On espace donc les tentatives puis on continue toutes les 30 s,
+// sans renoncer, tant que l'utilisateur n'a pas arrêté.
+const BACKOFF_MS = [1000, 2000, 4000, 8000, 15000];
+const STEADY_MS = 30000;
+// `source` couvre un 404 mais aussi un 502 passager : quelques essais, pas plus.
+const MAX_SOURCE_RETRIES = 3;
+// La panne que rien ne signale : la connexion reste ouverte, les données
+// n'arrivent plus, le lecteur reste en tampon sans lever d'erreur.
+const STALL_MS = 20000;
+
+/** Combien d'essais mérite une erreur de cette nature (Infinity = sans fin). */
+function retryBudget(code: PlaybackErrorCode): number {
+  switch (code) {
+    case 'network':
+    case 'unknown':
+      return Infinity;
+    case 'source':
+      return MAX_SOURCE_RETRIES;
+    default:
+      // Décodeur ou sortie audio en panne, lecture refusée par le navigateur :
+      // réessayer ne changera rien.
+      return 0;
+  }
+}
+
+function backoffDelay(attempt: number): number {
+  return BACKOFF_MS[attempt - 1] ?? STEADY_MS;
+}
 
 export function usePlayback(stations: Station[]) {
   const playing = useIsPlaying();
@@ -54,7 +79,18 @@ export function usePlayback(stations: Station[]) {
   const currentRef = useRef<string | null>(null);
   currentRef.current = currentUrl;
   const attempts = useRef(0);
+  const [reconnectAttempt, setReconnectAttempt] = useState(0);
   const reconnectTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const stallTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Nombre d'essais accordés à la coupure en cours, selon la nature de l'erreur.
+  const budgetRef = useRef(Infinity);
+  // Posé au renoncement, levé par la prochaine action de l'utilisateur : une
+  // erreur en double arrivant après coup ne doit pas relancer les essais.
+  const gaveUp = useRef(false);
+  // Ce que l'utilisateur a demandé, pas ce que le lecteur fait : en tampon,
+  // `playing` est faux alors qu'on attend bien du son.
+  const wantPlay = useRef(false);
+  const volRef = useRef(DEFAULT_VOLUME);
   // L'URL réellement chargée dans le lecteur. Elle diffère de currentUrl juste
   // après une restauration : la dernière station est re-sélectionnée sans être
   // jouée, donc rien n'est attaché tant qu'on n'a pas appuyé sur lecture.
@@ -64,6 +100,7 @@ export function usePlayback(stations: Station[]) {
 
   const current = stations.find((s) => s.url === currentUrl) ?? null;
   const effectiveMaster = muted ? 0 : master;
+  volRef.current = effectiveMaster;
 
   // ─── Reprise de l'état ───
   useEffect(() => {
@@ -134,21 +171,85 @@ export function usePlayback(stations: Station[]) {
   }, [master]);
 
   // ─── Sélection et transport ───
+  const clearStall = useCallback(() => {
+    if (stallTimer.current) clearTimeout(stallTimer.current);
+    stallTimer.current = null;
+  }, []);
+
   const clearReconnect = useCallback(() => {
     if (reconnectTimer.current) clearTimeout(reconnectTimer.current);
     reconnectTimer.current = null;
+    clearStall();
     attempts.current = 0;
+    gaveUp.current = false;
+    setReconnectAttempt(0);
+  }, [clearStall]);
+
+  /**
+   * Recharge la station chargée. `retry()` ne suffit pas : c'est un
+   * `prepare()`, sans effet sur un lecteur resté en tampon — précisément le
+   * cas du blocage silencieux. Reconstruire la file marche dans les deux cas.
+   */
+  const reload = useCallback(() => {
+    reconnectTimer.current = null;
+    const url = loadedUrl.current;
+    const s = url ? stationsRef.current.find((x) => x.url === url) : undefined;
+    if (!s || !wantPlay.current) return;
+    playNative(s, volRef.current, visibleRef.current);
   }, []);
+
+  /** Programme la tentative suivante, ou renonce si `budget` est épuisé. */
+  const scheduleReconnect = useCallback(
+    (budget: number) => {
+      const giveUp = () => {
+        gaveUp.current = true;
+        setStreamState('dropped');
+      };
+      if (gaveUp.current) return;
+      if (reconnectTimer.current) {
+        // Une même coupure peut remonter deux fois : sur le web, le rejet de
+        // play() arrive classé 'unknown', puis l'erreur de l'élément, plus
+        // précise. On garde le verdict le plus sévère des deux.
+        budgetRef.current = Math.min(budgetRef.current, budget);
+        if (attempts.current > budgetRef.current) {
+          clearTimeout(reconnectTimer.current);
+          reconnectTimer.current = null;
+          giveUp();
+        }
+        return;
+      }
+      budgetRef.current = budget;
+      clearStall();
+      if (attempts.current >= budget) {
+        giveUp();
+        return;
+      }
+      attempts.current += 1;
+      setReconnectAttempt(attempts.current);
+      setStreamState('reconnecting');
+      reconnectTimer.current = setTimeout(reload, backoffDelay(attempts.current));
+    },
+    [clearStall, reload],
+  );
+
+  /** Le réseau revient, ou l'utilisateur rouvre l'appli : inutile d'attendre. */
+  const reconnectNow = useCallback(() => {
+    if (!reconnectTimer.current) return;
+    clearTimeout(reconnectTimer.current);
+    reload();
+  }, [reload]);
 
   const select = useCallback(
     (s: Station) => {
       clearReconnect();
       if (currentRef.current === s.url && loadedUrl.current === s.url) {
+        wantPlay.current = !playing;
         togglePlayNative(playing, stationsRef.current.find((x) => x.url === currentRef.current)?.boost ?? 0);
         return;
       }
       setCurrentUrl(s.url);
       setStreamState('buffering');
+      wantPlay.current = true;
       // La file est reconstruite à chaque choix explicite : c'est le seul
       // moment où l'on sait que l'utilisateur accepte une coupure. Une station
       // ajoutée en cours d'écoute n'entre donc dans la file qu'au prochain
@@ -162,6 +263,7 @@ export function usePlayback(stations: Station[]) {
 
   const stop = useCallback(() => {
     clearReconnect();
+    wantPlay.current = false;
     loadedUrl.current = null;
     stopNative();
     setCurrentUrl(null);
@@ -171,18 +273,23 @@ export function usePlayback(stations: Station[]) {
   const toggle = useCallback(() => {
     const url = currentRef.current;
     if (!url) return;
+    // Appuyer pendant une reconnexion, c'est la réclamer tout de suite : le
+    // natif prépare un lecteur à l'arrêt avant de jouer.
+    clearReconnect();
     // Après une restauration, la station est sélectionnée mais pas chargée :
     // appuyer sur lecture doit l'attacher, pas démarrer un lecteur vide.
     if (loadedUrl.current !== url) {
       const s = stationsRef.current.find((x) => x.url === url);
       if (!s) return;
       setStreamState('buffering');
+      wantPlay.current = true;
       playNative(s, muted ? 0 : master, visibleRef.current);
       loadedUrl.current = url;
       return;
     }
+    wantPlay.current = !playing;
     togglePlayNative(playing, stationsRef.current.find((x) => x.url === currentRef.current)?.boost ?? 0);
-  }, [master, muted, playing]);
+  }, [clearReconnect, master, muted, playing]);
 
   /**
    * Zapper, c'est déplacer l'index dans la file du lecteur — pas recharger une
@@ -235,26 +342,37 @@ export function usePlayback(stations: Station[]) {
   useEffect(() => {
     const subs = [
       TrackPlayer.addEventListener(Event.PlaybackStateChanged, ({ state }) => {
-        if (state === PlaybackState.Buffering) setStreamState('buffering');
-        else if (state === PlaybackState.Ready) {
+        if (state === PlaybackState.Buffering) {
+          // Pendant une reconnexion, le tampon est la tentative elle-même : le
+          // libellé reste « reconnexion », sinon le compteur clignoterait.
+          setStreamState(attempts.current ? 'reconnecting' : 'buffering');
+          clearStall();
+          if (loadedUrl.current && wantPlay.current) {
+            stallTimer.current = setTimeout(() => {
+              stallTimer.current = null;
+              if (!wantPlay.current) return;
+              if (TrackPlayer.getPlaybackState() !== PlaybackState.Buffering) return;
+              scheduleReconnect(Infinity);
+            }, STALL_MS);
+          }
+        } else if (state === PlaybackState.Ready) {
           // Le flux est reparti : on remet le compteur de tentatives à zéro,
-          // sinon trois coupures espacées dans la journée finiraient par
-          // épuiser le quota et faire renoncer sur la première suivante.
+          // sinon des coupures espacées dans la journée allongeraient les délais
+          // de la suivante, et épuiseraient le budget des erreurs `source`.
           clearReconnect();
           setStreamState(currentRef.current ? 'playing' : 'idle');
         } else if (state === PlaybackState.Idle) {
+          clearStall();
+          // Une tentative est prévue, ou en cours (reload() repasse par l'arrêt
+          // en reconstruisant la file) : on n'a pas renoncé. Le renoncement,
+          // lui, est posé par scheduleReconnect().
+          if (reconnectTimer.current || (attempts.current && wantPlay.current)) return;
           setStreamState(loadedUrl.current ? 'dropped' : 'idle');
         }
       }),
-      TrackPlayer.addEventListener(Event.PlaybackError, () => {
-        if (!loadedUrl.current) return;
-        if (attempts.current >= MAX_RECONNECT) {
-          setStreamState('dropped');
-          return;
-        }
-        attempts.current += 1;
-        setStreamState('reconnecting');
-        reconnectTimer.current = setTimeout(retry, RECONNECT_DELAY_MS);
+      TrackPlayer.addEventListener(Event.PlaybackError, ({ code }) => {
+        if (!loadedUrl.current || !wantPlay.current) return;
+        scheduleReconnect(retryBudget(code));
       }),
       // **Le changement de station se constate, il ne se commande plus.** Le
       // natif zappe seul dans la file ; ce qui remonte ici est le résultat,
@@ -269,6 +387,10 @@ export function usePlayback(stations: Station[]) {
         if (!url) return;
         const s = stationsRef.current.find((x) => x.url === url);
         if (!s) return;
+        // Zapper pendant une reconnexion, c'est changer de flux : le compteur
+        // repart de zéro. Mais reload() reconstruit la file sur la même
+        // station, et cette transition-là ne doit rien remettre à zéro.
+        if (url !== loadedUrl.current) clearReconnect();
         currentRef.current = url;
         loadedUrl.current = url;
         setCurrentUrl(url);
@@ -284,7 +406,21 @@ export function usePlayback(stations: Station[]) {
       }),
     ];
     return () => subs.forEach((s) => s.remove());
-  }, [clearReconnect, step]);
+  }, [clearReconnect, clearStall, scheduleReconnect, step]);
+
+  // Sans module réseau natif, le téléphone n'annonce pas le retour du signal ;
+  // rouvrir l'appli en est le meilleur indice. Le navigateur, lui, le dit.
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (st) => {
+      if (st === 'active') reconnectNow();
+    });
+    if (Platform.OS !== 'web' || typeof window === 'undefined') return () => sub.remove();
+    window.addEventListener('online', reconnectNow);
+    return () => {
+      sub.remove();
+      window.removeEventListener('online', reconnectNow);
+    };
+  }, [reconnectNow]);
 
   useEffect(() => () => clearReconnect(), [clearReconnect]);
 
@@ -293,6 +429,7 @@ export function usePlayback(stations: Station[]) {
     currentUrl,
     playing,
     streamState,
+    reconnectAttempt,
     master,
     muted,
     sleepMinutes: SLEEP_STEPS_MIN[sleepStep],

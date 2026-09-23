@@ -21,6 +21,7 @@ import {
   type Alarm,
 } from '../../modules/alarm';
 import type { Station } from '../model/station';
+import type { StreamState } from '../player/usePlayback';
 import { newAlarm, withStation, type AlarmLibrary } from '../store/useAlarms';
 import { FONT_BODY, FONT_DISPLAY, useTheme, type Palette } from './theme';
 
@@ -78,6 +79,9 @@ export function Bedside({
 }) {
   const { p, t } = useTheme();
   const s = useMemo(() => makeStyles(p), [p]);
+  // Le bouton comparait l'état à 'loading', qui n'existe pas : « connexion »
+  // ne s'affichait jamais. Les deux états où l'on attend du son sont ceux-ci.
+  const connecting = streamState === 'buffering' || streamState === 'reconnecting';
   const { width, height } = useWindowDimensions();
   // L'horloge remplit sa colonne au lieu d'une taille fixe : c'est le seul
   // contenu de l'écran qu'on doit pouvoir lire d'un lit, à deux mètres et
@@ -197,7 +201,7 @@ export function Bedside({
             onPress={onToggle}
             disabled={!station}
             accessibilityRole="button"
-            accessibilityState={{ disabled: !station, busy: streamState === 'loading' }}
+            accessibilityState={{ disabled: !station, busy: connecting }}
             accessibilityLabel={playing ? 'Mettre en pause' : 'Lancer la radio'}
             style={[t.btn, s.play, { borderColor: station ? p.base : p.border }]}>
             <Text style={[t.btnText, s.playText, !station && t.btnOff]}>
@@ -205,7 +209,7 @@ export function Bedside({
                   de couleur, seul élément non Pip-Boy de l'écran. */}
               {!station
                 ? '▶ AUCUNE STATION'
-                : streamState === 'loading'
+                : connecting
                   ? '… CONNEXION'
                   : playing
                     ? '❚❚ PAUSE'
