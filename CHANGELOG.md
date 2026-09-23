@@ -9,6 +9,22 @@ Ordre : **entrée la plus récente en tête**. Plusieurs passes le même jour so
 suffixées `(2)`, `(3)`… la plus haute étant la plus récente (même convention que
 `TANDEM_LOG.md`).
 
+## 2026-09-23 (9) — site, les noms de station en entier sur téléphone
+
+### Modifié
+- **Le nom passe sur deux lignes à 480 px et moins**, trois sous 340 px, au lieu d'être coupé
+  (« Vault 101 PA Syst… »). Le point différé par la passe QA, tranché ainsi plutôt qu'en
+  masquant le libellé d'état (TUNE IN / ON AIR / RECONNEXION) : l'état porte une information,
+  une ligne de plus ne coûte que de la hauteur. Au-delà de la limite, les points de suspension
+  reviennent. Au-dessus de 480 px, rien ne change.
+
+### Vérifié
+- Mesuré à 300, 320, 340, 360, 480, 481 et 1000 px : les onze stations livrées tiennent en
+  entier partout ; seuls un nom de 80 caractères et un mot unique de 41, ajoutés pour le test,
+  restent coupés, avec leurs points de suspension. Aucun débordement ; la zone de clic couvre
+  toujours toute la ligne. À 320 px, deux lignes ne suffisaient pas pour « Black Mountain
+  Radio » : d'où la troisième sous 340 px.
+
 ## 2026-09-23 (8) — site, import de playlists M3U et PLS
 
 ### Ajouté
@@ -95,7 +111,8 @@ fonctionnels croisés. Un commit par correctif.
 
 ### Différé
 - Noms de station tronqués à 360 px : gagner la place, c'est masquer le libellé d'état ou
-  passer le nom sur deux lignes — un arbitrage de design, pas une correction.
+  passer le nom sur deux lignes — un arbitrage de design, pas une correction. Tranché le
+  même jour, voir « 2026-09-23 (9) ».
 
 ### Vérifié
 - QA finale sur la page corrigée : aucune erreur de console, aucun élément sans focus

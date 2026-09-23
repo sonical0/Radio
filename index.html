@@ -446,6 +446,26 @@
     text-overflow: ellipsis;
   }
   .station-item.playing .station-btn { color: var(--green-bright); }
+  /* Sur téléphone, le nom tenait mal sur une ligne à côté de l'état et du ✕ :
+     « Vault 101 PA Syst… ». Il passe sur deux lignes plutôt que de sacrifier
+     l'état (TUNE IN / ON AIR / RECONNEXION), qui porte une information. Au-delà
+     de deux, les points de suspension reviennent. */
+  @media (max-width: 480px) {
+    .station-btn {
+      white-space: normal;
+      overflow-wrap: anywhere;
+      display: -webkit-box;
+      -webkit-box-orient: vertical;
+      -webkit-line-clamp: 2;
+      line-clamp: 2;
+      line-height: 1.3;
+    }
+  }
+  /* À 320 px, deux lignes ne suffisent plus (« Black Mountain Radio ») : une
+     troisième coûte moins qu'un nom illisible. */
+  @media (max-width: 339px) {
+    .station-btn { -webkit-line-clamp: 3; line-clamp: 3; }
+  }
   /* ::after étend la cible de clic à toute la ligne sans étendre l'élément
      focalisable. Les contrôles remontent au-dessus via z-index. */
   .station-btn::after { content: ''; position: absolute; inset: 0; }
