@@ -142,8 +142,13 @@
     align-items: center;
     justify-content: space-between;
   }
+  /* Un <h1> : la page n'avait aucun titre de niveau 1, et les sections de
+     stations (h2) n'avaient rien au-dessus d'elles dans la navigation par titres.
+     font-weight rétabli à la main : sans lui, le navigateur synthétise un gras
+     sur VT323, qui n'en a pas. */
   .header-title {
     font-family: 'VT323', monospace;
+    font-weight: normal;
     font-size: 38px;
     letter-spacing: 4px;
     color: var(--green-bright);
@@ -675,7 +680,7 @@
 <div class="pipboy">
 
   <header class="header">
-    <div class="header-title">☢ FALLOUT RADIO</div>
+    <h1 class="header-title"><span aria-hidden="true">☢ </span>FALLOUT RADIO</h1>
     <div class="header-right">
       <button type="button" id="theme-btn" class="icon-btn" aria-haspopup="dialog"
               aria-expanded="false" aria-controls="theme-panel" aria-label="Réglages">⚙</button>
