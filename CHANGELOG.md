@@ -35,6 +35,10 @@ fonctionnels croisés. Un commit par correctif.
 - **Le groupe des couleurs n'était pas un vrai groupe radio** : cinq arrêts de Tab, aucune
   flèche. Un seul arrêt désormais, les flèches cochent la voisine, Début/Fin les extrémités.
 - **Pas de titre de niveau 1** : le titre de la page est un `<h1>`.
+- **Le mauvais bouton se désactivait pendant un ajout** : `addStation()` prenait le premier
+  `.add-btn` de la page, devenu le FERMER du dialogue des réglages. Pendant la résolution du
+  flux (jusqu'à 6 s), FERMER était grisé et AJOUTER restait cliquable. Trouvé à la relecture du
+  code en préparant l'import de playlists, après la passe — aucun parcours ne l'avait vu.
 
 ### Corrigé — faible
 - Anneau de 2 px à 11:1 au focus des champs et du menu de tri (une bordure à 3,1:1 avant).
