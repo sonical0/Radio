@@ -3299,8 +3299,18 @@ async function importStations(file) {
       ? ('✓ ' + added + ' station(s) importée(s).' + suite)
       : ('⚠ Aucune nouvelle station (déjà présentes).' + suite);
     msg.className = (added || importedAlarms) ? 'add-msg ok' : 'add-msg err';
-  } catch {
-    msg.textContent = '⚠ Fichier invalide.'; msg.className = 'add-msg err';
+  } catch (e) {
+    // Trois causes, un seul message jusqu'ici : « Fichier invalide » couvrait
+    // aussi une erreur de la page, sans laisser de trace pour la retrouver.
+    if (e instanceof SyntaxError) {
+      msg.textContent = '⚠ Fichier illisible : ce n\'est pas du JSON.';
+    } else if (e?.message === 'empty') {
+      msg.textContent = '⚠ Aucune station reconnue dans ce fichier.';
+    } else {
+      console.error('Import des stations :', e);
+      msg.textContent = '⚠ Import interrompu par une erreur de la page.';
+    }
+    msg.className = 'add-msg err';
   }
   fileInput.value = '';
   setTimeout(() => { msg.textContent = ''; msg.className = 'add-msg'; }, 3000);
