@@ -10,8 +10,14 @@ export const KEY_BUILTIN_PREFS = 'builtinStationPrefs';
 export const KEY_LAST_STATION = 'lastStationUrl';
 export const KEY_VOLUME = 'radioVolume';
 export const KEY_THEME = 'themePalette';
-/** La teinte de l'écran LIBRE, en degrés. Le site range un objet ; ici un entier suffit. */
+/**
+ * L'écran LIBRE : sa couleur exacte (#rrggbb), et sa teinte en degrés, gardée à
+ * part parce qu'un gris n'en a pas — remonter la saturation repart d'elle. Le
+ * site range un objet ; ici deux valeurs simples suffisent. Un réglage sans
+ * couleur date d'avant la couleur exacte : voir `legacyColorFromHue`.
+ */
 export const KEY_THEME_HUE = 'themeCustomHue';
+export const KEY_THEME_COLOR = 'themeCustomColor';
 /** Dernière vérification de release : date, version vue, lien, version écartée. */
 export const KEY_UPDATE = 'updateCheck';
 /** Les alarmes du réveil. Le natif en tient sa propre copie, qu'on lui pousse. */

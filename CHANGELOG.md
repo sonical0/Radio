@@ -9,6 +9,30 @@ Ordre : **entrée la plus récente en tête**. Plusieurs passes le même jour so
 suffixées `(2)`, `(3)`… la plus haute étant la plus récente (même convention que
 `TANDEM_LOG.md`).
 
+## 2026-10-04 — app, la couleur libre exacte, comme sur le site
+
+Portage des deux passes du site du même jour. Pas encore d'APK : à construire.
+
+### Modifié
+- **La couleur choisie n'est plus corrigée.** Le texte principal prend exactement la couleur
+  réglée, au lieu d'être éclairci jusqu'à 11:1. Sous 4,5:1 sur le fond, un avertissement
+  donne le contraste, dans le rouge fixe des erreurs. `dim` garde ses 5,5:1.
+- Un réglage antérieur (`themeCustomHue` seul) est relu dans la couleur qu'il affichait
+  (`legacyColorFromHue()`) : rien ne change à l'écran à la mise à jour.
+
+### Ajouté
+- **Curseurs de saturation et de luminosité** sous celui de la teinte.
+- **Champ CODE** : `#rrggbb`, `#rgb`, `r,g,b` ou `rgb()`, appliqué à la validation, erreur
+  signalée dessous. Pas de pipette, faute d'équivalent React Native sans dépendance native.
+- Nouvelle clé `themeCustomColor` (`#rrggbb`) ; `themeCustomHue` garde la teinte des gris.
+
+### Vérifié
+- `tsc --noEmit` sans erreur. Palettes identiques au site sur 4 000 couleurs aléatoires ;
+  migration identique sur les 360 teintes (300° → `#ff9eff`).
+- Version web (Expo) dans le navigateur : ancien réglage 200° relu en `#66ccff`, codes
+  exact / sombre (avertissement) / invalide / gris (teinte conservée), curseur de saturation,
+  persistance au rechargement. **Non vérifié sur Android.**
+
 ## 2026-09-24 — app v1.5.0 publiée, et le premier tag casse la CI
 
 Première release passée par la CI. Les secrets de signature ont été posés, le tag `v1.5.0`

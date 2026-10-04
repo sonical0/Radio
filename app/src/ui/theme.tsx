@@ -12,20 +12,30 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState, t
 import { StyleSheet } from 'react-native';
 
 import { setAlarmPalette } from '../../modules/alarm';
-import { KEY_THEME, KEY_THEME_HUE, readString, writeString } from '../store/storage';
+import { KEY_THEME, KEY_THEME_COLOR, KEY_THEME_HUE, readString, writeString } from '../store/storage';
 import {
+  CUSTOM_COLOR_DEFAULT,
   CUSTOM_HUE_DEFAULT,
   CUSTOM_PALETTE_ID,
-  paletteFromHue,
+  legacyColorFromHue,
+  paletteFromColor,
+  parseColor,
+  sanitizeColor,
   sanitizeHue,
   type Palette,
 } from './palette';
 
 export type { Palette } from './palette';
 export {
+  CUSTOM_COLOR_DEFAULT,
   CUSTOM_HUE_DEFAULT,
   CUSTOM_PALETTE_ID,
-  paletteFromHue,
+  customContrastWarning,
+  hslToRgb,
+  paletteFromColor,
+  parseColor,
+  rgbHex,
+  rgbToHsl,
   sanitizeHue,
 } from './palette';
 
@@ -172,24 +182,34 @@ type ThemeValue = {
   p: Palette;
   t: ReturnType<typeof makeShared>;
   setPalette: (id: string) => void;
-  /** La teinte de l'écran LIBRE, et son réglage. */
-  hue: number;
-  previewHue: (h: number) => void;
-  commitHue: (h: number) => void;
+  /**
+   * L'écran LIBRE : sa couleur exacte (#rrggbb), sa palette — calculée même
+   * quand un autre écran est choisi, pour la pastille de l'option — et la
+   * teinte retenue pour les gris, qui n'en ont pas.
+   */
+  customColor: string;
+  customHue: number;
+  custom: Palette;
+  previewCustom: (color: string, hue: number) => void;
+  commitCustom: (color: string, hue: number) => void;
 };
 
 const fallback = PALETTES[0];
+const defaultCustom = paletteFromColor(parseColor(CUSTOM_COLOR_DEFAULT)!, CUSTOM_HUE_DEFAULT);
 const ThemeContext = createContext<ThemeValue>({
   p: fallback,
   t: makeShared(fallback),
   setPalette: () => {},
-  hue: CUSTOM_HUE_DEFAULT,
-  previewHue: () => {},
-  commitHue: () => {},
+  customColor: CUSTOM_COLOR_DEFAULT,
+  customHue: CUSTOM_HUE_DEFAULT,
+  custom: defaultCustom,
+  previewCustom: () => {},
+  commitCustom: () => {},
 });
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
   const [id, setId] = useState(fallback.id);
+  const [color, setColor] = useState(CUSTOM_COLOR_DEFAULT);
   const [hue, setHue] = useState(CUSTOM_HUE_DEFAULT);
 
   useEffect(() => {
@@ -198,8 +218,13 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
         setId(saved);
       }
     });
-    readString(KEY_THEME_HUE).then((saved) => {
-      if (saved != null) setHue(sanitizeHue(saved));
+    Promise.all([readString(KEY_THEME_COLOR), readString(KEY_THEME_HUE)]).then(([savedColor, savedHue]) => {
+      const h = sanitizeHue(savedHue);
+      if (savedHue != null) setHue(h);
+      // Un réglage d'avant la couleur exacte n'a qu'une teinte : on reprend la
+      // couleur qu'elle affichait alors, pour que l'écran ne change pas.
+      const c = sanitizeColor(savedColor) ?? (savedHue != null ? legacyColorFromHue(h) : null);
+      if (c) setColor(c);
     });
   }, []);
 
@@ -209,22 +234,29 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   }, []);
 
   /** Pendant le geste : la page se recolore, rien n'est écrit. */
-  const previewHue = useCallback((h: number) => setHue(sanitizeHue(h)), []);
+  const previewCustom = useCallback((c: string, h: number) => {
+    const v = sanitizeColor(c);
+    if (!v) return;
+    setColor(v);
+    setHue(sanitizeHue(h));
+  }, []);
 
-  /** Au relâchement du curseur : c'est là seulement qu'on persiste. */
-  const commitHue = useCallback((h: number) => {
-    const v = sanitizeHue(h);
-    setHue(v);
-    void writeString(KEY_THEME_HUE, String(v));
+  /** Au relâchement du curseur, ou à la validation du code : on persiste. */
+  const commitCustom = useCallback((c: string, h: number) => {
+    const v = sanitizeColor(c);
+    if (!v) return;
+    const hv = sanitizeHue(h);
+    setColor(v);
+    setHue(hv);
+    void writeString(KEY_THEME_COLOR, v);
+    void writeString(KEY_THEME_HUE, String(hv));
   }, []);
 
   const value = useMemo(() => {
-    const p =
-      id === CUSTOM_PALETTE_ID
-        ? paletteFromHue(hue)
-        : (PALETTES.find((x) => x.id === id) ?? fallback);
-    return { p, t: makeShared(p), setPalette, hue, previewHue, commitHue };
-  }, [id, hue, setPalette, previewHue, commitHue]);
+    const custom = paletteFromColor(parseColor(color)!, hue);
+    const p = id === CUSTOM_PALETTE_ID ? custom : (PALETTES.find((x) => x.id === id) ?? fallback);
+    return { p, t: makeShared(p), setPalette, customColor: color, customHue: hue, custom, previewCustom, commitCustom };
+  }, [id, color, hue, setPalette, previewCustom, commitCustom]);
 
   // L'écran de réveil est une fenêtre native, posée alors que le runtime JS
   // dort : il ne peut pas lire ce contexte. On lui dépose les couleurs à
