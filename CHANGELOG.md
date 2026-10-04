@@ -9,6 +9,21 @@ Ordre : **entrée la plus récente en tête**. Plusieurs passes le même jour so
 suffixées `(2)`, `(3)`… la plus haute étant la plus récente (même convention que
 `TANDEM_LOG.md`).
 
+## 2026-10-04 (2) — site, la couleur libre appliquée telle quelle, avec avertissement
+
+### Modifié
+- **La couleur choisie n'est plus corrigée.** Code, pipette ou curseurs : le texte principal
+  prend exactement cette couleur, au lieu d'être éclairci jusqu'à 11:1. Sous 4,5:1 sur le
+  fond, un avertissement donne le contraste (« Contraste 1,2:1 sur le fond : le texte sera
+  difficile à lire »), dans le rouge fixe des erreurs, lisible même quand le reste du panneau
+  ne l'est plus. Le texte secondaire garde, lui, ses 5,5:1.
+- `themeCustom` stocke `{ h, rgb, vars }`. Une sauvegarde antérieure est relue depuis son
+  `--green`, la couleur qu'elle affichait : rien ne change à l'écran.
+
+### Ajouté
+- **Curseur de luminosité**, sous la saturation : sans correction automatique, c'est lui qui
+  règle la clarté. Les pistes de saturation et de luminosité suivent la couleur courante.
+
 ## 2026-10-04 — site, la couleur libre se règle aussi en saturation, en code et à la pipette
 
 ### Ajouté

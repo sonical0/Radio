@@ -43,8 +43,8 @@ Pas d'étape de build, pas de gestionnaire de paquets, pas de framework. On sert
   masquage est réversible : une corbeille dépliable en bas de liste les rend une par une.
 - **La couleur de l'écran au choix.** Le bouton ⚙ à gauche de l'horloge fait passer le
   phosphore du vert à l'ambre, au bleu ou au blanc, comme sur un Pip-Boy — ou, comme le
-  permet Fallout 4, à n'importe quelle couleur — teinte et saturation au curseur, code hex/RGB ou pipette — dont toute la palette est déduite
-  en restant aussi lisible que les écrans fixes. Le choix est
+  permet Fallout 4, à n'importe quelle couleur — teinte, saturation et luminosité au curseur, code hex/RGB ou pipette — appliquée telle
+  quelle, le reste de la palette en étant déduit, avec un avertissement si le texte devient difficile à lire. Le choix est
   mémorisé et réappliqué par un script du `<head>`, avant le premier rendu : la page ne
   clignote jamais dans la mauvaise couleur.
 - **Minuterie de veille** avec fondu progressif, **touches multimédia** et contrôles depuis

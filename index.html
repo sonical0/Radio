@@ -225,7 +225,7 @@
   .theme-name { flex: 1; }
   .theme-check { font-family: 'Share Tech Mono', monospace; font-size: 14px; }
   .theme-close { display: block; margin-left: auto; margin-top: 8px; }
-  /* Couleur libre : une teinte et une saturation, le reste de la palette en
+  /* Couleur libre : la couleur exacte du texte, le reste de la palette en
      découle. */
   .theme-custom[hidden] { display: none; }
   .theme-bar { height: 6px; margin: 2px 0 4px; }
@@ -234,7 +234,8 @@
       hsl(0,100%,62%), hsl(60,100%,55%), hsl(120,100%,55%), hsl(180,100%,55%),
       hsl(240,100%,70%), hsl(300,100%,65%), hsl(359,100%,62%));
   }
-  /* Le dégradé de la saturation dépend de la teinte : posé par le script. */
+  /* Les dégradés de saturation et de luminosité dépendent de la couleur :
+     posés par le script. */
   .theme-sat-bar { background: linear-gradient(to right, #9a9a9a, var(--green)); }
   /* input[type=range].theme-range et non .theme-range : la règle globale des
      curseurs (90 px) est plus spécifique qu'une simple classe. */
@@ -763,6 +764,9 @@
         <label class="theme-label" for="theme-sat">Saturation</label>
         <div class="theme-bar theme-sat-bar" id="theme-sat-bar" aria-hidden="true"></div>
         <input type="range" class="theme-range" id="theme-sat" min="0" max="100" step="1">
+        <label class="theme-label" for="theme-light">Luminosité</label>
+        <div class="theme-bar" id="theme-light-bar" aria-hidden="true"></div>
+        <input type="range" class="theme-range" id="theme-light" min="0" max="100" step="1">
         <label class="theme-label" for="theme-hex">Code couleur</label>
         <div class="theme-code-row">
           <input type="color" class="theme-picker" id="theme-picker" aria-label="Choisir une couleur">
@@ -3550,11 +3554,14 @@ const THEME_KEY = 'themePalette';
 const CUSTOM_THEME_KEY = 'themeCustom';
 const CUSTOM_THEME_VARS = ['--green', '--green-dim', '--green-bright', '--bg', '--bg2', '--bg3', '--border', '--accent-rgb'];
 // Une teinte qu'aucun écran fixe ne propose, pour que choisir LIBRE change
-// visiblement quelque chose.
-const CUSTOM_HUE_DEFAULT = 300;
-let customHue = CUSTOM_HUE_DEFAULT;
-// 100 % : le néon d'origine. Plus bas, le phosphore se délave vers le blanc.
-let customSat = 100;
+// visiblement quelque chose : le magenta que l'ancien calcul donnait à 300°.
+const CUSTOM_DEFAULT = [255, 158, 255];
+let customRgb = CUSTOM_DEFAULT;
+// Un gris n'a pas de teinte : on retient la dernière, pour que remonter la
+// saturation reparte de là plutôt que du rouge.
+let customHue = 300;
+// En dessous, le texte principal devient difficile à lire (WCAG AA).
+const CUSTOM_MIN_CONTRAST = 4.5;
 
 function currentTheme() {
   return document.documentElement.dataset.theme || 'vert';
@@ -3581,54 +3588,49 @@ function contrast(a, b) {
   return (hi + 0.05) / (lo + 0.05);
 }
 
+/** Teinte (null pour un gris), saturation et luminosité entières. */
+function rgbToHsl([r, g, b]) {
+  r /= 255; g /= 255; b /= 255;
+  const max = Math.max(r, g, b), min = Math.min(r, g, b), d = max - min;
+  const l = (max + min) / 2;
+  if (d === 0) return { h: null, s: 0, l: Math.round(l * 100) };
+  const s = d / (1 - Math.abs(2 * l - 1));
+  let h = max === r ? ((g - b) / d) % 6 : max === g ? (b - r) / d + 2 : (r - g) / d + 4;
+  h = Math.round(h * 60);
+  return { h: (h + 360) % 360, s: Math.round(Math.min(s, 1) * 100), l: Math.round(l * 100) };
+}
+
 /**
- * Les mêmes rôles que les quatre écrans fixes, avec les mêmes exigences. À
- * luminosité égale, les teintes ne se valent pas : un bleu pur à 60 % est trois
- * fois plus sombre à l'œil qu'un vert. On monte donc la luminosité jusqu'au
- * contraste visé plutôt que de la fixer — sans quoi un Pip-Boy bleu nuit serait
- * illisible.
- * La saturation s (0–100) s'applique à toute la palette dans la même
- * proportion : à 0, fonds et texte passent ensemble au gris, comme l'écran
- * BLANC.
+ * Les mêmes rôles que les quatre écrans fixes. La couleur choisie est le texte
+ * principal, appliquée telle quelle : si elle manque de contraste, le panneau
+ * le dit (CUSTOM_MIN_CONTRAST) mais ne la corrige pas.
+ * Le reste en découle par sa teinte et sa saturation, dans la même proportion
+ * pour tous les rôles : à 0 %, fonds et texte passent ensemble au gris, comme
+ * l'écran BLANC. Seul le texte secondaire garde une exigence — 5,5:1, comme
+ * --green-dim partout ailleurs — atteinte en montant sa luminosité, parce qu'à
+ * luminosité égale un bleu pur est trois fois plus sombre à l'œil qu'un vert.
  */
-function paletteFromHue(h, sat = 100) {
-  const k = sat / 100;
+function paletteFromColor(rgb, fallbackHue) {
+  const { h: hue, s, l } = rgbToHsl(rgb);
+  const h = hue ?? fallbackHue;
+  const k = s / 100;
   const bg3 = hslToRgb(h, 30 * k, 3);
-  const reach = (s, from, target, max) => {
-    let l = from;
-    let rgb = hslToRgb(h, s, l);
-    while (contrast(rgb, bg3) < target && l < max) rgb = hslToRgb(h, s, ++l);
-    return { rgb, l };
-  };
-  // Texte principal : les écrans fixes vont de 11,2:1 (ambre) à 19,2:1 (blanc).
-  // On vise l'ambre et pas plus : chaque point de contraste gagné sur un rouge
-  // ou un bleu se paie en saturation, jusqu'au pastel.
-  const main = reach(100 * k, 50, 11, 90);
-  // Texte secondaire : 5,5:1 au moins, comme --green-dim partout ailleurs.
-  const dim = reach(60 * k, 25, 5.5, 70);
+  let dl = 25;
+  let dim = hslToRgb(h, 60 * k, dl);
+  while (contrast(dim, bg3) < 5.5 && dl < 70) dim = hslToRgb(h, 60 * k, ++dl);
   return {
-    '--green': rgbHex(main.rgb),
-    '--green-dim': rgbHex(dim.rgb),
-    '--green-bright': rgbHex(hslToRgb(h, 100 * k, Math.min(main.l + 16, 94))),
+    '--green': rgbHex(rgb),
+    '--green-dim': rgbHex(dim),
+    // Plus clair que le texte, sauf s'il l'est déjà plus que 94 %.
+    '--green-bright': rgbHex(hslToRgb(h, s, Math.max(l, Math.min(l + 16, 94)))),
     '--bg': rgbHex(hslToRgb(h, 22 * k, 4.5)),
     '--bg2': rgbHex(hslToRgb(h, 28 * k, 7)),
     '--bg3': rgbHex(bg3),
     '--border': rgbHex(hslToRgb(h, 45 * k, 20)),
-    '--accent-rgb': main.rgb.join(',')
+    '--accent-rgb': rgb.join(',')
   };
 }
-const customPalette = () => paletteFromHue(customHue, customSat);
-
-function rgbToHueSat([r, g, b]) {
-  r /= 255; g /= 255; b /= 255;
-  const max = Math.max(r, g, b), min = Math.min(r, g, b), d = max - min;
-  if (d === 0) return { h: null, s: 0 };
-  const l = (max + min) / 2;
-  const s = d / (1 - Math.abs(2 * l - 1));
-  let h = max === r ? ((g - b) / d) % 6 : max === g ? (b - r) / d + 2 : (r - g) / d + 4;
-  h = Math.round(h * 60);
-  return { h: (h + 360) % 360, s: Math.round(Math.min(s, 1) * 100) };
-}
+const customPalette = () => paletteFromColor(customRgb, customHue);
 
 /** #rgb, #rrggbb (dièse facultatif), « r,g,b » ou rgb(r, g, b). Null sinon. */
 function parseColor(text) {
@@ -3658,8 +3660,11 @@ function loadCustomHue() {
   try {
     const v = JSON.parse(localStorage.getItem(CUSTOM_THEME_KEY) || 'null');
     if (v && Number.isInteger(v.h) && v.h >= 0 && v.h < 360) customHue = v.h;
-    // Absente des réglages enregistrés avant le curseur : 100 %, comme alors.
-    if (v && Number.isInteger(v.s) && v.s >= 0 && v.s <= 100) customSat = v.s;
+    // Les réglages enregistrés avant la couleur exacte n'ont pas de `rgb`, mais
+    // leur --green est la couleur qu'ils affichaient : on la reprend.
+    const hex = v && (v.rgb || (v.vars && v.vars['--green']));
+    const rgb = typeof hex === 'string' && /^#[0-9a-f]{6}$/i.test(hex) ? parseColor(hex) : null;
+    if (rgb) customRgb = rgb;
   } catch {}
 }
 
@@ -3667,7 +3672,7 @@ function loadCustomHue() {
 // avant le premier affichage, sans avoir à refaire le calcul.
 function saveCustomHue() {
   try {
-    localStorage.setItem(CUSTOM_THEME_KEY, JSON.stringify({ h: customHue, s: customSat, vars: customPalette() }));
+    localStorage.setItem(CUSTOM_THEME_KEY, JSON.stringify({ h: customHue, rgb: rgbHex(customRgb), vars: customPalette() }));
   } catch {}
 }
 
@@ -3702,40 +3707,47 @@ function applyTheme(id) {
 
 // Trois façons de régler la même couleur — curseurs, code, pipette — qui se
 // suivent. `from` est le contrôle qui vient de bouger : on ne lui réécrit pas
-// sa valeur sous les doigts (la pipette du système sauterait pendant le geste).
+// sa valeur sous les doigts (la pipette du système sauterait pendant le geste,
+// et un curseur arrondi par l'aller-retour HSL → RGB → HSL reculerait).
 function syncCustomControls(from) {
-  const hue = document.getElementById('theme-hue');
-  const sat = document.getElementById('theme-sat');
-  const main = customPalette()['--green'];
-  if (from !== hue) hue.value = customHue;
-  if (from !== sat) sat.value = customSat;
-  hue.setAttribute('aria-valuetext', customHue + '°');
-  sat.setAttribute('aria-valuetext', customSat + ' %');
+  const { h: hue, s, l } = rgbToHsl(customRgb);
+  const h = hue ?? customHue;
+  const hex = rgbHex(customRgb);
+  const sliders = [['theme-hue', h, h + '°'], ['theme-sat', s, s + ' %'], ['theme-light', l, l + ' %']];
+  for (const [id, value, text] of sliders) {
+    const el = document.getElementById(id);
+    if (from !== el) el.value = value;
+    el.setAttribute('aria-valuetext', text);
+  }
   document.getElementById('theme-sat-bar').style.background =
-    `linear-gradient(to right, hsl(${customHue},0%,60%), hsl(${customHue},100%,55%))`;
+    `linear-gradient(to right, hsl(${h},0%,${l}%), hsl(${h},100%,${l}%))`;
+  document.getElementById('theme-light-bar').style.background =
+    `linear-gradient(to right, #000, hsl(${h},${s}%,50%), #fff)`;
   const picker = document.getElementById('theme-picker');
   const field = document.getElementById('theme-hex');
-  if (from !== picker) picker.value = main;
-  if (from !== field) field.value = main;
+  if (from !== picker) picker.value = hex;
+  if (from !== field) {
+    field.value = hex;
+    field.removeAttribute('aria-invalid');
+  }
 }
 
-function refreshCustom(from) {
+// La couleur n'est jamais corrigée : on dit seulement quand elle se lit mal sur
+// le fond qu'elle produit. Le message garde son rouge fixe, lisible même quand
+// le reste du panneau ne l'est plus.
+function customContrastWarning() {
+  const ratio = contrast(customRgb, parseColor(customPalette()['--bg3']));
+  if (ratio >= CUSTOM_MIN_CONTRAST) return '';
+  return `Contraste ${ratio.toFixed(1).replace('.', ',')}:1 sur le fond : le texte sera difficile à lire (4,5:1 conseillé).`;
+}
+
+function setCustomRgb(rgb, from) {
+  customRgb = rgb;
+  const { h } = rgbToHsl(rgb);
+  if (h !== null) customHue = h;
   setCustomVars(customPalette());
   updateCustomSwatch();
   syncCustomControls(from);
-}
-
-// Une couleur venue du code ou de la pipette n'est pas appliquée telle quelle :
-// on en garde la teinte et la saturation, la luminosité reste celle qui tient
-// le contraste de l'écran. Le message dit ce qu'il en est devenu.
-function applyCustomRgb(rgb, from) {
-  const { h, s } = rgbToHueSat(rgb);
-  // Un gris n'a pas de teinte : on garde la courante, seule la saturation tombe.
-  if (h !== null) customHue = h;
-  customSat = s;
-  refreshCustom(from);
-  const main = customPalette()['--green'];
-  return main === rgbHex(rgb) ? '' : `Appliquée en ${main} : luminosité réglée pour rester lisible.`;
 }
 
 // Les curseurs et la pipette recolorent la page pendant le geste ; l'écriture
@@ -3744,27 +3756,33 @@ function initCustomHue() {
   loadCustomHue();
   const hue = document.getElementById('theme-hue');
   const sat = document.getElementById('theme-sat');
+  const light = document.getElementById('theme-light');
   const picker = document.getElementById('theme-picker');
   const field = document.getElementById('theme-hex');
   const msg = document.getElementById('theme-hex-msg');
   const say = (text, cls) => { msg.textContent = text; msg.className = 'add-msg' + (cls ? ' ' + cls : ''); };
+  const warn = () => say(customContrastWarning(), 'err');
   syncCustomControls();
+  warn();
 
-  for (const [slider, set] of [[hue, v => { customHue = v; }], [sat, v => { customSat = v; }]]) {
+  for (const slider of [hue, sat, light]) {
     slider.addEventListener('input', () => {
-      set(parseInt(slider.value, 10) || 0);
-      refreshCustom(slider);
-      say('');
+      const v = el => parseInt(el.value, 10) || 0;
+      // Teinte retenue même quand la saturation est à 0 : sans ça, le gris
+      // n'aurait plus de teinte et le curseur sauterait au rouge.
+      customHue = v(hue);
+      setCustomRgb(hslToRgb(v(hue), v(sat), v(light)), slider);
+      customHue = v(hue);
+      warn();
     });
     slider.addEventListener('change', saveCustomHue);
   }
 
-  picker.addEventListener('input', () => say(applyCustomRgb(parseColor(picker.value), picker)));
-  picker.addEventListener('change', () => {
-    saveCustomHue();
-    // Le geste fini, la pastille montre la couleur réellement appliquée.
-    syncCustomControls();
+  picker.addEventListener('input', () => {
+    setCustomRgb(parseColor(picker.value), picker);
+    warn();
   });
+  picker.addEventListener('change', saveCustomHue);
 
   // Le code s'applique à la validation (Entrée ou sortie du champ), pas à
   // chaque frappe : « #f » ou « 25 » ne sont pas encore des couleurs.
@@ -3775,8 +3793,8 @@ function initCustomHue() {
       say('Code non reconnu : #rrggbb, #rgb ou r,g,b (0 à 255).', 'err');
       return;
     }
-    field.removeAttribute('aria-invalid');
-    say(applyCustomRgb(rgb));
+    setCustomRgb(rgb);
+    warn();
     saveCustomHue();
   });
 }
