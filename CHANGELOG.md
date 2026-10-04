@@ -9,6 +9,23 @@ Ordre : **entrée la plus récente en tête**. Plusieurs passes le même jour so
 suffixées `(2)`, `(3)`… la plus haute étant la plus récente (même convention que
 `TANDEM_LOG.md`).
 
+## 2026-10-04 — site, la couleur libre se règle aussi en saturation, en code et à la pipette
+
+### Ajouté
+- **Curseur de saturation** sous celui de la teinte : de 100 % (le néon d'origine) à 0 %
+  (un phosphore gris, comme l'écran BLANC). Il s'applique à toute la palette, fonds compris.
+  Sa piste montre le dégradé de la teinte courante.
+- **Code couleur** : `#rrggbb`, `#rgb`, `r,g,b` ou `rgb(r, g, b)`, appliqué à la validation
+  (Entrée ou sortie du champ). Un code non reconnu est signalé sous le champ.
+- **Pipette du système** (`<input type="color">`), qui recolore la page pendant le geste.
+
+### Modifié
+- Une couleur saisie ou pipetée garde sa teinte et sa saturation. Sa luminosité reste
+  celle qui tient le contraste (11:1 pour le texte, 5,5:1 pour le secondaire), et le message
+  donne la couleur réellement appliquée. Cibles vérifiées sur les 360 teintes × 0–100 % :
+  11,0–18,5:1 et 5,5–5,8:1.
+- `themeCustom` stocke `{ h, s, vars }`. Une sauvegarde antérieure, sans `s`, se relit à 100 %.
+
 ## 2026-09-23 (9) — site, les noms de station en entier sur téléphone
 
 ### Modifié
