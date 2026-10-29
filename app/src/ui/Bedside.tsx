@@ -180,18 +180,14 @@ export function Bedside({
         {/* La taille est déjà calculée sur l'écran : la multiplier encore par
             la taille de police du système la ferait déborder. */}
         <Text
-          style={[
-            s.clock,
-            { fontSize: clockSize, lineHeight: Math.round(clockSize * 1.04) },
-            dimmed && s.dimClock,
-          ]}
+          style={[s.clock, { fontSize: clockSize, lineHeight: Math.round(clockSize * 1.04) }]}
           numberOfLines={1}
           adjustsFontSizeToFit
           allowFontScaling={false}
           accessibilityLabel={'Il est ' + two(now.getHours()) + ' heures ' + two(now.getMinutes())}>
           {two(now.getHours())}:{two(now.getMinutes())}
         </Text>
-        <View style={dimmed && s.dimRest} onLayout={(e) => setRestH(e.nativeEvent.layout.height)}>
+        <View onLayout={(e) => setRestH(e.nativeEvent.layout.height)}>
           <Text style={s.date} maxFontSizeMultiplier={1}>{dateLabel(now).toUpperCase()}</Text>
           <Text style={s.next} maxFontSizeMultiplier={1}>
             {lib.next ? '⏰ ' + whenLabel(lib.next.at) : 'AUCUN RÉVEIL ARMÉ'}
@@ -257,7 +253,7 @@ export function Bedside({
         </View>
       </ScrollView>
 
-      <View style={[s.right, dimmed && s.dimRest]}>
+      <View style={s.right}>
         <ScrollView keyboardShouldPersistTaps="handled">
           {lib.alarms.map((alarm) => (
             <AlarmRow
@@ -294,6 +290,9 @@ export function Bedside({
         </ScrollView>
       </View>
 
+      {/* Un voile plutôt qu'une baisse de luminosité système : réversible au
+          moindre contact, et sans rien changer aux réglages du téléphone. */}
+      {dimmed ? <View style={s.veil} pointerEvents="none" /> : null}
     </Pressable>
   );
 }
@@ -487,10 +486,13 @@ const makeStyles = (p: Palette) =>
     add: { paddingHorizontal: 22 },
     hint: { color: p.dim, fontFamily: FONT_BODY, fontSize: 11, marginTop: 8 },
 
-    // Assombri : une opacité plutôt qu'une baisse de luminosité système,
-    // réversible au moindre contact et sans toucher aux réglages du téléphone.
-    // L'heure baisse moins que le reste. Un voile noir à 72 % la recouvrait
-    // comme tout le reste, et c'est elle qu'on cherche des yeux dans le noir.
-    dimClock: { opacity: 0.6 },
-    dimRest: { opacity: 0.28 },
+    veil: {
+      position: 'absolute',
+      top: 0,
+      right: 0,
+      bottom: 0,
+      left: 0,
+      backgroundColor: '#000',
+      opacity: 0.72,
+    },
   });
