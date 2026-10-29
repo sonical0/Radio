@@ -9,6 +9,35 @@ Ordre : **entrée la plus récente en tête**. Plusieurs passes le même jour so
 suffixées `(2)`, `(3)`… la plus haute étant la plus récente (même convention que
 `TANDEM_LOG.md`).
 
+## 2026-10-29 (2) — app v1.7.0 : le réveil parle, la météo, les favoris, Android Auto
+
+Une journée de supervision à quatre managers ; chaque branche est entrée dans
+`react-native/dev` en un seul commit.
+
+### Ajouté — réveil et horloge de chevet
+- **L'heure annoncée à la sonnerie** (RÉGLAGES › RÉVEIL › ANNONCER L'HEURE) : une fois la
+  radio partie, la synthèse vocale fr-FR dit l'heure, et la météo en cache si elle existe,
+  radio baissée pendant la phrase. Un garde-fou remonte la radio si la voix ne finit jamais.
+  Le natif garde le réglage ; la clé `announceTime` ne sert qu'à rouvrir le panneau.
+- **Un appui long sur l'heure** la dit à voix haute.
+- **SAUTER / REPRENDRE** sur chaque réveil : la prochaine sonnerie seulement.
+- **La fenêtre s'assombrit** avec la veille de nuit et revient au toucher et en quittant le
+  mode chevet ; elle descend aussi avec le fondu de la minuterie de veille.
+- **La météo** (Open-Meteo, ville dans RÉGLAGES › MÉTÉO, clé `weatherCity`, vide = aucune
+  requête) : sur la ligne de la date, pour que l'heure garde sa taille, et sur l'écran de
+  sonnerie. Cache de 30 minutes, muette hors ligne.
+
+### Ajouté — lecture
+- **Favoris** : une étoile sur chaque station, jusqu'à six gros boutons au-dessus de la
+  liste. Champ ignoré par le site, export et import compris.
+- **Titres gardés** : un titre de l'historique peut être gardé au-delà du plafond, et
+  cherché sur YouTube ou Deezer.
+- **Android Auto** : les stations visibles sont publiées dans l'arbre de navigation (plugin
+  `withAndroidAuto`).
+
+### Vérifié
+- À compléter après le test de l'APK de la CI sur émulateur.
+
 ## 2026-10-29 — app v1.6.0 : l'horloge de chevet sur un écran agrandi
 
 Constat sur un téléphone réglé en grand (taille d'affichage et de police) : en paysage,

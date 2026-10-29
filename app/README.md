@@ -2,7 +2,7 @@
 
 Portage mobile du site. Le site en HTML pur reste sur `main` et n'est pas touché : on ajoute une cible, on ne migre pas.
 
-**Version 1.6.0** (`versionCode` 12), APK signé, publié par la CI sur tag. La valeur qui fait foi est celle d'`app.json` : la CI refuse un APK dont la version en diffère.
+**Version 1.7.0** (`versionCode` 13), APK signé, publié par la CI sur tag. La valeur qui fait foi est celle d'`app.json` : la CI refuse un APK dont la version en diffère.
 
 **Deux branches, pas une.** `react-native/dev` porte le travail, `react-native/main` ne reçoit que ce qui a tourné sur un appareil. Git refuse une branche `react-native` à côté de `react-native/main` — un nom ne peut pas être à la fois une référence et un dossier de références — d'où ce préfixe plutôt qu'une branche parente. Les fichiers du site présents ici sont une copie de `main` : ils s'alignent par `cherry-pick`, **jamais par `git checkout main -- index.html`**, qui écrase au lieu de reporter (fait une fois, trois fonctions perdues et mises en ligne dans cet état).
 
