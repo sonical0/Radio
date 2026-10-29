@@ -9,6 +9,53 @@ Ordre : **entrée la plus récente en tête**. Plusieurs passes le même jour so
 suffixées `(2)`, `(3)`… la plus haute étant la plus récente (même convention que
 `TANDEM_LOG.md`).
 
+## 2026-10-29 (3) — app v1.8.0 : l'étape Google Maps sur l'écran vélo
+
+### Ajouté
+- **L'étape de Google Maps sur l'écran vélo** : pendant une navigation, la flèche de Maps et
+  la distance prennent la place de l'heure, en très gros ; l'heure reste en petit à droite,
+  avec « → 17:04 » pour l'heure d'arrivée ; la manœuvre et la rue passent dessous, sur deux
+  lignes au plus. Sur Android 16, Maps ne donne pas la distance jusqu'au prochain virage : la
+  grande valeur est alors ce qui reste du trajet (« 1,2 km »). Sans navigation, l'écran vélo
+  est celui de la 1.7.0.
+- **Module natif `nav`** : un écouteur de notifications qui ne garde que la notification de
+  navigation de Maps et en recopie le titre, le texte, le sous-texte et la flèche, sans rien
+  lire d'autre.
+- **RÉGLAGES › ÉTAPES GOOGLE MAPS (VÉLO)** : montre si l'accès aux notifications est
+  accordé, relu au retour dans l'appli, et ouvre la page d'Android qui l'accorde. Une appli
+  installée hors Play Store y voit « Paramètre restreint » : Infos de l'appli › menu (trois points) ›
+  Autoriser les paramètres restreints, puis revenir.
+
+### Corrigé
+- **Le titre de l'en-tête passe sur sa propre ligne** dès une police de 1,15 au lieu de
+  rétrécir à côté de VÉLO (il descendait bien sous 60 % en 1.7.0).
+
+### Vérifié
+- Sur émulateur (Pixel moyen, API 36), APK release de la CI du train, en réglage normal
+  (police 1, densité 420) puis agrandi (police 1,3, densité 525) :
+  - réglage Maps : « AUTORISER L'ACCÈS » ouvre la page d'Android propre à l'appli ; accès
+    donné puis retour sans relancer : « ACCÈS ACCORDÉ ✓ » ;
+  - Maps ouvert sur une recherche sans navigation, plus une notification d'une autre appli :
+    aucune étape relayée ;
+  - vrai trajet à vélo dans Maps (positions simulées le long de la rue de Rivoli) : flèche,
+    « 60 m » ou « 1,1 km » en grand, heure et « → 17:35 » en petit, manœuvre dessous ; le
+    reste du trajet baisse à chaque déplacement (1086, 923, 700, 459, 204 m), une seule
+    relève par changement ; en paysage et en portrait, aux deux réglages, rien ne déborde
+    et les boutons gardent 79 à 80 dp ;
+  - fin de navigation : l'écran vélo revient à l'heure ; accès retiré dans Android : vu ;
+  - titre de l'en-tête : à côté de VÉLO en police 1, sur sa propre ligne et entier en 1,3 ;
+  - sans trajet, l'écran vélo est celui de la 1.7.0.
+
+### Non vérifié / limites
+- **« Paramètre restreint » non vu** : une appli installée par adb n'est pas restreinte ;
+  l'aide suit la marche documentée par Android pour une installation depuis un navigateur.
+- **Distance jusqu'au virage** : Maps ne la donne pas toujours ; quand elle manque, la grande
+  valeur est le reste du trajet. Quand elle y est, elle revient aussi en tête de la manœuvre
+  (« 60 M · TURN RIGHT… »).
+- **L'heure d'arrivée est celle que Maps écrit** : sur l'émulateur réglé en GMT, Maps la donne
+  à l'heure de Paris ; sur un téléphone, fuseau et trajet coïncident.
+- **Non vérifié sur un vrai téléphone, ni sur un vrai vélo.**
+
 ## 2026-10-29 (2) — app v1.7.0 : le réveil parle, la météo, les favoris, le vélo, Android Auto
 
 Une journée de supervision à quatre managers ; chaque branche est entrée dans
