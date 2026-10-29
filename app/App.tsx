@@ -280,7 +280,11 @@ function Radio() {
         <StatusBar barStyle="light-content" backgroundColor={p.bg} />
 
         <View style={t.header}>
-          <Text style={t.title} numberOfLines={1}>FALLOUT RADIO</Text>
+          {/* Le bouton VÉLO prend sa place à l'en-tête : sur un écran agrandi, le
+              titre rétrécit pour rester entier plutôt que de finir en « FALL… ». */}
+          <Text style={t.title} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>
+            FALLOUT RADIO
+          </Text>
           <View style={s.headerRight}>
             <Pressable
               onPress={() => {
