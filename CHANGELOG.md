@@ -15,12 +15,15 @@ suffixées `(2)`, `(3)`… la plus haute étant la plus récente (même conventi
 - **L'étape de Google Maps sur l'écran vélo** : pendant une navigation, la flèche de Maps et
   la distance prennent la place de l'heure, en très gros ; l'heure reste en petit à droite,
   avec « → 17:04 » pour l'heure d'arrivée ; la manœuvre et la rue passent dessous, sur deux
-  lignes au plus. Sur Android 16, Maps ne donne pas la distance jusqu'au prochain virage : la
-  grande valeur est alors ce qui reste du trajet (« 1,2 km »). Sans navigation, l'écran vélo
-  est celui de la 1.7.0.
+  lignes au plus. La grande valeur est la distance jusqu'au virage quand Maps l'écrit en tête
+  de son titre (« 60 m · Turn right… », retirée alors de la ligne de manœuvre), sinon ce qui
+  reste du trajet (« 1,1 km »). À l'arrivée, l'heure reprend sa grande taille, « ARRIVING »
+  dessous, jusqu'à ce que Maps retire sa notification. Sans navigation, l'écran vélo est celui
+  de la 1.7.0.
 - **Module natif `nav`** : un écouteur de notifications qui ne garde que la notification de
   navigation de Maps et en recopie le titre, le texte, le sous-texte et la flèche, sans rien
-  lire d'autre.
+  lire d'autre. Les republications passagères sans flèche de Maps (au démarrage, à un
+  changement de densité) sont écartées ; l'arrivée, sans flèche ni progression, passe.
 - **RÉGLAGES › ÉTAPES GOOGLE MAPS (VÉLO)** : montre si l'accès aux notifications est
   accordé, relu au retour dans l'appli, et ouvre la page d'Android qui l'accorde. Une appli
   installée hors Play Store y voit « Paramètre restreint » : Infos de l'appli › menu (trois points) ›
@@ -38,20 +41,28 @@ suffixées `(2)`, `(3)`… la plus haute étant la plus récente (même conventi
   - Maps ouvert sur une recherche sans navigation, plus une notification d'une autre appli :
     aucune étape relayée ;
   - vrai trajet à vélo dans Maps (positions simulées le long de la rue de Rivoli) : flèche,
-    « 60 m » ou « 1,1 km » en grand, heure et « → 17:35 » en petit, manœuvre dessous ; le
-    reste du trajet baisse à chaque déplacement (1086, 923, 700, 459, 204 m), une seule
-    relève par changement ; en paysage et en portrait, aux deux réglages, rien ne déborde
-    et les boutons gardent 79 à 80 dp ;
-  - fin de navigation : l'écran vélo revient à l'heure ; accès retiré dans Android : vu ;
+    « 60 m », « 400 m » ou « 1,1 km » en grand, heure et « → 17:35 » en petit, manœuvre
+    dessous sans la distance répétée ; le reste du trajet baisse à chaque déplacement
+    (1086, 923, 700, 459, 204 m), une seule relève par changement ; en paysage et en
+    portrait, aux deux réglages, rien ne déborde et les boutons gardent 79 à 80 dp ;
+  - arrivée (paysage, police 1,3) : une seconde après le dernier virage, l'heure en grand
+    et « ARRIVING » dessous ; Maps retire sa notification six minutes plus tard, l'écran
+    vélo redevient celui sans trajet ;
+  - Exit dans Maps en cours de route : l'écran vélo revient à l'heure ; accès retiré dans
+    Android : vu ;
   - titre de l'en-tête : à côté de VÉLO en police 1, sur sa propre ligne et entier en 1,3 ;
   - sans trajet, l'écran vélo est celui de la 1.7.0.
 
 ### Non vérifié / limites
 - **« Paramètre restreint » non vu** : une appli installée par adb n'est pas restreinte ;
   l'aide suit la marche documentée par Android pour une installation depuis un navigateur.
-- **Distance jusqu'au virage** : Maps ne la donne pas toujours ; quand elle manque, la grande
-  valeur est le reste du trajet. Quand elle y est, elle revient aussi en tête de la manœuvre
-  (« 60 M · TURN RIGHT… »).
+- **Distance jusqu'au virage** : Maps ne la donne pas toujours (au départ, « Head north ») ;
+  quand elle manque, la grande valeur est le reste du trajet.
+- **À l'arrivée, seul « ARRIVING » s'affiche**, pas le lieu (« at … », dans le texte de la
+  notification).
+- **Sans station choisie, le bouton de lecture de l'écran vélo affiche parfois « ▶ A »** au
+  lieu de « ▶ AUCUNE STATION » (le rétrécissement automatique du texte d'Android) ; déjà en
+  1.7.0, prévu pour une prochaine vague.
 - **L'heure d'arrivée est celle que Maps écrit** : sur l'émulateur réglé en GMT, Maps la donne
   à l'heure de Paris ; sur un téléphone, fuseau et trajet coïncident.
 - **Non vérifié sur un vrai téléphone, ni sur un vrai vélo.**
