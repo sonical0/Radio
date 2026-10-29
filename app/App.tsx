@@ -200,8 +200,12 @@ function Radio() {
   // Le paysage n'est pas une mise en page de plus : c'est un autre écran.
   // Poser le téléphone à l'horizontale en fait un radio-réveil, et la liste
   // des stations n'a pas à savoir ce qu'elle deviendrait dans cette largeur.
-  const { width, height } = useWindowDimensions();
+  const { width, height, fontScale } = useWindowDimensions();
   const landscape = width > height;
+  // Texte agrandi dans les réglages du téléphone : titre, VÉLO, ⚙ et l'heure ne
+  // tiennent plus sur une ligne. Android ignore minimumFontScale et le titre
+  // finissait en lettres minuscules ; il prend alors sa ligne à lui.
+  const stackedHeader = fontScale >= 1.15;
 
   // Onze stations tiennent à l'œil ; l'annuaire Radio-Browser en propose
   // cinquante mille, et dès qu'on en ajoute vingt la liste devient un mur.
@@ -279,13 +283,18 @@ function Radio() {
         <SafeAreaView style={t.screen} edges={['top', 'bottom']}>
         <StatusBar barStyle="light-content" backgroundColor={p.bg} />
 
-        <View style={t.header}>
-          {/* Le bouton VÉLO prend sa place à l'en-tête : sur un écran agrandi, le
-              titre rétrécit pour rester entier plutôt que de finir en « FALL… ». */}
-          <Text style={t.title} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>
+        <View style={[t.header, stackedHeader && s.headerStacked]}>
+          {/* Le bouton VÉLO prend sa place à l'en-tête : le titre rétrécit pour
+              rester entier plutôt que de finir en « FALL… », et passe sur sa
+              propre ligne quand le texte du téléphone est agrandi. */}
+          <Text
+            style={[t.title, stackedHeader && s.titleStacked]}
+            numberOfLines={1}
+            adjustsFontSizeToFit
+            minimumFontScale={0.6}>
             FALLOUT RADIO
           </Text>
-          <View style={s.headerRight}>
+          <View style={[s.headerRight, stackedHeader && s.headerRightStacked]}>
             <Pressable
               onPress={() => {
                 setLandscapeMode('ride');
@@ -452,4 +461,7 @@ const makeStyles = (p: Palette) =>
   search: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 16, paddingTop: 10 },
   searchField: { flex: 1, marginBottom: 0 },
     headerRight: { flexDirection: 'row', alignItems: 'center', gap: 10, flexShrink: 0 },
+    headerStacked: { flexWrap: 'wrap', rowGap: 8 },
+    titleStacked: { width: '100%' },
+    headerRightStacked: { marginLeft: 'auto' },
   });
