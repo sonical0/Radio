@@ -78,6 +78,14 @@ function reconcile(list: Alarm[], native: Alarm[] | null): Alarm[] {
   return changed ? out : list;
 }
 
+/** Ce qu'on laisse au natif pour réarmer la suivante une fois l'échéance passée. */
+const RESYNC_GRACE_MS = 2_000;
+/**
+ * Pas maximal du minuteur d'échéance : un minuteur JS de plusieurs heures
+ * dérive pendant la veille du téléphone, un pas d'une minute se recale.
+ */
+const CHECK_MS = 60_000;
+
 export function useAlarms(): AlarmLibrary {
   const [alarms, setAlarms] = useState<Alarm[]>([]);
   const [loading, setLoading] = useState(true);
@@ -106,20 +114,43 @@ export function useAlarms(): AlarmLibrary {
     };
   }, [refresh]);
 
-  // Une alarme qui a sonné pendant que l'appli était en arrière-plan a pu être
-  // éteinte côté natif, un saut a pu être consommé : relire en revenant.
+  // Une alarme qui a sonné a pu être éteinte côté natif, un saut a pu être
+  // consommé, et la prochaine échéance a changé : tout relire d'un coup.
+  const resync = useCallback(() => {
+    setAlarms((prev) => {
+      const next = reconcile(prev, nativeAlarms());
+      if (next !== prev) void writeJson(KEY_ALARMS, next);
+      return next;
+    });
+    refresh();
+  }, [refresh]);
+
+  // Au retour au premier plan : ce qui a sonné pendant l'absence.
   useEffect(() => {
     const sub = AppState.addEventListener('change', (s) => {
-      if (s !== 'active') return;
-      setAlarms((prev) => {
-        const next = reconcile(prev, nativeAlarms());
-        if (next !== prev) void writeJson(KEY_ALARMS, next);
-        return next;
-      });
-      refresh();
+      if (s === 'active') resync();
     });
     return () => sub.remove();
-  }, [refresh]);
+  }, [resync]);
+
+  // Pendant que l'appli est affichée — l'horloge de chevet, typiquement — la
+  // sonnerie passe sans changer d'état d'appli : on relit une fois l'échéance
+  // dépassée, plutôt qu'à chaque rendu. Une échéance déjà passée au montage
+  // (natif pas encore réarmé) attend un pas complet, sans quoi chaque relecture
+  // identique relancerait aussitôt la suivante.
+  useEffect(() => {
+    if (!next) return;
+    const due = next.at.getTime() + RESYNC_GRACE_MS;
+    let timer: ReturnType<typeof setTimeout>;
+    const tick = () => {
+      const left = due - Date.now();
+      if (left <= 0) resync();
+      else timer = setTimeout(tick, Math.min(left, CHECK_MS));
+    };
+    const first = due - Date.now();
+    timer = setTimeout(tick, first > 0 ? Math.min(first, CHECK_MS) : CHECK_MS);
+    return () => clearTimeout(timer);
+  }, [next, resync]);
 
   const commit = useCallback(
     (list: Alarm[]) => {
