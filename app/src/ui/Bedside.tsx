@@ -91,17 +91,19 @@ export function Bedside({
   // Sur un téléphone où l'affichage est agrandi (taille d'affichage ou de
   // police), un forfait de 66 % de la hauteur poussait les boutons hors de
   // l'écran : l'horloge prend désormais ce qui reste une fois le reste posé.
-  const [columnH, setColumnH] = useState(0);
+  const [column, setColumn] = useState({ w: 0, h: 0 });
   const [restH, setRestH] = useState(0);
   // L'horloge remplit sa colonne au lieu d'une taille fixe : c'est le seul
   // contenu de l'écran qu'on doit pouvoir lire d'un lit, à deux mètres et
   // sans lunettes. « 07:00 » fait cinq caractères d'une police à chasse fixe,
-  // soit environ 2,6 largeurs de cadratin ; la hauteur borne le reste.
+  // 2,63 largeurs de cadratin mesurées sur l'émulateur ; 2,75 laisse une marge.
+  // La taille calculée est appliquée telle quelle : adjustsFontSizeToFit la
+  // rétrécissait encore de moitié sur Android, alors que la place y était.
   const clockSize = useMemo(() => {
-    const byWidth = (width * 0.52 - 40) / 2.6;
-    const byHeight = columnH && restH ? (columnH - restH) / 1.04 : height * 0.5;
+    const byWidth = column.w ? column.w / 2.75 : (width * 0.52 - 40) / 2.75;
+    const byHeight = column.h && restH ? (column.h - restH) / 1.04 : height * 0.5;
     return Math.max(36, Math.floor(Math.min(byWidth, byHeight)));
-  }, [columnH, height, restH, width]);
+  }, [column, height, restH, width]);
   const [now, setNow] = useState(() => new Date());
   const [dimmed, setDimmed] = useState(false);
   // Réglé dans les paramètres. Relu à chaque passage en paysage : les
@@ -183,7 +185,7 @@ export function Bedside({
       <ScrollView
         style={s.left}
         contentContainerStyle={s.leftContent}
-        onLayout={(e) => setColumnH(e.nativeEvent.layout.height)}>
+        onLayout={(e) => setColumn({ w: e.nativeEvent.layout.width, h: e.nativeEvent.layout.height })}>
         {/* La taille est déjà calculée sur l'écran : la multiplier encore par
             la taille de police du système la ferait déborder. */}
         <Text
@@ -193,7 +195,6 @@ export function Bedside({
             dimmed && keepClock && s.dimClock,
           ]}
           numberOfLines={1}
-          adjustsFontSizeToFit
           allowFontScaling={false}
           accessibilityLabel={'Il est ' + two(now.getHours()) + ' heures ' + two(now.getMinutes())}>
           {two(now.getHours())}:{two(now.getMinutes())}
