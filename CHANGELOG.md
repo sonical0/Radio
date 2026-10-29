@@ -9,6 +9,53 @@ Ordre : **entrée la plus récente en tête**. Plusieurs passes le même jour so
 suffixées `(2)`, `(3)`… la plus haute étant la plus récente (même convention que
 `TANDEM_LOG.md`).
 
+## 2026-10-29 — app v1.6.0 : l'horloge de chevet sur un écran agrandi
+
+Constat sur un téléphone réglé en grand (taille d'affichage et de police) : en paysage,
+l'heure était coupée en haut et ▶▶ sortait de l'écran en bas, sans moyen de l'atteindre.
+Reproduit sur émulateur (police 1,3, densité 525 au lieu de 420) avec l'APK 1.5.0.
+
+### Corrigé — horloge de chevet (`Bedside.tsx`)
+- **L'heure prend la hauteur qui reste**, mesurée (`onLayout` de la colonne et du bloc du
+  dessous), au lieu d'un forfait de 66 % de l'écran. Elle n'est plus multipliée par la police
+  système (`allowFontScaling={false}`) : sa taille vient déjà de l'écran.
+- **L'heure prend toute la place qu'elle a.** Métriques de VT323 lues dans la police : 0,4
+  cadratin d'avance par caractère (« 07:00 » = 2,0), chiffres de 0 à 0,56 au-dessus de la
+  ligne de base, corps 0,8 / 0,2. La boîte faisait 1,04 plus la marge de police d'Android :
+  plus de la moitié était vide. Elle fait 0,8 sans marge (`includeFontPadding: false`), ce qui
+  garde les chiffres entiers qu'Android rogne la ligne par le haut ou des deux côtés. La
+  largeur par cadratin est mesurée sur le texte affiché et non plus estimée (2,6 supposés
+  laissaient l'heure à 60 % de la largeur). `adjustsFontSizeToFit` est retiré.
+- Date, prochain réveil et boutons, déjà en 24 à 26, ne grossissent plus avec la police
+  système : chaque point pris en hauteur l'était à l'heure.
+- **Les trois boutons de transport restent sur une ligne** ; le libellé du milieu rétrécit.
+  Passés à la ligne, ils volaient de la hauteur à l'heure puis sortaient de l'écran.
+- La colonne défile en dernier recours ; les lignes du réglage d'un réveil passent à la ligne.
+
+### Corrigé — écran de sonnerie (`AlarmActivity.kt`)
+- Dans un `ScrollView` (`fillViewport`, centré quand tout tient) : l'heure en 72 sp pouvait
+  pousser ARRÊTER et REPORT sous le bord.
+
+### Corrigé — réglages
+- Le panneau défile : agrandi, FERMER sortait de l'écran.
+
+### Ajouté
+- **Veille de nuit au choix** (RÉGLAGES › RÉVEIL) : TOUT ASSOMBRIR, le voile d'avant et le
+  défaut, ou HEURE LISIBLE, où l'heure ne descend qu'à 60 % et le reste à 28 %. Clé
+  `bedsideDim` (`veil` | `clock`), hors sauvegarde.
+
+### Vérifié
+- Sur émulateur (Pixel moyen, API 36), APK release de la CI : police 1,3 et densité 525,
+  avec et sans station ni titre affichés ; réglage normal (police 1, densité 420) ; HEURE
+  LISIBLE après une minute ; panneau des réglages défilant jusqu'à FERMER ; écran de sonnerie
+  sur téléphone verrouillé à police 2,0, REPORT atteint en défilant.
+- Sur la v1.5.0, même réglage : heure coupée en haut, ▶▶ hors de l'écran (reproduit avant
+  correction).
+- **Non vérifié sur un vrai téléphone.**
+
+### Publié
+- **v1.6.0** (`versionCode` 12), qui embarque aussi la couleur libre exacte du 2026-10-04.
+
 ## 2026-10-04 — app, la couleur libre exacte, comme sur le site
 
 Portage des deux passes du site du même jour. Pas encore d'APK : à construire.
