@@ -125,12 +125,12 @@ object AlarmStore {
         continue
       }
       val kept = previous[spec.id]?.takeIf { it.skipNext }?.skipAt ?: 0L
-      val skipAt = if (kept > 0L && AlarmScheduler.isOccurrence(spec, kept)) {
+      val skipAt = if (kept > 0L && AlarmScheduler.matchesOccurrence(spec, kept)) {
         kept
       } else {
         AlarmScheduler.nextOccurrence(spec.copy(skipNext = false), now) ?: 0L
       }
-      if (skipAt in 1L..now) {
+      if (AlarmScheduler.skipConsumed(skipAt, now)) {
         // Déjà passé : le saut a servi.
         o.put("skipNext", false)
       } else if (skipAt > 0L) {
@@ -153,7 +153,7 @@ object AlarmStore {
       for (i in 0 until array.length()) {
         val o = array.optJSONObject(i) ?: continue
         val at = o.optLong(KEY_SKIP_AT, 0L)
-        if (at in 1L..now) {
+        if (AlarmScheduler.skipConsumed(at, now)) {
           o.put("skipNext", false)
           o.remove(KEY_SKIP_AT)
           changed = true

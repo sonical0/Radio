@@ -40,13 +40,17 @@
       android:exported="false" />
 
     <!-- Exporté : la diffusion vient du système, pas de l'application. C'est
-         une diffusion protégée, qu'aucune autre application ne peut émettre. -->
+         une diffusion protégée, qu'aucune autre application ne peut émettre.
+         Fuseau et heure changés : protégées aussi, et exemptées de la limite
+         des diffusions implicites. -->
     <receiver
       android:name=".BootReceiver"
       android:exported="true">
       <intent-filter>
         <action android:name="android.intent.action.BOOT_COMPLETED" />
         <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+        <action android:name="android.intent.action.TIMEZONE_CHANGED" />
+        <action android:name="android.intent.action.TIME_SET" />
       </intent-filter>
     </receiver>
   </application>

@@ -88,13 +88,28 @@ object AlarmScheduler {
     // sautée ; un saut sans occurrence fixée (réveil unique) n'arme rien.
     if (spec.skipNext) {
       if (spec.skipAt <= 0L) return null
-      return occurrenceAfter(spec, maxOf(from, spec.skipAt))
+      return occurrenceAfter(spec, maxOf(from, spec.skipAt + SKIP_WINDOW_MS))
     }
     return occurrenceAfter(spec, from)
   }
 
-  /** Vrai si `at` tombe exactement sur une occurrence de l'horaire, saut ignoré. */
-  fun isOccurrence(spec: AlarmSpec, at: Long): Boolean = occurrenceAfter(spec, at - 1) == at
+  /**
+   * Le saut vise une occurrence, pas un instant : `skipAt` est l'instant
+   * calculé dans le fuseau du moment, et après un changement de fuseau
+   * (voyage) le même 7 h tombe ailleurs. Tout ce qui sonne à moins de douze
+   * heures de `skipAt` est cette occurrence-là — un réveil ne sonne qu'une
+   * fois par jour, la suivante est à vingt-quatre heures.
+   */
+  const val SKIP_WINDOW_MS = 12 * 60 * 60 * 1000L
+
+  /** Le saut a servi : la fenêtre de l'occurrence sautée est passée. */
+  fun skipConsumed(skipAt: Long, now: Long): Boolean = skipAt > 0L && now >= skipAt + SKIP_WINDOW_MS
+
+  /** Vrai si une occurrence de l'horaire tombe dans la fenêtre de `at`, saut ignoré. */
+  fun matchesOccurrence(spec: AlarmSpec, at: Long): Boolean {
+    val near = occurrenceAfter(spec, at - SKIP_WINDOW_MS) ?: return false
+    return near < at + SKIP_WINDOW_MS
+  }
 
   private fun occurrenceAfter(spec: AlarmSpec, from: Long): Long? {
     val cal = Calendar.getInstance().apply {
