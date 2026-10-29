@@ -83,14 +83,21 @@ export function Bedside({
   // ne s'affichait jamais. Les deux états où l'on attend du son sont ceux-ci.
   const connecting = streamState === 'buffering' || streamState === 'reconnecting';
   const { width, height } = useWindowDimensions();
+  // La hauteur de la colonne, et celle de tout ce qui s'affiche sous l'heure.
+  // Sur un téléphone où l'affichage est agrandi (taille d'affichage ou de
+  // police), un forfait de 66 % de la hauteur poussait les boutons hors de
+  // l'écran : l'horloge prend désormais ce qui reste une fois le reste posé.
+  const [columnH, setColumnH] = useState(0);
+  const [restH, setRestH] = useState(0);
   // L'horloge remplit sa colonne au lieu d'une taille fixe : c'est le seul
   // contenu de l'écran qu'on doit pouvoir lire d'un lit, à deux mètres et
   // sans lunettes. « 07:00 » fait cinq caractères d'une police à chasse fixe,
   // soit environ 2,6 largeurs de cadratin ; la hauteur borne le reste.
-  const clockSize = useMemo(
-    () => Math.floor(Math.min((width * 0.52 - 40) / 2.6, height * 0.66)),
-    [height, width],
-  );
+  const clockSize = useMemo(() => {
+    const byWidth = (width * 0.52 - 40) / 2.6;
+    const byHeight = columnH && restH ? (columnH - restH) / 1.04 : height * 0.5;
+    return Math.max(36, Math.floor(Math.min(byWidth, byHeight)));
+  }, [columnH, height, restH, width]);
   const [now, setNow] = useState(() => new Date());
   const [dimmed, setDimmed] = useState(false);
   const [editing, setEditing] = useState<string | null>(null);
@@ -161,73 +168,83 @@ export function Bedside({
 
   return (
     <Pressable style={s.screen} onPress={wake} accessibilityLabel="Horloge de chevet">
-      <View style={s.left}>
+      {/* Défilante en dernier recours : si même une horloge réduite au minimum
+          ne laisse pas la place aux boutons, on doit pouvoir aller les chercher. */}
+      <ScrollView
+        style={s.left}
+        contentContainerStyle={s.leftContent}
+        onLayout={(e) => setColumnH(e.nativeEvent.layout.height)}>
+        {/* La taille est déjà calculée sur l'écran : la multiplier encore par
+            la taille de police du système la ferait déborder. */}
         <Text
           style={[s.clock, { fontSize: clockSize, lineHeight: Math.round(clockSize * 1.04) }]}
           numberOfLines={1}
           adjustsFontSizeToFit
+          allowFontScaling={false}
           accessibilityLabel={'Il est ' + two(now.getHours()) + ' heures ' + two(now.getMinutes())}>
           {two(now.getHours())}:{two(now.getMinutes())}
         </Text>
-        <Text style={s.date}>{dateLabel(now).toUpperCase()}</Text>
-        <Text style={s.next}>
-          {lib.next ? '⏰ ' + whenLabel(lib.next.at) : 'AUCUN RÉVEIL ARMÉ'}
-        </Text>
-        {station ? <Text style={s.station}>{station.name}</Text> : null}
-        {/* Ce qui passe, pas seulement où ça passe : l'écran affichait la
-            station sans jamais dire le morceau, alors que l'appli le connaît. */}
-        {station && title ? (
-          <Text style={s.track} numberOfLines={1}>
-            {title}
+        <View onLayout={(e) => setRestH(e.nativeEvent.layout.height)}>
+          <Text style={s.date} maxFontSizeMultiplier={1.3}>{dateLabel(now).toUpperCase()}</Text>
+          <Text style={s.next} maxFontSizeMultiplier={1.3}>
+            {lib.next ? '⏰ ' + whenLabel(lib.next.at) : 'AUCUN RÉVEIL ARMÉ'}
           </Text>
-        ) : null}
-
-        {/* Écouter sans se relever ni retourner le téléphone. Zapper non plus :
-            la liste des stations reste en portrait, mais la file du lecteur est
-            la même des deux côtés, donc les deux flèches suffisent à en changer
-            sans quitter l'horloge. */}
-        <View style={s.transport}>
-          <Pressable
-            onPress={onPrevious}
-            disabled={!station}
-            accessibilityRole="button"
-            accessibilityState={{ disabled: !station }}
-            accessibilityLabel="Station précédente"
-            style={[t.btn, s.skip, { borderColor: station ? p.base : p.border }]}>
-            <Text style={[t.btnText, s.skipText, !station && t.btnOff]}>◀◀</Text>
-          </Pressable>
-
-          <Pressable
-            onPress={onToggle}
-            disabled={!station}
-            accessibilityRole="button"
-            accessibilityState={{ disabled: !station, busy: connecting }}
-            accessibilityLabel={playing ? 'Mettre en pause' : 'Lancer la radio'}
-            style={[t.btn, s.play, { borderColor: station ? p.base : p.border }]}>
-            <Text style={[t.btnText, s.playText, !station && t.btnOff]}>
-              {/* Les mêmes glyphes que l'écran portrait : ⏸ sortait en emoji
-                  de couleur, seul élément non Pip-Boy de l'écran. */}
-              {!station
-                ? '▶ AUCUNE STATION'
-                : connecting
-                  ? '… CONNEXION'
-                  : playing
-                    ? '❚❚ PAUSE'
-                    : '▶ ÉCOUTER'}
+          {station ? <Text style={s.station}>{station.name}</Text> : null}
+          {/* Ce qui passe, pas seulement où ça passe : l'écran affichait la
+              station sans jamais dire le morceau, alors que l'appli le connaît. */}
+          {station && title ? (
+            <Text style={s.track} numberOfLines={1}>
+              {title}
             </Text>
-          </Pressable>
+          ) : null}
 
-          <Pressable
-            onPress={onNext}
-            disabled={!station}
-            accessibilityRole="button"
-            accessibilityState={{ disabled: !station }}
-            accessibilityLabel="Station suivante"
-            style={[t.btn, s.skip, { borderColor: station ? p.base : p.border }]}>
-            <Text style={[t.btnText, s.skipText, !station && t.btnOff]}>▶▶</Text>
-          </Pressable>
+          {/* Écouter sans se relever ni retourner le téléphone. Zapper non plus :
+              la liste des stations reste en portrait, mais la file du lecteur est
+              la même des deux côtés, donc les deux flèches suffisent à en changer
+              sans quitter l'horloge. */}
+          <View style={s.transport}>
+            <Pressable
+              onPress={onPrevious}
+              disabled={!station}
+              accessibilityRole="button"
+              accessibilityState={{ disabled: !station }}
+              accessibilityLabel="Station précédente"
+              style={[t.btn, s.skip, { borderColor: station ? p.base : p.border }]}>
+              <Text style={[t.btnText, s.skipText, !station && t.btnOff]} maxFontSizeMultiplier={1.3}>◀◀</Text>
+            </Pressable>
+
+            <Pressable
+              onPress={onToggle}
+              disabled={!station}
+              accessibilityRole="button"
+              accessibilityState={{ disabled: !station, busy: connecting }}
+              accessibilityLabel={playing ? 'Mettre en pause' : 'Lancer la radio'}
+              style={[t.btn, s.play, { borderColor: station ? p.base : p.border }]}>
+              <Text style={[t.btnText, s.playText, !station && t.btnOff]} maxFontSizeMultiplier={1.3}>
+                {/* Les mêmes glyphes que l'écran portrait : ⏸ sortait en emoji
+                    de couleur, seul élément non Pip-Boy de l'écran. */}
+                {!station
+                  ? '▶ AUCUNE STATION'
+                  : connecting
+                    ? '… CONNEXION'
+                    : playing
+                      ? '❚❚ PAUSE'
+                      : '▶ ÉCOUTER'}
+              </Text>
+            </Pressable>
+
+            <Pressable
+              onPress={onNext}
+              disabled={!station}
+              accessibilityRole="button"
+              accessibilityState={{ disabled: !station }}
+              accessibilityLabel="Station suivante"
+              style={[t.btn, s.skip, { borderColor: station ? p.base : p.border }]}>
+              <Text style={[t.btnText, s.skipText, !station && t.btnOff]} maxFontSizeMultiplier={1.3}>▶▶</Text>
+            </Pressable>
+          </View>
         </View>
-      </View>
+      </ScrollView>
 
       <View style={s.right}>
         <ScrollView keyboardShouldPersistTaps="handled">
@@ -419,7 +436,8 @@ const makeStyles = (p: Palette) =>
     screen: { flex: 1, flexDirection: 'row', backgroundColor: p.bg, padding: 16, gap: 16 },
     // La colonne de l'horloge prend un peu plus de la moitié : la liste des
     // alarmes se contente d'une largeur de lecture, l'heure non.
-    left: { flex: 1.15, justifyContent: 'center' },
+    left: { flex: 1.15 },
+    leftContent: { flexGrow: 1, justifyContent: 'center' },
     // La taille vient du composant, calculée sur l'écran ; ce qui reste ici
     // ne dépend pas de la largeur.
     clock: { color: p.base, fontFamily: FONT_DISPLAY },
@@ -450,7 +468,8 @@ const makeStyles = (p: Palette) =>
     rowStation: { color: p.dim, fontFamily: FONT_BODY, fontSize: 11 },
 
     editor: { marginTop: 8, gap: 6 },
-    editRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+    // `wrap` : agrandi, OK et ✕ sortaient de la colonne à droite.
+    editRow: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 6 },
     field: { width: 48, textAlign: 'center', marginBottom: 0 },
     colon: { color: p.base, fontFamily: FONT_DISPLAY, fontSize: 18, lineHeight: 22 },
     day: { flex: 1, borderWidth: 1, paddingVertical: 5, alignItems: 'center' },

@@ -14,6 +14,7 @@ import android.view.ViewGroup
 import android.view.WindowManager
 import android.widget.Button
 import android.widget.LinearLayout
+import android.widget.ScrollView
 import android.widget.TextView
 import java.util.Calendar
 
@@ -135,7 +136,17 @@ class AlarmActivity : Activity() {
       root.addView(snooze)
     }
 
-    return root
+    // Défilant : sur un téléphone à l'affichage agrandi, surtout couché, l'heure
+    // en 72 sp poussait ARRÊTER et REPORT sous le bord de l'écran, sans moyen
+    // de les atteindre. fillViewport garde le centrage quand tout tient.
+    return ScrollView(this).apply {
+      isFillViewport = true
+      setBackgroundColor(palette.background)
+      addView(
+        root,
+        ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT),
+      )
+    }
   }
 
   private fun button(label: String, palette: AlarmPalette.Colors, onClick: () -> Unit): Button =
