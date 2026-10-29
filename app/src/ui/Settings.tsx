@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import Slider from '@react-native-community/slider';
 import {
+  AppState,
   Keyboard,
   Linking,
   Modal,
@@ -13,6 +14,7 @@ import {
 } from 'react-native';
 
 import { setAnnounceTime } from '../../modules/alarm';
+import { hasNavAccess, navAvailable, openNavAccess } from '../../modules/nav';
 import { CURRENT_VERSION, type Release } from '../net/updates';
 import {
   KEY_ANNOUNCE_TIME,
@@ -97,6 +99,7 @@ export function Settings({
   const [bedsideDim, setBedsideDim] = useState<'veil' | 'clock'>('veil');
   const [city, setCity] = useState('');
   const [announce, setAnnounce] = useState(false);
+  const [navAccess, setNavAccess] = useState(false);
   // Comme l'écran principal : la fenêtre n'est plus redimensionnée, c'est au
   // panneau de remonter au-dessus du clavier, sinon le champ ville reste dessous.
   const [keyboard, setKeyboard] = useState(0);
@@ -119,6 +122,18 @@ export function Settings({
     void readString(KEY_ANNOUNCE_TIME).then((v) => setAnnounce(v === '1'));
     void readString(KEY_BEDSIDE_DIM).then((v) => setBedsideDim(v === 'clock' ? 'clock' : 'veil'));
     void readString(KEY_WEATHER_CITY).then((v) => setCity(v ?? ''));
+  }, [visible]);
+
+  // L'accord se donne dans les réglages d'Android, hors de l'appli : on relit
+  // l'accès à l'ouverture et à chaque retour au premier plan, panneau ouvert.
+  useEffect(() => {
+    if (!visible || !navAvailable()) return;
+    const read = () => setNavAccess(hasNavAccess());
+    read();
+    const sub = AppState.addEventListener('change', (st) => {
+      if (st === 'active') read();
+    });
+    return () => sub.remove();
   }, [visible]);
 
   // Comme le code couleur : la ville s'écrit à la validation, pas à chaque
@@ -283,6 +298,31 @@ export function Settings({
                 </Pressable>
               );
             })}
+
+            {/* L'écran vélo montre l'étape de Maps en lisant sa notification de
+                navigation, ce qu'Android n'accorde que dans ses propres réglages. */}
+            {navAvailable() ? (
+              <View>
+                <Text style={s.label}>ÉTAPES GOOGLE MAPS (VÉLO)</Text>
+                <Pressable
+                  style={[s.option, { borderColor: navAccess ? p.base : p.border }]}
+                  onPress={openNavAccess}
+                  accessibilityRole="button"
+                  accessibilityLabel={
+                    'Étapes Google Maps : ' + (navAccess ? 'accès accordé' : 'accès à autoriser')
+                  }>
+                  <Text style={[s.optionLabel, { color: navAccess ? p.base : p.dim }]}>
+                    {navAccess ? 'ACCÈS ACCORDÉ' : "AUTORISER L'ACCÈS"}
+                  </Text>
+                  <Text style={[s.check, { color: p.base }]}>{navAccess ? '✓' : '›'}</Text>
+                </Pressable>
+                <Text style={s.hint}>
+                  Seule la notification de navigation de Maps est lue. Si Android répond
+                  « Paramètre restreint » : Infos de l'appli › menu (trois points) › Autoriser les paramètres
+                  restreints, puis revenir ici.
+                </Text>
+              </View>
+            ) : null}
 
             <Text style={s.label}>RÉVEIL</Text>
             {/* Le réveil vit sur l'horloge de chevet : le dire ici, sinon
