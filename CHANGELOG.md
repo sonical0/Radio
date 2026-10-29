@@ -9,7 +9,7 @@ Ordre : **entrée la plus récente en tête**. Plusieurs passes le même jour so
 suffixées `(2)`, `(3)`… la plus haute étant la plus récente (même convention que
 `TANDEM_LOG.md`).
 
-## 2026-10-29 (2) — app v1.7.0 : le réveil parle, la météo, les favoris, Android Auto
+## 2026-10-29 (2) — app v1.7.0 : le réveil parle, la météo, les favoris, le vélo, Android Auto
 
 Une journée de supervision à quatre managers ; chaque branche est entrée dans
 `react-native/dev` en un seul commit.
@@ -25,7 +25,16 @@ Une journée de supervision à quatre managers ; chaque branche est entrée dans
   mode chevet ; elle descend aussi avec le fondu de la minuterie de veille.
 - **La météo** (Open-Meteo, ville dans RÉGLAGES › MÉTÉO, clé `weatherCity`, vide = aucune
   requête) : sur la ligne de la date, pour que l'heure garde sa taille, et sur l'écran de
-  sonnerie. Cache de 30 minutes, muette hors ligne.
+  sonnerie. Cache de 30 minutes, muette hors ligne. Quand la ligne est trop longue, c'est la
+  date qui se raccourcit, pas la météo.
+
+### Ajouté — mode vélo
+- **Un écran pour le téléphone sur le guidon** : gros boutons de lecture, favoris, heure et
+  météo, écran maintenu allumé.
+- **Le paysage montre le chevet ou le vélo** (RÉGLAGES › EN PAYSAGE, AFFICHER, clé
+  `landscapeMode`) ; VÉLO ▶ sur l'horloge et CHEVET sur l'écran vélo basculent de l'un à
+  l'autre. En portrait, VÉLO dans l'en-tête l'ouvre et retient le choix : on le tape, puis on
+  pose le téléphone en travers. RETOUR ou le retour d'Android le referme.
 
 ### Ajouté — lecture
 - **Favoris** : une étoile sur chaque station, jusqu'à six gros boutons au-dessus de la
@@ -33,10 +42,52 @@ Une journée de supervision à quatre managers ; chaque branche est entrée dans
 - **Titres gardés** : un titre de l'historique peut être gardé au-delà du plafond, et
   cherché sur YouTube ou Deezer.
 - **Android Auto** : les stations visibles sont publiées dans l'arbre de navigation (plugin
-  `withAndroidAuto`).
+  `withAndroidAuto`), un dossier par groupe.
+
+### Corrigé
+- **Les réveils et les sauts tiennent un changement de fuseau ou d'heure** : réarmés après
+  `TIME_SET` et au démarrage, à la même heure locale.
+- **« Prochain réveil » passe à l'occurrence suivante** une fois l'heure passée, même
+  l'appli restée ouverte (il ne bougeait qu'au retour au premier plan, déjà en 1.6.0).
+- **Le panneau des réglages remonte au-dessus du clavier** : le champ ville restait dessous.
+- **Le titre de l'en-tête rétrécit** au lieu d'être coupé quand VÉLO prend sa place.
 
 ### Vérifié
-- À compléter après le test de l'APK de la CI sur émulateur.
+- Sur émulateur (Pixel moyen, API 36), APKs release de la CI du train, en réglage normal
+  (police 1, densité 420) puis agrandi (police 1,3, densité 525) :
+  - favoris (étoile, rangée, lecture) ; titre gardé et choix YouTube / Deezer ;
+  - heure de chevet de même hauteur avec et sans ville (294 px normal, 160 px agrandi,
+    titre affiché dans les deux cas) ; date et météo sur une ligne ;
+  - appui long : phrase fr-FR envoyée au moteur de synthèse (journal) ;
+  - SAUTER fait passer le prochain réveil de vendredi à lundi, REPRENDRE le ramène ;
+  - fenêtre à 5 % après une minute, rendue au système au toucher et en portrait ;
+  - minuterie de veille : luminosité de 100 % à 10 % sur les 20 s du fondu, puis système ;
+  - sonnerie avec annonce : radio partie, phrase demandée dans la foulée ; chevet ouvert,
+    « prochain réveil » à l'occurrence suivante 54 s après la sonnerie ;
+  - saut posé en Europe/Paris, émulateur redémarré en GMT : réarmé au lundi suivant, même
+    heure locale, « SAUTÉ UNE FOIS » toujours affiché ;
+  - vélo : bascules chevet / vélo dans les deux sens, VÉLO en portrait puis paysage reste en
+    vélo, ▶▶, favori, RETOUR et retour Android, `KEEP_SCREEN_ON` posé sur la fenêtre ;
+  - champ ville visible au-dessus du clavier ;
+  - agrandi, ligne du chevet entière, date en chiffres : « 29/10 · 14° NUAGEUX » ; titre
+    « FALLOUT RADIO » entier à côté de VÉLO, mais réduit bien en dessous de 60 % (Android
+    ne tient pas compte du plancher de `minimumFontScale`).
+
+### Non vérifié / limites
+- **La voix n'a pas été entendue** : l'émulateur ne rend pas le son à qui le teste ; seule la
+  demande au moteur de synthèse est vue dans le journal.
+- **Android Auto** : pas de simulateur possible, le Play Store déclare Android Auto
+  incompatible avec l'émulateur ; à vérifier en voiture. Sur un téléphone, Android Auto masque
+  les applis installées hors Play Store : activer ses paramètres développeur (toucher 10 fois
+  « Version »), puis « Sources inconnues », pour que Fallout Radio apparaisse. À vérifier en
+  voiture : l'appli dans les applis média ; un dossier par groupe, stations masquées
+  absentes ; une station choisie se lance, titre = nom de la station ; suivant / précédent
+  restent dans le groupe ; ajouter ou masquer une station met l'arbre à jour. Limites :
+  lancée depuis la voiture, l'interface de l'appli ne se reconnecte pas ; pas de boost ni de
+  pochette en voiture.
+- **Fuseau changé appli ouverte** : l'horloge affichée garde l'ancien fuseau jusqu'à la
+  relance (Hermes) ; le réveil natif, lui, sonne à la bonne heure.
+- **Non vérifié sur un vrai téléphone.**
 
 ## 2026-10-29 — app v1.6.0 : l'horloge de chevet sur un écran agrandi
 
