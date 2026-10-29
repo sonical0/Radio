@@ -34,6 +34,11 @@ const MONTHS = [
   'janvier', 'février', 'mars', 'avril', 'mai', 'juin',
   'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre',
 ];
+const DAY_SHORT = ['dim.', 'lun.', 'mar.', 'mer.', 'jeu.', 'ven.', 'sam.'];
+const MONTHS_SHORT = [
+  'janv.', 'févr.', 'mars', 'avr.', 'mai', 'juin',
+  'juil.', 'août', 'sept.', 'oct.', 'nov.', 'déc.',
+];
 
 /**
  * La hauteur de ligne de l'heure, en corps. Métriques de VT323 : ascendante
@@ -66,6 +71,11 @@ function two(n: number): string {
 
 function dateLabel(d: Date): string {
   return DAY_NAMES[d.getDay()] + ' ' + d.getDate() + ' ' + MONTHS[d.getMonth()];
+}
+
+/** « jeu. 29 oct. » : quand la date longue et la météo ne tiennent pas ensemble. */
+function shortDateLabel(d: Date): string {
+  return DAY_SHORT[d.getDay()] + ' ' + d.getDate() + ' ' + MONTHS_SHORT[d.getMonth()];
 }
 
 /**
@@ -130,6 +140,11 @@ export function Bedside({
   // l'écran : l'horloge prend désormais ce qui reste une fois le reste posé.
   const [column, setColumn] = useState({ w: 0, h: 0 });
   const [restH, setRestH] = useState(0);
+  // Hauteur de la ligne de date affichée, et de la même ligne en version
+  // longue mesurée sans limite de lignes : plus haute, c'est qu'elle passe à
+  // la ligne, donc qu'elle ne tient pas.
+  const [dateLineH, setDateLineH] = useState(0);
+  const [longDateH, setLongDateH] = useState(0);
   // L'horloge remplit sa colonne au lieu d'une taille fixe : c'est le seul
   // contenu de l'écran qu'on doit pouvoir lire d'un lit, à deux mètres et
   // sans lunettes. La largeur de « 07:00 » en cadratins n'est pas devinée :
@@ -153,6 +168,9 @@ export function Bedside({
   }, []);
   // Rien quand aucune ville n'est réglée ou que le réseau manque : voir useWeather.
   const weather = useWeather();
+  const weatherText = weather ? ' · ' + weather.replace(' · ', ' ').toUpperCase() : '';
+  // Tant qu'une des deux mesures manque, la date longue : c'est l'affichage d'avant.
+  const longDateFits = !dateLineH || !longDateH || longDateH < dateLineH * 1.5;
   const [editing, setEditing] = useState<string | null>(null);
   const [undo, setUndo] = useState<Alarm | null>(null);
   const undoTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -282,17 +300,30 @@ export function Bedside({
           onLayout={(e) => setRestH(e.nativeEvent.layout.height)}>
           {/* La météo sur la ligne de la date, jamais sur une ligne à elle :
               l'heure est dimensionnée sur la hauteur de ce bloc, et une ligne de
-              plus lui coûtait un cinquième de sa taille. Une seule ligne, coupée
-              par la fin : c'est la météo qui cède, pas la date. */}
+              plus lui coûtait un cinquième de sa taille. Quand la date longue et
+              la météo ne tiennent pas ensemble, c'est la date qui raccourcit
+              (« JEU. 29 OCT. ») : coupée par la fin, la ligne perdait le ciel. */}
           <Text
             style={s.date}
             maxFontSizeMultiplier={1}
             numberOfLines={1}
+            onLayout={(e) => setDateLineH(e.nativeEvent.layout.height)}
             accessibilityLabel={
               dateLabel(now) + (weather ? ', ' + weather.replace('°', ' degrés').replace(' · ', ', ') : '')
             }>
+            {(longDateFits ? dateLabel(now) : shortDateLabel(now)).toUpperCase()}
+            {weatherText}
+          </Text>
+          {/* La ligne longue, invisible et hors du flux (elle ne compte pas dans
+              `restH`), sans limite de lignes : sa hauteur dit si elle tiendrait. */}
+          <Text
+            style={[s.date, s.measure]}
+            maxFontSizeMultiplier={1}
+            onLayout={(e) => setLongDateH(e.nativeEvent.layout.height)}
+            accessibilityElementsHidden
+            importantForAccessibility="no-hide-descendants">
             {dateLabel(now).toUpperCase()}
-            {weather ? ' · ' + weather.replace(' · ', ' ').toUpperCase() : ''}
+            {weatherText}
           </Text>
           <Text style={s.next} maxFontSizeMultiplier={1}>
             {lib.next ? '⏰ ' + whenLabel(lib.next.at) : 'AUCUN RÉVEIL ARMÉ'}
@@ -606,6 +637,7 @@ const makeStyles = (p: Palette) =>
     // colonne, sinon la mesure de `emWidth` ne mesurerait que la colonne.
     clock: { color: p.base, fontFamily: FONT_DISPLAY, alignSelf: 'flex-start', includeFontPadding: false },
     date: { color: p.dim, fontFamily: FONT_DISPLAY, fontSize: 24, letterSpacing: 3 },
+    measure: { position: 'absolute', top: 0, left: 0, right: 0, opacity: 0 },
     next: { color: p.base, fontFamily: FONT_DISPLAY, fontSize: 26, letterSpacing: 2, marginTop: 16 },
     station: { color: p.dim, fontFamily: FONT_BODY, fontSize: 13, marginTop: 4 },
     track: { color: p.base, fontFamily: FONT_BODY, fontSize: 15, marginTop: 2, opacity: 0.9 },
