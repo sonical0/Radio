@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Alert, Linking, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import type { HistoryEntry } from '../store/useHistory';
 import { FONT_BODY, type Palette, useTheme } from './theme';
@@ -23,11 +23,36 @@ function normalize(text: string): string {
     .trim();
 }
 
+/** Le titre pour un moteur de recherche : « artiste titre » tel quel, encodé. */
+function searchUrl(engine: 'youtube' | 'deezer', title: string): string {
+  const q = encodeURIComponent(title);
+  return engine === 'youtube'
+    ? `https://www.youtube.com/results?search_query=${q}`
+    : `https://www.deezer.com/search/${q}`;
+}
+
+function searchTitle(title: string): void {
+  Alert.alert('Chercher ce titre', title, [
+    { text: 'YouTube', onPress: () => void Linking.openURL(searchUrl('youtube', title)).catch(() => {}) },
+    { text: 'Deezer', onPress: () => void Linking.openURL(searchUrl('deezer', title)).catch(() => {}) },
+    { text: 'Annuler', style: 'cancel' },
+  ]);
+}
+
 /**
  * Le volet des titres passés, sur le patron de la corbeille : repliable, et
  * absent tant qu'il n'a rien à montrer.
  */
-export function History({ entries, onClear }: { entries: HistoryEntry[]; onClear: () => void }) {
+export function History({
+  entries,
+  onClear,
+  onToggleKeep,
+}: {
+  entries: HistoryEntry[];
+  onClear: () => void;
+  /** Sans lui (appelant pas encore câblé), les étoiles sont affichées mais inertes. */
+  onToggleKeep?: (url: string, at: number) => void;
+}) {
   const { p, t } = useTheme();
   const s = useMemo(() => makeStyles(p), [p]);
   const [open, setOpen] = useState(false);
@@ -93,14 +118,27 @@ export function History({ entries, onClear }: { entries: HistoryEntry[]; onClear
             shown.map((e) => (
               <View key={e.url + e.at} style={s.item}>
                 <Text style={s.time}>{clock(e.at)}</Text>
-                <View style={s.texts}>
+                <Pressable
+                  style={s.texts}
+                  onPress={() => searchTitle(e.title)}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Chercher ${e.title} sur YouTube ou Deezer`}>
                   <Text style={s.title} numberOfLines={1}>
                     {e.title}
                   </Text>
                   <Text style={s.station} numberOfLines={1}>
                     {e.station}
                   </Text>
-                </View>
+                </Pressable>
+                <Pressable
+                  onPress={() => onToggleKeep?.(e.url, e.at)}
+                  disabled={!onToggleKeep}
+                  hitSlop={8}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: !!e.kept }}
+                  accessibilityLabel={e.kept ? `Ne plus garder ${e.title}` : `Garder ${e.title}`}>
+                  <Text style={[s.star, e.kept ? s.starOn : null]}>{e.kept ? '★' : '☆'}</Text>
+                </Pressable>
               </View>
             ))
           )}
@@ -134,6 +172,8 @@ const makeStyles = (p: Palette) =>
     texts: { flex: 1 },
     title: { color: p.bright, fontFamily: FONT_BODY, fontSize: 13 },
     station: { color: p.dim, fontFamily: FONT_BODY, fontSize: 11 },
+    star: { color: p.dim, fontFamily: FONT_BODY, fontSize: 18, paddingHorizontal: 4 },
+    starOn: { color: p.bright },
     empty: { color: p.dim, fontFamily: FONT_BODY, fontSize: 12, paddingVertical: 6 },
     more: { color: p.dim, fontFamily: FONT_BODY, fontSize: 11, paddingTop: 8, opacity: 0.8 },
   });

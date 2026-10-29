@@ -38,7 +38,8 @@
     "plugins": [
       "expo-sharing",
       "expo-font",
-      "./plugins/withReleaseSigning"
+      "./plugins/withReleaseSigning",
+      "./plugins/withAndroidAuto"
     ]
   }
 }

@@ -39,6 +39,7 @@ import { Bedside } from './src/ui/Bedside';
 import { Clock } from './src/ui/Clock';
 import { Crt } from './src/ui/Crt';
 import { Directory } from './src/ui/Directory';
+import { Favorites } from './src/ui/Favorites';
 import { History } from './src/ui/History';
 import { ListenStats } from './src/ui/ListenStats';
 import { NowPlaying } from './src/ui/NowPlaying';
@@ -282,28 +283,36 @@ function Radio() {
             ref={listRef}
             sections={sections}
             ListHeaderComponent={
-              lib.stations.filter((x) => !x.hidden).length > 8 ? (
-                <View style={s.search}>
-                  <TextInput
-                    style={[t.input, s.searchField]}
-                    value={query}
-                    onChangeText={setQuery}
-                    placeholder="CHERCHER UNE STATION"
-                    placeholderTextColor={p.dim}
-                    accessibilityLabel="Chercher une station"
-                    autoCorrect={false}
-                  />
-                  {query ? (
-                    <Pressable
-                      onPress={() => setQuery('')}
-                      accessibilityRole="button"
-                      accessibilityLabel="Effacer la recherche"
-                      style={t.btn}>
-                      <Text style={t.btnText}>✕</Text>
-                    </Pressable>
-                  ) : null}
-                </View>
-              ) : null
+              <View>
+                <Favorites
+                  stations={lib.stations}
+                  currentUrl={play.currentUrl}
+                  playing={play.playing}
+                  onSelect={onSelect}
+                />
+                {lib.stations.filter((x) => !x.hidden).length > 8 ? (
+                  <View style={s.search}>
+                    <TextInput
+                      style={[t.input, s.searchField]}
+                      value={query}
+                      onChangeText={setQuery}
+                      placeholder="CHERCHER UNE STATION"
+                      placeholderTextColor={p.dim}
+                      accessibilityLabel="Chercher une station"
+                      autoCorrect={false}
+                    />
+                    {query ? (
+                      <Pressable
+                        onPress={() => setQuery('')}
+                        accessibilityRole="button"
+                        accessibilityLabel="Effacer la recherche"
+                        style={t.btn}>
+                        <Text style={t.btnText}>✕</Text>
+                      </Pressable>
+                    ) : null}
+                  </View>
+                ) : null}
+              </View>
             }
             keyExtractor={(item) => item.url}
             stickySectionHeadersEnabled={false}
@@ -324,6 +333,7 @@ function Radio() {
                 onPreviewGain={lib.previewGain}
                 onCommitGain={lib.commitGain}
                 onHide={onHide}
+                onToggleFavorite={lib.toggleFavorite}
               />
             )}
             ListFooterComponent={
@@ -337,7 +347,7 @@ function Radio() {
                   onFieldFocus={onFieldFocus}
                 />
                 <Directory onAdd={lib.addStation} onFieldFocus={onFieldFocus} />
-                <History entries={history.entries} onClear={history.clear} />
+                <History entries={history.entries} onClear={history.clear} onToggleKeep={history.toggleKeep} />
 
         <ListenStats stats={stats.stats} stations={lib.stations} onClear={stats.clear} />
                 {/* Les raccourcis n existent que sur la cible web : ne pas les

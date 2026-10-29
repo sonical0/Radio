@@ -33,6 +33,11 @@ export type Station = {
    */
   boost: number;
   hidden: boolean;
+  /**
+   * Épinglée en tête d'écran (gros boutons). Propre à l'app : le site ignore
+   * ce champ, et ne l'écrit donc jamais dans ses propres exports.
+   */
+  favorite: boolean;
   isCustom: boolean;
   /**
    * Fiche Radio-Browser d'origine, quand la station en vient : l'identifiant
@@ -55,6 +60,7 @@ export type RawStation = {
   gain?: unknown;
   boost?: unknown;
   hidden?: unknown;
+  favorite?: unknown;
   uuid?: unknown;
   favicon?: unknown;
 };
@@ -168,6 +174,7 @@ export function normalizeStation(s: RawStation, isCustom: boolean): Station {
     gain: sanitizeGain(s.gain),
     boost: sanitizeBoost(s.boost),
     hidden: s.hidden === true,
+    favorite: s.favorite === true,
     isCustom,
     uuid: sanitizeUuid(s.uuid),
     favicon: sanitizeFavicon(s.favicon),

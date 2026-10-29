@@ -11,9 +11,10 @@
 // sans runtime JS. Le prix est un index à tenir en plus de la liste : c'est
 // l'évènement MediaItemTransition qui s'en charge, dans usePlayback.
 
-import TrackPlayer, { PlayerCommand, RepeatMode } from '@rntp/player';
+import TrackPlayer, { type BrowseCategory, PlayerCommand, RepeatMode } from '@rntp/player';
+import { Platform } from 'react-native';
 import { setBoostDb } from '../../modules/audio-boost';
-import type { Station } from '../model/station';
+import { groupKey, type Station } from '../model/station';
 
 let ready = false;
 
@@ -177,4 +178,52 @@ export function setSleepTimer(minutes: number): void {
 export function sleepRemainingSeconds(): number | null {
   const t = TrackPlayer.getSleepTimer();
   return t && t.type === 'time' ? t.remainingSeconds : null;
+}
+
+// ─── Android Auto ───
+// Le service de lecture de @rntp/player est un MediaLibraryService media3 : il
+// répond lui-même à onGetLibraryRoot / onGetChildren à partir d'un arbre que JS
+// lui confie par setBrowseTree(). L'arbre est écrit dans les SharedPreferences
+// du lecteur, il survit donc à l'arrêt du runtime JS — la voiture peut parcourir
+// les stations et en lancer une sans que l'appli ait été ouverte.
+
+/** Préfixe des dossiers : un mediaId de groupe ne doit jamais valoir une URL de flux. */
+const GROUP_ID_PREFIX = 'group:';
+// Le dernier arbre envoyé, sérialisé : la bibliothèque change d'identité à
+// chaque réglage de gain, et rien de ce que la voiture affiche n'a bougé.
+let lastBrowseTree = '';
+
+/**
+ * Publie les stations **visibles** pour Android Auto : racine → un dossier par
+ * groupe (même regroupement insensible à la casse que la liste) → stations.
+ *
+ * Choisir une station dans la voiture charge les stations de son dossier dans
+ * la file, sans passer par JS : suivant/précédent parcourent alors ce groupe.
+ * Le `mediaId` reste l'URL du flux, comme dans playStation() — c'est ce que lit
+ * l'écouteur MediaItemTransition de usePlayback pour retrouver la station.
+ */
+export function publishBrowseTree(stations: Station[]): void {
+  // Sur le web, setBrowseTree ne fait qu'avertir ; l'iPhone demanderait
+  // CarPlay, ses droits et sa scène, hors du périmètre de l'appli.
+  if (Platform.OS !== 'android') return;
+  const groups = new Map<string, BrowseCategory>();
+  for (const s of stations) {
+    if (s.hidden) continue;
+    const key = groupKey(s.group);
+    let cat = groups.get(key);
+    if (!cat) {
+      // Le libellé du premier venu, comme la section de la liste ; la casse
+      // saisie survit, la voiture n'a pas de text-transform.
+      cat = { mediaId: GROUP_ID_PREFIX + key, title: s.group, items: [] };
+      groups.set(key, cat);
+    }
+    // Pas de pochette : la poser ferait contacter l'hôte de chaque favicon par
+    // la voiture, ce que setStationArtwork() évite justement côté file.
+    cat.items.push({ mediaId: s.url, url: s.url, title: s.name, artist: s.group, isLive: true });
+  }
+  const tree = [...groups.values()];
+  const serialized = JSON.stringify(tree);
+  if (serialized === lastBrowseTree) return;
+  lastBrowseTree = serialized;
+  TrackPlayer.setBrowseTree(tree);
 }

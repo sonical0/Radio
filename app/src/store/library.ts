@@ -31,6 +31,8 @@ export function serializeStation(s: Station) {
   // Seulement quand il est vrai : un export ne contient que des stations
   // visibles, autant ne pas y traîner un `hidden: false` sur chaque entrée.
   if (s.hidden) out.hidden = true;
+  // Même règle pour le favori : absent vaut faux.
+  if (s.favorite) out.favorite = true;
   // La fiche d'annuaire suit la station dans le stockage et dans un export :
   // sans elle, une sauvegarde relue perdrait la pochette et le compteur.
   if (s.uuid) out.uuid = s.uuid;
@@ -38,7 +40,7 @@ export function serializeStation(s: Station) {
   return out;
 }
 
-type BuiltinPref = { gain?: number; hidden?: boolean };
+type BuiltinPref = { gain?: number; hidden?: boolean; favorite?: boolean };
 
 /** Gains d'origine, relevés avant toute retouche. */
 let builtinDefaultGain = new Map<string, number>();
@@ -78,6 +80,7 @@ export async function saveBuiltinPrefs(stations: Station[]): Promise<void> {
     const p: BuiltinPref = {};
     if (s.gain !== (builtinDefaultGain.get(s.url) ?? 1)) p.gain = s.gain;
     if (s.hidden) p.hidden = true;
+    if (s.favorite) p.favorite = true;
     if (Object.keys(p).length) out[s.url] = p;
   }
   await writeJson(KEY_BUILTIN_PREFS, out);
@@ -102,12 +105,25 @@ export async function loadLibrary(): Promise<Station[]> {
     if (!p) continue;
     if (p.gain !== undefined) s.gain = sanitizeGain(p.gain);
     if (p.hidden === true) s.hidden = true;
+    if (p.favorite === true) s.favorite = true;
   }
   const custom = await readJson<RawStation[]>(KEY_CUSTOM, []);
   const customList = Array.isArray(custom)
     ? custom.filter(isValidStation).map((s) => normalizeStation(s, true))
     : [];
   return [...list, ...customList];
+}
+
+/** Plafond de la rangée de favoris : au-delà, ce ne sont plus de gros boutons. */
+export const FAVORITES_MAX = 6;
+
+/**
+ * Les favoris affichables, dans l'ordre de la liste (livrées puis custom) :
+ * une station masquée n'en fait pas partie, mais garde son drapeau et revient
+ * dans la rangée si on la restaure.
+ */
+export function favoriteStations(stations: Station[]): Station[] {
+  return stations.filter((s) => s.favorite && !s.hidden).slice(0, FAVORITES_MAX);
 }
 
 /**

@@ -2,8 +2,15 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import Slider from '@react-native-community/slider';
 import { Linking, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 
+import { setAnnounceTime } from '../../modules/alarm';
 import { CURRENT_VERSION, type Release } from '../net/updates';
-import { KEY_BEDSIDE_DIM, KEY_WEATHER_CITY, readString, writeString } from '../store/storage';
+import {
+  KEY_ANNOUNCE_TIME,
+  KEY_BEDSIDE_DIM,
+  KEY_WEATHER_CITY,
+  readString,
+  writeString,
+} from '../store/storage';
 import {
   CUSTOM_PALETTE_ID,
   FONT_BODY,
@@ -68,14 +75,25 @@ export function Settings({
   const [codeErr, setCodeErr] = useState(false);
   const [bedsideDim, setBedsideDim] = useState<'veil' | 'clock'>('veil');
   const [city, setCity] = useState('');
+  const [announce, setAnnounce] = useState(false);
   useEffect(() => {
     if (!visible) return;
+    void readString(KEY_ANNOUNCE_TIME).then((v) => setAnnounce(v === '1'));
     void readString(KEY_BEDSIDE_DIM).then((v) => setBedsideDim(v === 'clock' ? 'clock' : 'veil'));
     void readString(KEY_WEATHER_CITY).then((v) => setCity(v ?? ''));
   }, [visible]);
 
   // Comme le code couleur : la ville s'écrit à la validation, pas à chaque
   // frappe, sinon la météo chercherait « Pa » puis « Par ».
+  // Le natif garde sa propre copie : c'est lui qui parle à la sonnerie, appli
+  // fermée. La clé ne sert qu'à rouvrir ce panneau sur le bon état.
+  const toggleAnnounce = () => {
+    const next = !announce;
+    setAnnounce(next);
+    setAnnounceTime(next);
+    void writeString(KEY_ANNOUNCE_TIME, next ? '1' : '');
+  };
+
   const submitCity = () => {
     const v = city.trim();
     setCity(v);
@@ -234,6 +252,16 @@ export function Settings({
               );
             })}
 
+            <Pressable
+              style={[s.option, s.announce, { borderColor: announce ? p.base : p.border }]}
+              onPress={toggleAnnounce}
+              accessibilityRole="checkbox"
+              accessibilityState={{ checked: announce }}
+              accessibilityLabel="Annoncer l'heure au réveil">
+              <Text style={[s.optionLabel, { color: announce ? p.base : p.dim }]}>ANNONCER L'HEURE</Text>
+              <Text style={[s.check, { color: p.base }]}>{announce ? '✓' : ' '}</Text>
+            </Pressable>
+
             <Text style={s.label}>MÉTÉO</Text>
             {/* Vide : pas de météo, et aucune requête. */}
             <TextInput
@@ -345,6 +373,7 @@ const makeStyles = (p: Palette) =>
   codeInput: { flex: 1, marginBottom: 0 },
   hint: { color: p.dim, fontFamily: FONT_BODY, fontSize: 12 },
   subHint: { marginTop: 8, marginBottom: 6 },
+  announce: { marginTop: 6 },
     optionLabel: { flex: 1, fontFamily: FONT_DISPLAY, fontSize: 18, letterSpacing: 2, lineHeight: 22 },
     check: { fontFamily: FONT_BODY, fontSize: 14 },
     close: { alignSelf: 'flex-end', marginTop: 8 },

@@ -19,6 +19,7 @@ import {
   FADE_OUT_SECONDS,
   SLEEP_STEPS_MIN,
   playStation as playNative,
+  publishBrowseTree,
   setSleepTimer,
   setVolume,
   skipNext,
@@ -163,6 +164,13 @@ export function usePlayback(stations: Station[], onCard?: (url: string, card: Di
       const s = stations.find((x) => x.url === url && !x.hidden);
       if (s) setCurrentUrl(s.url);
     })();
+  }, [stations]);
+
+  // ─── Android Auto ───
+  // L'arbre de navigation suit la bibliothèque : ajout, masquage, restauration,
+  // changement de groupe. Les doublons sont filtrés côté player.
+  useEffect(() => {
+    publishBrowseTree(stations);
   }, [stations]);
 
   // ─── Volume ───

@@ -82,6 +82,18 @@ export function useLibrary() {
   const hide = useCallback((url: string) => update(url, { hidden: true }), [update]);
   const restore = useCallback((url: string) => update(url, { hidden: false }), [update]);
 
+  /**
+   * Pose ou retire l'étoile. Passe par `update` : une station custom est
+   * réécrite dans son stockage, une livrée dans ses préférences par URL.
+   */
+  const toggleFavorite = useCallback(
+    (url: string) => {
+      const target = stationsRef.current.find((s) => s.url === url);
+      if (target) update(url, { favorite: !target.favorite });
+    },
+    [update],
+  );
+
   /** Définitif, et réservé aux stations custom : une station livrée revient de stations.json. */
   const purge = useCallback((url: string) => {
     setStations((prev) => {
@@ -171,19 +183,31 @@ export function useLibrary() {
    * Le format v1 était un simple tableau de stations, et changer de téléphone
    * perdait donc les alarmes en silence. La v2 est un objet ; l'import relit
    * les deux formats, parce que les fichiers déjà exportsés existent.
+   *
+   * Les favoris : une station custom emporte son `favorite: true` avec elle ;
+   * une station livrée n'est pas exportée (elle revient de stations.json), son
+   * étoile part donc à part, dans `favorites`, une liste d'URL de flux. Le site
+   * ignore les deux.
    */
   const exportStations = useCallback(
     async (alarms: unknown[] = []): Promise<Outcome> => {
       const custom = stations.filter((s) => s.isCustom && !s.hidden);
-      if (!custom.length && !alarms.length) {
+      const favorites = stations.filter((s) => !s.isCustom && s.favorite).map((s) => s.url);
+      if (!custom.length && !alarms.length && !favorites.length) {
         return { ok: false, message: '⚠ Rien à exporter : aucune station custom, aucun réveil.' };
       }
-      const backup = { version: 2, stations: custom.map(serializeStation), alarms };
+      const backup = {
+        version: 2,
+        stations: custom.map(serializeStation),
+        alarms,
+        ...(favorites.length ? { favorites } : {}),
+      };
       try {
         const where = await exportJson(JSON.stringify(backup, null, 2));
         const quoi = [
           custom.length ? `${custom.length} station(s)` : null,
           alarms.length ? `${alarms.length} réveil(s)` : null,
+          favorites.length ? `${favorites.length} favori(s) livré(s)` : null,
         ]
           .filter(Boolean)
           .join(' et ');
@@ -287,6 +311,8 @@ export function useLibrary() {
 
     let list: RawStation[];
     let importedAlarms = 0;
+    // URL des stations livrées marquées favorites dans le fichier (v2 seulement).
+    let favoriteUrls = new Set<string>();
     try {
       const data = JSON.parse(text);
       if (Array.isArray(data)) {
@@ -296,6 +322,10 @@ export function useLibrary() {
         list = (data as { stations: RawStation[] }).stations;
         const rawAlarms = (data as { alarms?: unknown }).alarms;
         if (onAlarms && Array.isArray(rawAlarms)) importedAlarms = onAlarms(rawAlarms);
+        const rawFav = (data as { favorites?: unknown }).favorites;
+        if (Array.isArray(rawFav)) {
+          favoriteUrls = new Set(rawFav.filter((u): u is string => typeof u === 'string'));
+        }
       } else {
         list = [data as RawStation];
       }
@@ -303,13 +333,14 @@ export function useLibrary() {
       return { ok: false, message: '⚠ Fichier invalide.' };
     }
     const valid = list.filter(isValidStation);
-    if (!valid.length) {
+    if (!valid.length && !favoriteUrls.size) {
       return importedAlarms
         ? { ok: true, message: `✓ ${importedAlarms} réveil(s) importé(s), aucune station.` }
         : { ok: false, message: '⚠ Aucune station lisible dans ce fichier.' };
     }
 
     let added = 0;
+    let starred = 0;
     setStations((prev) => {
       const byUrl = new Map(prev.map((s) => [s.url, s]));
       const next = [...prev];
@@ -318,10 +349,19 @@ export function useLibrary() {
         if (!isSafeHttpUrl(url)) continue;
         const dup = byUrl.get(url);
         if (dup) {
+          // Une étoile du fichier se pose aussi sur une station déjà là : la
+          // sauvegarde relue doit rendre la rangée de favoris telle qu'elle était.
+          const favorite = dup.favorite || s.favorite === true;
           // Même raison que dans addStation : un doublon masqué est réaffiché.
-          if (!dup.hidden) continue;
+          if (!dup.hidden) {
+            if (favorite && !dup.favorite) {
+              next[next.findIndex((x) => x.url === url)] = { ...dup, favorite };
+              starred++;
+            }
+            continue;
+          }
           const at = next.findIndex((x) => x.url === url);
-          next[at] = { ...dup, hidden: false };
+          next[at] = { ...dup, hidden: false, favorite };
           added++;
           continue;
         }
@@ -330,18 +370,28 @@ export function useLibrary() {
         byUrl.set(url, station);
         added++;
       }
-      if (added) {
+      // Favoris des stations livrées : seulement sur une livrée présente ici,
+      // l'URL du fichier ne crée rien.
+      for (let i = 0; i < next.length; i++) {
+        const x = next[i];
+        if (!x.isCustom && !x.favorite && favoriteUrls.has(x.url)) {
+          next[i] = { ...x, favorite: true };
+          starred++;
+        }
+      }
+      if (added || starred) {
         void saveCustomStations(next);
         void saveBuiltinPrefs(next);
       }
-      return added ? next : prev;
+      return added || starred ? next : prev;
     });
     const suffixe = importedAlarms ? ` et ${importedAlarms} réveil(s)` : '';
-    return added
-      ? { ok: true, message: `✓ ${added} station(s)${suffixe} importée(s).` }
-      : importedAlarms
-        ? { ok: true, message: `✓ ${importedAlarms} réveil(s) importé(s), stations déjà présentes.` }
-        : { ok: false, message: '⚠ Aucune nouvelle station (déjà présentes).' };
+    const etoiles = starred ? ` · ${starred} favori(s) rétabli(s)` : '';
+    if (added) return { ok: true, message: `✓ ${added} station(s)${suffixe} importée(s)${etoiles}.` };
+    if (starred) return { ok: true, message: `✓ ${starred} favori(s) rétabli(s)${suffixe}, stations déjà présentes.` };
+    return importedAlarms
+      ? { ok: true, message: `✓ ${importedAlarms} réveil(s) importé(s), stations déjà présentes.` }
+      : { ok: false, message: '⚠ Aucune nouvelle station (déjà présentes).' };
   }, [importPlaylist]);
 
   /**
@@ -364,6 +414,7 @@ export function useLibrary() {
     hide,
     restore,
     purge,
+    toggleFavorite,
     addStation,
     exportStations,
     importStations,

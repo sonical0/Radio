@@ -16,6 +16,8 @@ type Props = {
   onPreviewGain: (url: string, gain: number) => void;
   onCommitGain: (url: string) => void;
   onHide: (url: string) => void;
+  /** Facultatif : sans lui, pas d'étoile (l'écran n'a pas branché les favoris). */
+  onToggleFavorite?: (url: string) => void;
 };
 
 /**
@@ -33,6 +35,7 @@ function StationRowBase({
   onPreviewGain,
   onCommitGain,
   onHide,
+  onToggleFavorite,
 }: Props) {
   const { p: p } = useTheme();
   const s = useMemo(() => makeStyles(p), [p]);
@@ -80,13 +83,28 @@ function StationRowBase({
 
       <View style={s.side}>
         <Text style={[s.status, playing && s.statusOn]}>{playing ? '■ ' + status : '▶ ' + status}</Text>
-        <Pressable
-          onPress={() => onHide(station.url)}
-          accessibilityRole="button"
-          accessibilityLabel={'Masquer ' + station.name}
-          style={s.hideBtn}>
-          <Text style={s.hideTxt}>✕</Text>
-        </Pressable>
+        <View style={s.actions}>
+          {onToggleFavorite ? (
+            <Pressable
+              onPress={() => onToggleFavorite(station.url)}
+              accessibilityRole="button"
+              accessibilityState={{ selected: station.favorite }}
+              accessibilityLabel={
+                (station.favorite ? 'Retirer des favoris ' : 'Ajouter aux favoris ') + station.name
+              }
+              hitSlop={6}
+              style={[s.sideBtn, station.favorite && s.favBtnOn]}>
+              <Text style={[s.favTxt, station.favorite && s.favTxtOn]}>{station.favorite ? '★' : '☆'}</Text>
+            </Pressable>
+          ) : null}
+          <Pressable
+            onPress={() => onHide(station.url)}
+            accessibilityRole="button"
+            accessibilityLabel={'Masquer ' + station.name}
+            style={s.sideBtn}>
+            <Text style={s.hideTxt}>✕</Text>
+          </Pressable>
+        </View>
       </View>
     </View>
   );
@@ -120,6 +138,10 @@ const makeStyles = (p: Palette) =>
   side: { alignItems: 'flex-end', gap: 6, marginLeft: 8 },
   status: { color: p.dim, fontFamily: FONT_DISPLAY, fontSize: 13, letterSpacing: 1 },
   statusOn: { color: p.base },
-  hideBtn: { borderWidth: 1, borderColor: p.border, paddingHorizontal: 8, paddingVertical: 1 },
+  actions: { flexDirection: 'row', gap: 6 },
+  sideBtn: { borderWidth: 1, borderColor: p.border, paddingHorizontal: 8, paddingVertical: 1 },
+  favBtnOn: { borderColor: p.base },
+  favTxt: { color: p.dim, fontFamily: FONT_DISPLAY, fontSize: 15, lineHeight: 18 },
+  favTxtOn: { color: p.base },
   hideTxt: { color: p.red, fontFamily: FONT_DISPLAY, fontSize: 15, lineHeight: 18 },
 });
