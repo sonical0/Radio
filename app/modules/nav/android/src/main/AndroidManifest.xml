@@ -1,0 +1,19 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+  <application>
+    <!-- Lit la notification de navigation de Google Maps, et elle seule.
+         Exporté parce que c'est le système qui s'y lie ; la permission
+         BIND_NOTIFICATION_LISTENER_SERVICE garantit que lui seul le peut.
+         L'accès reste à accorder par l'utilisateur dans les réglages. -->
+    <service
+      android:name=".NavListener"
+      android:exported="true"
+      android:label="Étapes Google Maps (vélo)"
+      android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE">
+      <intent-filter>
+        <action android:name="android.service.notification.NotificationListenerService" />
+      </intent-filter>
+    </service>
+  </application>
+
+</manifest>
