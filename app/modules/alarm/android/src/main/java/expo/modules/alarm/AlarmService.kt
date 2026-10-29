@@ -38,6 +38,9 @@ private const val RAMP_FROM = 0.1f
 /** Le volume de la radio pendant l'annonce de l'heure, relatif au volume courant. */
 private const val ANNOUNCE_DUCK = 0.25f
 
+/** Au-delà, le son remonte même si la voix n'a pas fini : init comprise, une phrase dure moins. */
+private const val ANNOUNCE_MAX_MS = 10 * 1000L
+
 /**
  * La sonnerie.
  *
@@ -139,10 +142,18 @@ class AlarmService : Service() {
     announced = true
     duck = ANNOUNCE_DUCK
     applyVolume()
+    // Un moteur qui ne rappelle jamais (absent, bloqué à l'initialisation)
+    // laisserait la radio à 25 % toute la sonnerie : un réveil manqué.
+    handler.postDelayed(undoDuckRunnable, ANNOUNCE_MAX_MS)
     AlarmVoice.announce(this) {
-      duck = 1f
-      applyVolume()
+      handler.removeCallbacks(undoDuckRunnable)
+      undoDuckRunnable.run()
     }
+  }
+
+  private val undoDuckRunnable = Runnable {
+    duck = 1f
+    applyVolume()
   }
 
   override fun onBind(intent: Intent?): IBinder? = null
@@ -375,6 +386,7 @@ class AlarmService : Service() {
     handler.removeCallbacks(autoStopRunnable)
     handler.removeCallbacks(fallbackRunnable)
     handler.removeCallbacks(rampRunnable)
+    handler.removeCallbacks(undoDuckRunnable)
     // Couper la phrase en cours : ARRÊTER doit faire taire la voix aussi.
     if (announced) AlarmVoice.shutdown()
     releasePlayer()
