@@ -74,6 +74,36 @@ class AlarmModule : Module() {
       }
     }
 
+    /** Dit un texte en français, depuis l'application (essai de la voix, par exemple). */
+    Function("speak") { text: String ->
+      AlarmVoice.speak(context, text)
+    }
+
+    /**
+     * Luminosité de la fenêtre seule, de 0 à 1 ; une valeur négative rend la
+     * main au système. Pas de permission WRITE_SETTINGS : on ne touche pas au
+     * réglage du téléphone, qui reviendrait à sa valeur à la sortie de l'appli.
+     */
+    Function("setWindowBrightness") { level: Double ->
+      val activity = appContext.currentActivity ?: return@Function
+      activity.runOnUiThread {
+        val params = activity.window.attributes
+        params.screenBrightness =
+          if (level < 0) WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE else level.toFloat().coerceIn(0f, 1f)
+        activity.window.attributes = params
+      }
+    }
+
+    /** La météo en cache, que la sonnerie affiche et annonce. Vide ou null = rien. */
+    Function("setWeatherSummary") { text: String? ->
+      AlarmVoice.setWeather(context, text)
+    }
+
+    /** Annoncer l'heure à la sonnerie, une fois la radio partie. */
+    Function("setAnnounceTime") { enabled: Boolean ->
+      AlarmVoice.setAnnounce(context, enabled)
+    }
+
     /** Report depuis l'application, équivalent du bouton de la notification. */
     Function("snooze") {
       context.startService(

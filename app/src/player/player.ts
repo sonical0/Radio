@@ -158,7 +158,8 @@ export function stop(): void {
 // ─── Minuterie de veille ───
 // Les paliers du site, en minutes. 0 = éteinte.
 export const SLEEP_STEPS_MIN = [0, 15, 30, 60, 90];
-const FADE_OUT_SECONDS = 20;
+// Exporté : la luminosité de l'écran suit le même fondu (usePlayback).
+export const FADE_OUT_SECONDS = 20;
 
 /** Arme la minuterie, ou l'annule si `minutes` vaut 0. */
 export function setSleepTimer(minutes: number): void {

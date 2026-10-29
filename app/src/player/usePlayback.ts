@@ -5,6 +5,7 @@ import TrackPlayer, { Event, PlaybackState, type PlaybackErrorCode, useIsPlaying
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { AppState, Platform } from 'react-native';
 
+import { setWindowBrightness } from '../../modules/alarm';
 import type { Station } from '../model/station';
 import { loadArtwork, stationArtwork } from '../net/artwork';
 import { backfillFromDirectory, reportListen, type DirectoryCard } from '../net/rbStation';
@@ -15,6 +16,7 @@ import {
   writeString,
 } from '../store/storage';
 import {
+  FADE_OUT_SECONDS,
   SLEEP_STEPS_MIN,
   playStation as playNative,
   setSleepTimer,
@@ -64,6 +66,19 @@ function backoffDelay(attempt: number): number {
   return BACKOFF_MS[attempt - 1] ?? STEADY_MS;
 }
 
+// Pendant le fondu de la minuterie, l'écran s'assombrit avec le son, en
+// proportion du temps restant. Pas jusqu'au noir : à 0, certains écrans
+// s'éteignent tout à fait et l'on ne voit plus de quoi annuler à tâtons.
+const SLEEP_DIM_FLOOR = 0.1;
+
+/** Luminosité de la fenêtre à `left` secondes de la fin, ou null hors fondu. */
+function sleepBrightness(left: number | null): number | null {
+  if (left == null || left > FADE_OUT_SECONDS) return null;
+  // Au centième : le tick revient chaque seconde, inutile de déranger le
+  // natif pour un écart que l'œil ne voit pas.
+  return Math.max(SLEEP_DIM_FLOOR, Math.round((left / FADE_OUT_SECONDS) * 100) / 100);
+}
+
 /**
  * `onCard` reçoit la fiche d'annuaire retrouvée pour une station qui n'en avait
  * pas : c'est la bibliothèque qui la pose et la persiste, pas la lecture.
@@ -107,6 +122,16 @@ export function usePlayback(stations: Station[], onCard?: (url: string, card: Di
   const loadedUrl = useRef<string | null>(null);
   // Le volume d'avant la sourdine, pour le rendre tel quel au démuet.
   const beforeMute = useRef(DEFAULT_VOLUME);
+  // La luminosité posée par le fondu de veille, null = celle du système. On
+  // n'appelle le natif que sur un changement, et l'on ne rend jamais la main
+  // au système si l'on ne l'avait pas prise : d'autres écrans peuvent régler
+  // la fenêtre eux aussi.
+  const dimRef = useRef<number | null>(null);
+  const applyDim = useCallback((level: number | null) => {
+    if (level === dimRef.current) return;
+    dimRef.current = level;
+    setWindowBrightness(level);
+  }, []);
 
   const current = stations.find((s) => s.url === currentUrl) ?? null;
   const effectiveMaster = muted ? 0 : master;
@@ -305,10 +330,12 @@ export function usePlayback(stations: Station[], onCard?: (url: string, card: Di
     wantPlay.current = false;
     loadedUrl.current = null;
     stopNative();
+    // Plus de son à suivre : l'écran revient tout de suite, sans attendre le tick.
+    applyDim(null);
     setCurrentUrl(null);
     setArtwork(null);
     setStreamState('idle');
-  }, [clearReconnect]);
+  }, [applyDim, clearReconnect]);
 
   const toggle = useCallback(() => {
     const url = currentRef.current;
@@ -372,12 +399,28 @@ export function usePlayback(stations: Station[], onCard?: (url: string, card: Di
     }
     const tick = () => {
       const t = TrackPlayer.getSleepTimer();
-      setSleepLeft(t && t.type === 'time' ? Math.max(0, Math.round(t.remainingSeconds)) : null);
+      const left = t && t.type === 'time' ? t.remainingSeconds : null;
+      setSleepLeft(left == null ? null : Math.max(0, Math.round(left)));
+      // L'écran ne s'assombrit que s'il y a un fondu à voir : appli devant,
+      // son demandé. En pause, le minuteur court encore mais rien ne baisse.
+      const visible = AppState.currentState === 'active';
+      applyDim(visible && wantPlay.current ? sleepBrightness(left) : null);
     };
     tick();
     const id = setInterval(tick, 1000);
-    return () => clearInterval(id);
-  }, [sleepStep]);
+    // Passée en arrière-plan, la fenêtre rend la main au système tout de
+    // suite ; au retour, le tick suivant reprend là où en est le fondu.
+    const sub = AppState.addEventListener('change', (st) => {
+      if (st !== 'active') applyDim(null);
+    });
+    // Annulation (palier 0), fin de minuterie (SleepTimerTriggered remet le
+    // palier à 0) et démontage du hook passent tous par ici.
+    return () => {
+      clearInterval(id);
+      sub.remove();
+      applyDim(null);
+    };
+  }, [applyDim, sleepStep]);
 
   // ─── Évènements du lecteur ───
   useEffect(() => {

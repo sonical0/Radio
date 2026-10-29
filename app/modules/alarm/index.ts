@@ -12,6 +12,10 @@ type AlarmNative = {
   setKeepAwake(on: boolean): void;
   setPalette(background: string, surface: string, base: string, dim: string): void;
   canScheduleExact(): boolean;
+  speak(text: string): void;
+  setWindowBrightness(level: number): void;
+  setWeatherSummary(text: string | null): void;
+  setAnnounceTime(enabled: boolean): void;
 };
 
 // Optionnel par construction, comme audio-boost : le module n'existe que sur
@@ -38,6 +42,8 @@ export type Alarm = {
   rampSeconds: number;
   /** Le gain de la station, recopié à l'enregistrement : le natif ne lit pas la bibliothèque. */
   gain: number;
+  /** Saute la prochaine occurrence, puis repasse à faux tout seul. Sur un réveil unique, revient à l'éteindre. */
+  skipNext?: boolean;
 };
 
 /** Les durées proposées pour la montée, en secondes. 0 = plein volume tout de suite. */
@@ -99,7 +105,35 @@ export function canScheduleExact(): boolean {
   return native?.canScheduleExact() ?? false;
 }
 
-const DAY_LABELS = ['DIM', 'LUN', 'MAR', 'MER', 'JEU', 'VEN', 'SAM'];
+/** Dit le texte en français, par la synthèse vocale du téléphone. */
+export function speak(text: string): void {
+  native?.speak(text);
+}
+
+/**
+ * Luminosité de la fenêtre courante, de 0 à 1, sans toucher au réglage du
+ * système. `null` rend la main à la luminosité du système.
+ */
+export function setWindowBrightness(level: number | null): void {
+  // Le pont ne transporte pas un nombre nullable : -1 est la valeur d'Android
+  // pour « suivre le système ».
+  native?.setWindowBrightness(level == null ? -1 : Math.min(1, Math.max(0, level)));
+}
+
+/**
+ * La météo mise en cache côté JS, déposée pour la sonnerie : l'écran de réveil
+ * l'affiche et l'annonce la lit. `null` ou vide = rien à dire.
+ */
+export function setWeatherSummary(text: string | null): void {
+  native?.setWeatherSummary(text);
+}
+
+/** Annonce de l'heure à la sonnerie, une fois la radio partie. */
+export function setAnnounceTime(enabled: boolean): void {
+  native?.setAnnounceTime(enabled);
+}
+
+const DAY_LABELS =['DIM', 'LUN', 'MAR', 'MER', 'JEU', 'VEN', 'SAM'];
 
 /**
  * « LUN-VEN », « TOUS LES JOURS », « UNE FOIS » — les formes qu'on lit sur un
