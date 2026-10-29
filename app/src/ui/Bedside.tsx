@@ -83,6 +83,9 @@ export function Bedside({
   // ne s'affichait jamais. Les deux états où l'on attend du son sont ceux-ci.
   const connecting = streamState === 'buffering' || streamState === 'reconnecting';
   const { width, height } = useWindowDimensions();
+  // La date, le prochain réveil et les boutons sont déjà en 24 à 26 : la
+  // police du système ne les agrandit pas, chaque point qu'ils prendraient en
+  // hauteur serait retiré à l'heure (`maxFontSizeMultiplier={1}` ci-dessous).
   // La hauteur de la colonne, et celle de tout ce qui s'affiche sous l'heure.
   // Sur un téléphone où l'affichage est agrandi (taille d'affichage ou de
   // police), un forfait de 66 % de la hauteur poussait les boutons hors de
@@ -189,8 +192,8 @@ export function Bedside({
           {two(now.getHours())}:{two(now.getMinutes())}
         </Text>
         <View style={dimmed && s.dimRest} onLayout={(e) => setRestH(e.nativeEvent.layout.height)}>
-          <Text style={s.date} maxFontSizeMultiplier={1.3}>{dateLabel(now).toUpperCase()}</Text>
-          <Text style={s.next} maxFontSizeMultiplier={1.3}>
+          <Text style={s.date} maxFontSizeMultiplier={1}>{dateLabel(now).toUpperCase()}</Text>
+          <Text style={s.next} maxFontSizeMultiplier={1}>
             {lib.next ? '⏰ ' + whenLabel(lib.next.at) : 'AUCUN RÉVEIL ARMÉ'}
           </Text>
           {station ? <Text style={s.station}>{station.name}</Text> : null}
@@ -214,7 +217,7 @@ export function Bedside({
               accessibilityState={{ disabled: !station }}
               accessibilityLabel="Station précédente"
               style={[t.btn, s.skip, { borderColor: station ? p.base : p.border }]}>
-              <Text style={[t.btnText, s.skipText, !station && t.btnOff]} maxFontSizeMultiplier={1.3}>◀◀</Text>
+              <Text style={[t.btnText, s.skipText, !station && t.btnOff]} maxFontSizeMultiplier={1}>◀◀</Text>
             </Pressable>
 
             <Pressable
@@ -226,7 +229,7 @@ export function Bedside({
               style={[t.btn, s.play, { borderColor: station ? p.base : p.border }]}>
               <Text
                 style={[t.btnText, s.playText, !station && t.btnOff]}
-                maxFontSizeMultiplier={1.3}
+                maxFontSizeMultiplier={1}
                 numberOfLines={1}
                 adjustsFontSizeToFit>
                 {/* Les mêmes glyphes que l'écran portrait : ⏸ sortait en emoji
@@ -248,7 +251,7 @@ export function Bedside({
               accessibilityState={{ disabled: !station }}
               accessibilityLabel="Station suivante"
               style={[t.btn, s.skip, { borderColor: station ? p.base : p.border }]}>
-              <Text style={[t.btnText, s.skipText, !station && t.btnOff]} maxFontSizeMultiplier={1.3}>▶▶</Text>
+              <Text style={[t.btnText, s.skipText, !station && t.btnOff]} maxFontSizeMultiplier={1}>▶▶</Text>
             </Pressable>
           </View>
         </View>
