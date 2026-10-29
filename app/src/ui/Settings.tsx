@@ -1,6 +1,16 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import Slider from '@react-native-community/slider';
-import { Linking, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import {
+  Keyboard,
+  Linking,
+  Modal,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from 'react-native';
 
 import { setAnnounceTime } from '../../modules/alarm';
 import { CURRENT_VERSION, type Release } from '../net/updates';
@@ -10,6 +20,7 @@ import {
   KEY_WEATHER_CITY,
   readString,
   writeString,
+  type LandscapeMode,
 } from '../store/storage';
 import {
   CUSTOM_PALETTE_ID,
@@ -32,6 +43,12 @@ function hslOf(color: string, hue: number): Hsl {
   const v = rgbToHsl(parseColor(color)!);
   return { h: v.h ?? hue, s: v.s, l: v.l };
 }
+
+/** Ce que montre le téléphone à l'horizontale ; le premier choix est celui par défaut. */
+const LANDSCAPE: { id: LandscapeMode; label: string }[] = [
+  { id: 'bedside', label: 'CHEVET' },
+  { id: 'ride', label: 'VÉLO' },
+];
 
 /** La veille de nuit de l'horloge de chevet ; le premier choix est celui par défaut. */
 const BEDSIDE_DIM: { id: 'veil' | 'clock'; label: string }[] = [
@@ -56,12 +73,16 @@ export function Settings({
   update,
   checking,
   onCheckUpdate,
+  landscapeMode,
+  onLandscapeMode,
 }: {
   visible: boolean;
   onClose: () => void;
   update: Release | null;
   checking: boolean;
   onCheckUpdate: () => void;
+  landscapeMode: LandscapeMode;
+  onLandscapeMode: (m: LandscapeMode) => void;
 }) {
   const { p, t, setPalette, customColor, customHue, custom, previewCustom, commitCustom } = useTheme();
   const s = useMemo(() => makeStyles(p), [p]);
@@ -76,6 +97,23 @@ export function Settings({
   const [bedsideDim, setBedsideDim] = useState<'veil' | 'clock'>('veil');
   const [city, setCity] = useState('');
   const [announce, setAnnounce] = useState(false);
+  // Comme l'écran principal : la fenêtre n'est plus redimensionnée, c'est au
+  // panneau de remonter au-dessus du clavier, sinon le champ ville reste dessous.
+  const [keyboard, setKeyboard] = useState(0);
+  const scrollRef = useRef<ScrollView>(null);
+  useEffect(() => {
+    const show = Keyboard.addListener('keyboardDidShow', (e) => setKeyboard(e.endCoordinates.height));
+    const hide = Keyboard.addListener('keyboardDidHide', () => setKeyboard(0));
+    return () => {
+      show.remove();
+      hide.remove();
+    };
+  }, []);
+  // La ville est le dernier champ : amener le panneau à son terme la place au-dessus
+  // du clavier, une fois la marge appliquée.
+  const onCityFocus = () => {
+    setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 120);
+  };
   useEffect(() => {
     if (!visible) return;
     void readString(KEY_ANNOUNCE_TIME).then((v) => setAnnounce(v === '1'));
@@ -148,11 +186,14 @@ export function Settings({
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       {/* Toucher hors du panneau referme : sur un téléphone, c'est le geste
           attendu, et le bouton FERMER reste là pour le clavier et le web. */}
-      <Pressable style={s.backdrop} onPress={onClose} accessibilityLabel="Fermer les réglages">
+      <Pressable
+        style={[s.backdrop, keyboard ? { paddingBottom: keyboard + 8 } : null]}
+        onPress={onClose}
+        accessibilityLabel="Fermer les réglages">
         <Pressable style={s.panel} onPress={() => {}}>
           {/* Défilant : sur un écran agrandi, le panneau dépassait la hauteur et
               FERMER comme VÉRIFIER sortaient de l'écran. */}
-          <ScrollView keyboardShouldPersistTaps="handled">
+          <ScrollView ref={scrollRef} keyboardShouldPersistTaps="handled">
             <Text style={s.title}>── RÉGLAGES ──</Text>
             <Text style={s.label}>COULEUR D'ÉCRAN</Text>
 
@@ -226,6 +267,23 @@ export function Settings({
               </View>
             ) : null}
 
+            <Text style={s.label}>EN PAYSAGE, AFFICHER</Text>
+            {LANDSCAPE.map((option) => {
+              const current = landscapeMode === option.id;
+              return (
+                <Pressable
+                  key={option.id}
+                  style={[s.option, { borderColor: current ? p.base : p.border }]}
+                  onPress={() => onLandscapeMode(option.id)}
+                  accessibilityRole="radio"
+                  accessibilityState={{ selected: current }}
+                  accessibilityLabel={'En paysage : ' + option.label}>
+                  <Text style={[s.optionLabel, { color: current ? p.base : p.dim }]}>{option.label}</Text>
+                  <Text style={[s.check, { color: p.base }]}>{current ? '✓' : ' '}</Text>
+                </Pressable>
+              );
+            })}
+
             <Text style={s.label}>RÉVEIL</Text>
             {/* Le réveil vit sur l'horloge de chevet : le dire ici, sinon
                 personne ne pense à tourner le téléphone. */}
@@ -268,6 +326,7 @@ export function Settings({
               style={t.input}
               value={city}
               onChangeText={setCity}
+              onFocus={onCityFocus}
               onSubmitEditing={submitCity}
               onEndEditing={submitCity}
               autoCorrect={false}

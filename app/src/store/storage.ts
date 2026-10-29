@@ -35,6 +35,9 @@ export const KEY_RB_PINNED = 'rbPinnedCountries';
 export const KEY_WEATHER_CITY = 'weatherCity';
 /** Annoncer l'heure à voix haute au réveil : `1` ou absent. Le natif en tient sa copie. */
 export const KEY_ANNOUNCE_TIME = 'announceTime';
+/** Ce que montre le paysage : `bedside` (horloge de chevet, défaut) ou `ride` (vélo). */
+export const KEY_LANDSCAPE_MODE = 'landscapeMode';
+export type LandscapeMode = 'bedside' | 'ride';
 
 /**
  * Toute lecture peut échouer (stockage plein, mode privé, données corrompues

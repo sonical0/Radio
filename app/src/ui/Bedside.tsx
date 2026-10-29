@@ -102,6 +102,7 @@ export function Bedside({
   onToggle,
   onNext,
   onPrevious,
+  onRide,
 }: {
   station: Station | null;
   title: string | null;
@@ -111,6 +112,8 @@ export function Bedside({
   onToggle: () => void;
   onNext: () => void;
   onPrevious: () => void;
+  /** Fourni par App.tsx : un bouton VÉLO ouvre alors le mode vélo. */
+  onRide?: () => void;
 }) {
   const { p, t } = useTheme();
   const s = useMemo(() => makeStyles(p), [p]);
@@ -356,6 +359,23 @@ export function Bedside({
       </ScrollView>
 
       <View style={[s.right, dimmed && keepClock && s.dimRest]}>
+        {/* Le mode vélo en tête de la colonne des réveils, hors de leur liste
+            défilante : toujours visible, même avec dix réveils. Surtout pas
+            dans la colonne de l'heure — celle-ci est dimensionnée sur la
+            hauteur du bloc mesuré dessous (`restH`), et toute ligne ajoutée
+            là lui serait retirée. Ici, ce bouton ne prend de hauteur qu'à la
+            liste des réveils, qui défile de toute façon. */}
+        {onRide ? (
+          <View style={s.rightHead}>
+            <Pressable
+              onPress={onRide}
+              accessibilityRole="button"
+              accessibilityLabel="Passer en mode vélo"
+              style={[t.btn, s.ride]}>
+              <Text style={t.btnText} maxFontSizeMultiplier={1}>VÉLO ▶</Text>
+            </Pressable>
+          </View>
+        ) : null}
         <ScrollView keyboardShouldPersistTaps="handled">
           {lib.alarms.map((alarm) => (
             <AlarmRow
@@ -604,6 +624,9 @@ const makeStyles = (p: Palette) =>
     skipText: { fontSize: 26, letterSpacing: 2, lineHeight: 30 },
 
     right: { flex: 1 },
+    // Calé à droite : le bouton ne prend que sa largeur, la colonne garde son air.
+    rightHead: { flexDirection: 'row', justifyContent: 'flex-end', marginBottom: 8 },
+    ride: { minHeight: 44, justifyContent: 'center' },
     row: { borderWidth: 1, backgroundColor: p.bg2, padding: 8, marginBottom: 8 },
     rowHead: { flexDirection: 'row', alignItems: 'center', gap: 10 },
     rowTime: { fontFamily: FONT_DISPLAY, fontSize: 34, lineHeight: 38 },

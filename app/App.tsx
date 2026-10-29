@@ -7,6 +7,7 @@ import { useFonts } from 'expo-font';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  BackHandler,
   Keyboard,
   KeyboardAvoidingView,
   Platform,
@@ -29,6 +30,7 @@ import { useUpdateCheck } from './src/model/useUpdateCheck';
 import { setupPlayer } from './src/player/player';
 import { useKeyboardShortcuts } from './src/player/useKeyboardShortcuts';
 import { usePlayback } from './src/player/usePlayback';
+import { KEY_LANDSCAPE_MODE, readString, writeString, type LandscapeMode } from './src/store/storage';
 import { useAlarms } from './src/store/useAlarms';
 import { useHistory } from './src/store/useHistory';
 import { useListenStats } from './src/store/useListenStats';
@@ -43,6 +45,7 @@ import { Favorites } from './src/ui/Favorites';
 import { History } from './src/ui/History';
 import { ListenStats } from './src/ui/ListenStats';
 import { NowPlaying } from './src/ui/NowPlaying';
+import { Ride } from './src/ui/Ride';
 import { StationRow } from './src/ui/StationRow';
 import { Trash } from './src/ui/Trash';
 import { UpdateBanner } from './src/ui/UpdateBanner';
@@ -72,6 +75,27 @@ function Radio() {
   const { p, t } = useTheme();
   const s = useMemo(() => makeStyles(p), [p]);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  // Le paysage montre l'horloge de chevet ou l'écran vélo, au choix retenu ;
+  // en portrait, le bouton VÉLO ouvre ce dernier par-dessus la liste et retient
+  // le vélo : on le tape, puis on pose le téléphone en travers du guidon.
+  const [landscapeMode, setLandscapeModeState] = useState<LandscapeMode>('bedside');
+  const [rideOpen, setRideOpen] = useState(false);
+  useEffect(() => {
+    void readString(KEY_LANDSCAPE_MODE).then((v) => setLandscapeModeState(v === 'ride' ? 'ride' : 'bedside'));
+  }, []);
+  const setLandscapeMode = useCallback((m: LandscapeMode) => {
+    setLandscapeModeState(m);
+    void writeString(KEY_LANDSCAPE_MODE, m);
+  }, []);
+  // Le retour d'Android referme l'écran vélo plutôt que de quitter l'appli.
+  useEffect(() => {
+    if (!rideOpen) return;
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      setRideOpen(false);
+      return true;
+    });
+    return () => sub.remove();
+  }, [rideOpen]);
   // Hauteur du clavier. Android 15 impose le bord-à-bord, et dans ce mode
   // adjustResize ne redimensionne plus la fenêtre : c est à l appli de faire
   // de la place, sinon le champ saisi reste sous le clavier.
@@ -198,22 +222,48 @@ function Radio() {
   const hidden = useMemo(() => lib.stations.filter((x) => x.hidden), [lib.stations]);
   const groups = useMemo(() => knownGroups(lib.stations), [lib.stations]);
 
-  if (landscape) {
+  if (landscape || rideOpen) {
+    const ride = landscape ? landscapeMode === 'ride' : true;
     return (
       <SafeAreaProvider>
         <Crt>
           <SafeAreaView style={t.screen} edges={['top', 'bottom', 'left', 'right']}>
             <StatusBar hidden />
-            <Bedside
-              station={play.current}
-              title={currentTitle || null}
-              lib={alarms}
-              playing={play.playing}
-              streamState={play.streamState}
-              onToggle={play.toggle}
-              onNext={play.next}
-              onPrevious={play.previous}
-            />
+            {ride ? (
+              <Ride
+                station={play.current}
+                title={currentTitle || null}
+                playing={play.playing}
+                streamState={play.streamState}
+                onToggle={play.toggle}
+                onNext={play.next}
+                onPrevious={play.previous}
+                stations={lib.stations}
+                onSelect={onSelect}
+                onBedside={
+                  landscape
+                    ? () => {
+                        setLandscapeMode('bedside');
+                        // Sinon, revenu en portrait, on retomberait sur le vélo.
+                        setRideOpen(false);
+                      }
+                    : undefined
+                }
+                onExit={landscape ? undefined : () => setRideOpen(false)}
+              />
+            ) : (
+              <Bedside
+                station={play.current}
+                title={currentTitle || null}
+                lib={alarms}
+                playing={play.playing}
+                streamState={play.streamState}
+                onToggle={play.toggle}
+                onNext={play.next}
+                onPrevious={play.previous}
+                onRide={() => setLandscapeMode('ride')}
+              />
+            )}
           </SafeAreaView>
         </Crt>
       </SafeAreaProvider>
@@ -233,6 +283,16 @@ function Radio() {
           <Text style={t.title} numberOfLines={1}>FALLOUT RADIO</Text>
           <View style={s.headerRight}>
             <Pressable
+              onPress={() => {
+                setLandscapeMode('ride');
+                setRideOpen(true);
+              }}
+              accessibilityRole="button"
+              accessibilityLabel="Mode vélo"
+              style={t.btn}>
+              <Text style={t.btnText}>VÉLO</Text>
+            </Pressable>
+            <Pressable
               onPress={() => setSettingsOpen(true)}
               accessibilityRole="button"
               accessibilityLabel="Réglages"
@@ -249,6 +309,8 @@ function Radio() {
           update={updates.update}
           checking={updates.checking}
           onCheckUpdate={updates.check}
+          landscapeMode={landscapeMode}
+          onLandscapeMode={setLandscapeMode}
         />
 
         <UpdateBanner update={updates.update} onDismiss={updates.dismiss} />
