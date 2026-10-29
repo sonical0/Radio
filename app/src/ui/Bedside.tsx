@@ -22,6 +22,7 @@ import {
 } from '../../modules/alarm';
 import type { Station } from '../model/station';
 import type { StreamState } from '../player/usePlayback';
+import { KEY_BEDSIDE_DIM, readString } from '../store/storage';
 import { newAlarm, withStation, type AlarmLibrary } from '../store/useAlarms';
 import { FONT_BODY, FONT_DISPLAY, useTheme, type Palette } from './theme';
 
@@ -103,6 +104,12 @@ export function Bedside({
   }, [columnH, height, restH, width]);
   const [now, setNow] = useState(() => new Date());
   const [dimmed, setDimmed] = useState(false);
+  // Réglé dans les paramètres. Relu à chaque passage en paysage : les
+  // paramètres ne s'ouvrent qu'en portrait, l'horloge n'existe qu'en paysage.
+  const [keepClock, setKeepClock] = useState(false);
+  useEffect(() => {
+    void readString(KEY_BEDSIDE_DIM).then((v) => setKeepClock(v === 'clock'));
+  }, []);
   const [editing, setEditing] = useState<string | null>(null);
   const [undo, setUndo] = useState<Alarm | null>(null);
   const undoTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -180,14 +187,20 @@ export function Bedside({
         {/* La taille est déjà calculée sur l'écran : la multiplier encore par
             la taille de police du système la ferait déborder. */}
         <Text
-          style={[s.clock, { fontSize: clockSize, lineHeight: Math.round(clockSize * 1.04) }]}
+          style={[
+            s.clock,
+            { fontSize: clockSize, lineHeight: Math.round(clockSize * 1.04) },
+            dimmed && keepClock && s.dimClock,
+          ]}
           numberOfLines={1}
           adjustsFontSizeToFit
           allowFontScaling={false}
           accessibilityLabel={'Il est ' + two(now.getHours()) + ' heures ' + two(now.getMinutes())}>
           {two(now.getHours())}:{two(now.getMinutes())}
         </Text>
-        <View onLayout={(e) => setRestH(e.nativeEvent.layout.height)}>
+        <View
+          style={dimmed && keepClock && s.dimRest}
+          onLayout={(e) => setRestH(e.nativeEvent.layout.height)}>
           <Text style={s.date} maxFontSizeMultiplier={1}>{dateLabel(now).toUpperCase()}</Text>
           <Text style={s.next} maxFontSizeMultiplier={1}>
             {lib.next ? '⏰ ' + whenLabel(lib.next.at) : 'AUCUN RÉVEIL ARMÉ'}
@@ -253,7 +266,7 @@ export function Bedside({
         </View>
       </ScrollView>
 
-      <View style={s.right}>
+      <View style={[s.right, dimmed && keepClock && s.dimRest]}>
         <ScrollView keyboardShouldPersistTaps="handled">
           {lib.alarms.map((alarm) => (
             <AlarmRow
@@ -292,7 +305,7 @@ export function Bedside({
 
       {/* Un voile plutôt qu'une baisse de luminosité système : réversible au
           moindre contact, et sans rien changer aux réglages du téléphone. */}
-      {dimmed ? <View style={s.veil} pointerEvents="none" /> : null}
+      {dimmed && !keepClock ? <View style={s.veil} pointerEvents="none" /> : null}
     </Pressable>
   );
 }
@@ -495,4 +508,8 @@ const makeStyles = (p: Palette) =>
       backgroundColor: '#000',
       opacity: 0.72,
     },
+    // HEURE LISIBLE : une opacité par zone au lieu du voile, l'heure baisse
+    // moins que le reste — c'est elle qu'on cherche des yeux dans le noir.
+    dimClock: { opacity: 0.6 },
+    dimRest: { opacity: 0.28 },
   });

@@ -22,6 +22,8 @@ export const KEY_THEME_COLOR = 'themeCustomColor';
 export const KEY_UPDATE = 'updateCheck';
 /** Les alarmes du réveil. Le natif en tient sa propre copie, qu'on lui pousse. */
 export const KEY_ALARMS = 'alarms';
+/** La veille de nuit de l'horloge de chevet : `veil` (tout assombrir) ou `clock` (heure lisible). */
+export const KEY_BEDSIDE_DIM = 'bedsideDim';
 /** Les titres passés, plafonnés : voir useHistory. */
 export const KEY_HISTORY = 'titleHistory';
 /** Le temps d'écoute par jour et par station, sur 31 jours glissants. Hors export. */

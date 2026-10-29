@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import Slider from '@react-native-community/slider';
-import { Linking, Modal, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Linking, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { CURRENT_VERSION, type Release } from '../net/updates';
+import { KEY_BEDSIDE_DIM, readString, writeString } from '../store/storage';
 import {
   CUSTOM_PALETTE_ID,
   FONT_BODY,
@@ -24,6 +25,12 @@ function hslOf(color: string, hue: number): Hsl {
   const v = rgbToHsl(parseColor(color)!);
   return { h: v.h ?? hue, s: v.s, l: v.l };
 }
+
+/** La veille de nuit de l'horloge de chevet ; le premier choix est celui par défaut. */
+const BEDSIDE_DIM: { id: 'veil' | 'clock'; label: string }[] = [
+  { id: 'veil', label: 'TOUT ASSOMBRIR' },
+  { id: 'clock', label: 'HEURE LISIBLE' },
+];
 
 const SLIDERS: { key: keyof Hsl; label: string; max: number; unit: string; a11y: string }[] = [
   { key: 'h', label: 'TEINTE', max: 359, unit: '°', a11y: "Teinte de l'écran" },
@@ -59,6 +66,11 @@ export function Settings({
   const hslRef = useRef(hsl);
   const [code, setCode] = useState(customColor);
   const [codeErr, setCodeErr] = useState(false);
+  const [bedsideDim, setBedsideDim] = useState<'veil' | 'clock'>('veil');
+  useEffect(() => {
+    if (!visible) return;
+    void readString(KEY_BEDSIDE_DIM).then((v) => setBedsideDim(v === 'clock' ? 'clock' : 'veil'));
+  }, [visible]);
   useEffect(() => {
     if (!visible) return;
     const v = hslOf(customColor, customHue);
@@ -110,117 +122,142 @@ export function Settings({
           attendu, et le bouton FERMER reste là pour le clavier et le web. */}
       <Pressable style={s.backdrop} onPress={onClose} accessibilityLabel="Fermer les réglages">
         <Pressable style={s.panel} onPress={() => {}}>
-          <Text style={s.title}>── RÉGLAGES ──</Text>
-          <Text style={s.label}>COULEUR D'ÉCRAN</Text>
+          {/* Défilant : sur un écran agrandi, le panneau dépassait la hauteur et
+              FERMER comme VÉRIFIER sortaient de l'écran. */}
+          <ScrollView keyboardShouldPersistTaps="handled">
+            <Text style={s.title}>── RÉGLAGES ──</Text>
+            <Text style={s.label}>COULEUR D'ÉCRAN</Text>
 
-          {[...PALETTES, custom].map((option) => {
-            const current = option.id === p.id;
-            return (
-              <Pressable
-                key={option.id}
-                style={[s.option, { borderColor: current ? option.base : p.border }]}
-                onPress={() => setPalette(option.id)}
-                accessibilityRole="radio"
-                accessibilityState={{ selected: current }}
-                accessibilityLabel={option.label}>
-                <View style={[s.swatch, { backgroundColor: option.base, borderColor: option.dim }]} />
-                <Text style={[s.optionLabel, { color: option.base }]}>{option.label}</Text>
-                <Text style={[s.check, { color: option.base }]}>{current ? '✓' : ' '}</Text>
-              </Pressable>
-            );
-          })}
+            {[...PALETTES, custom].map((option) => {
+              const current = option.id === p.id;
+              return (
+                <Pressable
+                  key={option.id}
+                  style={[s.option, { borderColor: current ? option.base : p.border }]}
+                  onPress={() => setPalette(option.id)}
+                  accessibilityRole="radio"
+                  accessibilityState={{ selected: current }}
+                  accessibilityLabel={option.label}>
+                  <View style={[s.swatch, { backgroundColor: option.base, borderColor: option.dim }]} />
+                  <Text style={[s.optionLabel, { color: option.base }]}>{option.label}</Text>
+                  <Text style={[s.check, { color: option.base }]}>{current ? '✓' : ' '}</Text>
+                </Pressable>
+              );
+            })}
 
-          {/* Les réglages n'apparaissent que sous LIBRE : hors de ce choix ils
-              ne régleraient rien de visible. L'écran se recolore pendant le
-              geste, le choix s'écrit quand on lâche. */}
-          {p.id === CUSTOM_PALETTE_ID ? (
-            <View>
-              {SLIDERS.map((def) => (
-                <View key={def.key} style={s.hueRow}>
-                  <Text style={s.hueLabel}>{def.label}</Text>
-                  <Slider
-                    style={s.hueSlider}
-                    minimumValue={0}
-                    maximumValue={def.max}
-                    step={1}
-                    value={hsl[def.key]}
-                    minimumTrackTintColor={p.dim}
-                    maximumTrackTintColor={p.border}
-                    thumbTintColor={p.base}
-                    onValueChange={(v) => slide(def.key, v, false)}
-                    onSlidingComplete={(v) => slide(def.key, v, true)}
-                    accessibilityLabel={def.a11y}
+            {/* Les réglages n'apparaissent que sous LIBRE : hors de ce choix ils
+                ne régleraient rien de visible. L'écran se recolore pendant le
+                geste, le choix s'écrit quand on lâche. */}
+            {p.id === CUSTOM_PALETTE_ID ? (
+              <View>
+                {SLIDERS.map((def) => (
+                  <View key={def.key} style={s.hueRow}>
+                    <Text style={s.hueLabel}>{def.label}</Text>
+                    <Slider
+                      style={s.hueSlider}
+                      minimumValue={0}
+                      maximumValue={def.max}
+                      step={1}
+                      value={hsl[def.key]}
+                      minimumTrackTintColor={p.dim}
+                      maximumTrackTintColor={p.border}
+                      thumbTintColor={p.base}
+                      onValueChange={(v) => slide(def.key, v, false)}
+                      onSlidingComplete={(v) => slide(def.key, v, true)}
+                      accessibilityLabel={def.a11y}
+                    />
+                    <Text style={s.hueValue}>
+                      {hsl[def.key]}
+                      {def.unit}
+                    </Text>
+                  </View>
+                ))}
+                <View style={s.hueRow}>
+                  <Text style={s.hueLabel}>CODE</Text>
+                  <TextInput
+                    style={[t.input, s.codeInput]}
+                    value={code}
+                    onChangeText={(v) => {
+                      setCode(v);
+                      setCodeErr(false);
+                    }}
+                    onSubmitEditing={submitCode}
+                    onEndEditing={submitCode}
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                    spellCheck={false}
+                    placeholder="#ff8800 ou 255,136,0"
+                    placeholderTextColor={p.dim}
+                    returnKeyType="done"
+                    accessibilityLabel="Code couleur"
                   />
-                  <Text style={s.hueValue}>
-                    {hsl[def.key]}
-                    {def.unit}
-                  </Text>
                 </View>
-              ))}
-              <View style={s.hueRow}>
-                <Text style={s.hueLabel}>CODE</Text>
-                <TextInput
-                  style={[t.input, s.codeInput]}
-                  value={code}
-                  onChangeText={(v) => {
-                    setCode(v);
-                    setCodeErr(false);
-                  }}
-                  onSubmitEditing={submitCode}
-                  onEndEditing={submitCode}
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                  spellCheck={false}
-                  placeholder="#ff8800 ou 255,136,0"
-                  placeholderTextColor={p.dim}
-                  returnKeyType="done"
-                  accessibilityLabel="Code couleur"
-                />
-              </View>
-              <Text style={t.msgErr} accessibilityLiveRegion="polite">
-                {message}
-              </Text>
-            </View>
-          ) : null}
-
-          <Text style={s.label}>RÉVEIL</Text>
-          {/* Le réveil vit sur l'horloge de chevet : le dire ici, sinon
-              personne ne pense à tourner le téléphone. */}
-          <Text style={s.hint}>Tourne le téléphone à l'horizontale.</Text>
-
-          <Text style={s.label}>VERSION</Text>
-          {/* La vérification se fait d'elle-même une fois par jour ; ce bouton
-              n'existe que pour ne pas avoir à attendre le lendemain, et pour
-              rendre visible ce que l'appli fait déjà en silence. */}
-          <View style={s.version}>
-            <Text style={s.versionText} numberOfLines={1}>
-              {CURRENT_VERSION}
-              {update ? '  →  ' + update.version + ' DISPONIBLE' : ''}
-            </Text>
-            {update ? (
-              <Pressable
-                onPress={() => void Linking.openURL(update.url)}
-                accessibilityRole="link"
-                style={t.btn}>
-                <Text style={t.btnText}>VOIR</Text>
-              </Pressable>
-            ) : (
-              <Pressable
-                onPress={onCheckUpdate}
-                disabled={checking}
-                accessibilityRole="button"
-                accessibilityState={{ disabled: checking }}
-                style={t.btn}>
-                <Text style={[t.btnText, checking && t.btnOff]}>
-                  {checking ? '…' : 'VÉRIFIER'}
+                <Text style={t.msgErr} accessibilityLiveRegion="polite">
+                  {message}
                 </Text>
-              </Pressable>
-            )}
-          </View>
+              </View>
+            ) : null}
 
-          <Pressable style={[t.btn, s.close]} onPress={onClose} accessibilityRole="button">
-            <Text style={t.btnText}>FERMER</Text>
-          </Pressable>
+            <Text style={s.label}>RÉVEIL</Text>
+            {/* Le réveil vit sur l'horloge de chevet : le dire ici, sinon
+                personne ne pense à tourner le téléphone. */}
+            <Text style={s.hint}>Tourne le téléphone à l'horizontale.</Text>
+
+            {/* Au bout d'une minute sans contact, l'horloge s'assombrit. */}
+            <Text style={[s.hint, s.subHint]}>La nuit, après une minute sans toucher l'écran :</Text>
+            {BEDSIDE_DIM.map((option) => {
+              const current = bedsideDim === option.id;
+              return (
+                <Pressable
+                  key={option.id}
+                  style={[s.option, { borderColor: current ? p.base : p.border }]}
+                  onPress={() => {
+                    setBedsideDim(option.id);
+                    void writeString(KEY_BEDSIDE_DIM, option.id);
+                  }}
+                  accessibilityRole="radio"
+                  accessibilityState={{ selected: current }}
+                  accessibilityLabel={option.label}>
+                  <Text style={[s.optionLabel, { color: current ? p.base : p.dim }]}>{option.label}</Text>
+                  <Text style={[s.check, { color: p.base }]}>{current ? '✓' : ' '}</Text>
+                </Pressable>
+              );
+            })}
+
+            <Text style={s.label}>VERSION</Text>
+            {/* La vérification se fait d'elle-même une fois par jour ; ce bouton
+                n'existe que pour ne pas avoir à attendre le lendemain, et pour
+                rendre visible ce que l'appli fait déjà en silence. */}
+            <View style={s.version}>
+              <Text style={s.versionText} numberOfLines={1}>
+                {CURRENT_VERSION}
+                {update ? '  →  ' + update.version + ' DISPONIBLE' : ''}
+              </Text>
+              {update ? (
+                <Pressable
+                  onPress={() => void Linking.openURL(update.url)}
+                  accessibilityRole="link"
+                  style={t.btn}>
+                  <Text style={t.btnText}>VOIR</Text>
+                </Pressable>
+              ) : (
+                <Pressable
+                  onPress={onCheckUpdate}
+                  disabled={checking}
+                  accessibilityRole="button"
+                  accessibilityState={{ disabled: checking }}
+                  style={t.btn}>
+                  <Text style={[t.btnText, checking && t.btnOff]}>
+                    {checking ? '…' : 'VÉRIFIER'}
+                  </Text>
+                </Pressable>
+              )}
+            </View>
+
+            <Pressable style={[t.btn, s.close]} onPress={onClose} accessibilityRole="button">
+              <Text style={t.btnText}>FERMER</Text>
+            </Pressable>
+          </ScrollView>
         </Pressable>
       </Pressable>
     </Modal>
@@ -239,6 +276,7 @@ const makeStyles = (p: Palette) =>
     panel: {
       width: '100%',
       maxWidth: 420,
+      maxHeight: '100%',
       borderWidth: 1,
       borderColor: p.base,
       backgroundColor: p.bg2,
@@ -281,6 +319,7 @@ const makeStyles = (p: Palette) =>
   hueValue: { color: p.dim, fontFamily: FONT_BODY, fontSize: 11, minWidth: 36, textAlign: 'right' },
   codeInput: { flex: 1, marginBottom: 0 },
   hint: { color: p.dim, fontFamily: FONT_BODY, fontSize: 12 },
+  subHint: { marginTop: 8, marginBottom: 6 },
     optionLabel: { flex: 1, fontFamily: FONT_DISPLAY, fontSize: 18, letterSpacing: 2, lineHeight: 22 },
     check: { fontFamily: FONT_BODY, fontSize: 14 },
     close: { alignSelf: 'flex-end', marginTop: 8 },
