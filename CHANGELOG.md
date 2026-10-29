@@ -18,11 +18,29 @@ Retour du premier essai sur un vrai téléphone (2400×1080, densité 420), en n
   au-dessous ; elle prend maintenant toute la hauteur que laissent les boutons, et c'est
   cette boîte mesurée qui fixe la taille de la distance.
 - **L'heure et l'heure d'arrivée grandissent** (32 → 48 points), sur une rangée à elles
-  sous la distance ; la température ne s'y ajoute que si elle tient.
+  sous la distance ; la température ne s'y ajoute que si elle tient. Sur un écran bas (texte
+  agrandi), les heures rétrécissent avec la distance, qui reste la plus grande valeur, et la
+  manœuvre passe sur une ligne.
 - Hors navigation, l'écran vélo est celui de la 1.8.0.
 
 ### Vérifié
-- _À compléter après le passage sur émulateur._
+- Sur émulateur (2400×1080), APK release de la CI du train, palette BLANC, quatre favoris,
+  une station en lecture, météo, vrai trajet Maps à vélo :
+  - paysage, densité 420 et police 1 (le réglage du téléphone de l'utilisateur) : l'étape part
+    du haut de la colonne, plus de bande vide ; heures environ 1,6 fois plus grandes que sur
+    sa capture ; boutons de 79 dp alignés sur CHEVET ;
+  - paysage, densité 525 et police 1,3 : distance environ deux fois plus haute que les heures,
+    température entière, manœuvre sur une ligne, boutons entiers de 80 dp ;
+  - portrait, densité 525 et police 1,3 : rien ne déborde, boutons de 79 dp ;
+  - VÉLO touché en portrait pendant la navigation : l'étape s'affiche aussitôt ;
+  - fin de navigation : l'écran vélo redevient celui de la 1.8.0.
+
+### Limites
+- **Après un changement de densité d'écran** pendant la navigation, l'étape peut ne
+  réapparaître qu'à la mise à jour suivante de Maps (quelques secondes). Ce changement recrée
+  l'activité ; il n'arrive pas en roulant.
+- **Le libellé du bouton de lecture de l'écran vélo** est parfois tronqué (« ▶ A »,
+  « ❚❚ P ») ; déjà en 1.7.0.
 
 ## 2026-10-29 (3) — app v1.8.0 : l'étape Google Maps sur l'écran vélo
 
