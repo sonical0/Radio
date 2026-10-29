@@ -9,6 +9,21 @@ Ordre : **entrée la plus récente en tête**. Plusieurs passes le même jour so
 suffixées `(2)`, `(3)`… la plus haute étant la plus récente (même convention que
 `TANDEM_LOG.md`).
 
+## 2026-10-29 (4) — app v1.8.1 : l'étape Maps lisible sur le guidon
+
+Retour du premier essai sur un vrai téléphone (2400×1080, densité 420), en navigation.
+
+### Corrigé
+- **L'étape remplit la colonne de gauche** : elle laissait une bande vide au-dessus et
+  au-dessous ; elle prend maintenant toute la hauteur que laissent les boutons, et c'est
+  cette boîte mesurée qui fixe la taille de la distance.
+- **L'heure et l'heure d'arrivée grandissent** (32 → 48 points), sur une rangée à elles
+  sous la distance ; la température ne s'y ajoute que si elle tient.
+- Hors navigation, l'écran vélo est celui de la 1.8.0.
+
+### Vérifié
+- _À compléter après le passage sur émulateur._
+
 ## 2026-10-29 (3) — app v1.8.0 : l'étape Google Maps sur l'écran vélo
 
 ### Ajouté
