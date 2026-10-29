@@ -32,6 +32,16 @@ const MONTHS = [
   'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre',
 ];
 
+/**
+ * La hauteur de ligne de l'heure, en corps. Métriques de VT323 : ascendante
+ * 0,8, descendante 0,2, et les chiffres vont de la ligne de base à 0,56. À
+ * 1,04 plus la marge qu'Android ajoute par défaut (`includeFontPadding`),
+ * plus de la moitié de la boîte était vide. 0,8 garde les chiffres entiers
+ * qu'Android rogne la ligne par le haut (sommet à 0,6) ou des deux côtés
+ * (sommet à 0,7, base à 0,1 sous la ligne).
+ */
+const CLOCK_LINE = 0.8;
+
 /** Au bout d'une minute sans contact, l'écran s'assombrit : c'est une table de nuit. */
 const DIM_AFTER_MS = 60 * 1000;
 
@@ -103,7 +113,7 @@ export function Bedside({
   const clockSize = useMemo(() => {
     const avail = column.w || width * 0.52 - 40;
     const byWidth = avail / (emWidth * 1.04);
-    const byHeight = column.h && restH ? (column.h - restH) / 1.04 : height * 0.5;
+    const byHeight = column.h && restH ? (column.h - restH) / CLOCK_LINE : height * 0.5;
     return Math.max(36, Math.floor(Math.min(byWidth, byHeight)));
   }, [column, emWidth, height, restH, width]);
   const [now, setNow] = useState(() => new Date());
@@ -193,7 +203,7 @@ export function Bedside({
         <Text
           style={[
             s.clock,
-            { fontSize: clockSize, lineHeight: Math.round(clockSize * 1.04) },
+            { fontSize: clockSize, lineHeight: Math.round(clockSize * CLOCK_LINE) },
             dimmed && keepClock && s.dimClock,
           ]}
           numberOfLines={1}
@@ -469,7 +479,7 @@ const makeStyles = (p: Palette) =>
     // ne dépend pas de la largeur.
     // `flex-start` : la boîte prend la largeur du texte, pas celle de la
     // colonne, sinon la mesure de `emWidth` ne mesurerait que la colonne.
-    clock: { color: p.base, fontFamily: FONT_DISPLAY, alignSelf: 'flex-start' },
+    clock: { color: p.base, fontFamily: FONT_DISPLAY, alignSelf: 'flex-start', includeFontPadding: false },
     date: { color: p.dim, fontFamily: FONT_DISPLAY, fontSize: 24, letterSpacing: 3 },
     next: { color: p.base, fontFamily: FONT_DISPLAY, fontSize: 26, letterSpacing: 2, marginTop: 16 },
     station: { color: p.dim, fontFamily: FONT_BODY, fontSize: 13, marginTop: 4 },
