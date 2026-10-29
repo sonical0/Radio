@@ -78,6 +78,18 @@ function shortDateLabel(d: Date): string {
   return DAY_SHORT[d.getDay()] + ' ' + d.getDate() + ' ' + MONTHS_SHORT[d.getMonth()];
 }
 
+/** « 29/10 » : le dernier palier, quand même la date courte coupe la météo. */
+function numericDateLabel(d: Date): string {
+  return two(d.getDate()) + '/' + two(d.getMonth() + 1);
+}
+
+/**
+ * Les paliers de la date à côté de la météo, du plus long au plus court. On
+ * prend le premier qui tient sur la ligne ; si aucun ne tient, la météo reste
+ * seule, plutôt que d'en perdre la fin.
+ */
+const DATE_FORMATS = [dateLabel, shortDateLabel, numericDateLabel];
+
 /**
  * L'heure telle qu'on la dit : « Il est 7 heures 5. », « Il est minuit. »,
  * « Il est midi 30. ». Les minutes sans zéro devant : la synthèse vocale lit
@@ -140,11 +152,11 @@ export function Bedside({
   // l'écran : l'horloge prend désormais ce qui reste une fois le reste posé.
   const [column, setColumn] = useState({ w: 0, h: 0 });
   const [restH, setRestH] = useState(0);
-  // Hauteur de la ligne de date affichée, et de la même ligne en version
-  // longue mesurée sans limite de lignes : plus haute, c'est qu'elle passe à
-  // la ligne, donc qu'elle ne tient pas.
+  // Hauteur de la ligne de date affichée, et de chaque palier de date mesuré
+  // sans limite de lignes : plus haut, c'est qu'il passe à la ligne, donc
+  // qu'il ne tient pas.
   const [dateLineH, setDateLineH] = useState(0);
-  const [longDateH, setLongDateH] = useState(0);
+  const [tierH, setTierH] = useState<number[]>(() => DATE_FORMATS.map(() => 0));
   // L'horloge remplit sa colonne au lieu d'une taille fixe : c'est le seul
   // contenu de l'écran qu'on doit pouvoir lire d'un lit, à deux mètres et
   // sans lunettes. La largeur de « 07:00 » en cadratins n'est pas devinée :
@@ -169,8 +181,11 @@ export function Bedside({
   // Rien quand aucune ville n'est réglée ou que le réseau manque : voir useWeather.
   const weather = useWeather();
   const weatherText = weather ? ' · ' + weather.replace(' · ', ' ').toUpperCase() : '';
-  // Tant qu'une des deux mesures manque, la date longue : c'est l'affichage d'avant.
-  const longDateFits = !dateLineH || !longDateH || longDateH < dateLineH * 1.5;
+  // Tant qu'une mesure manque, la date longue : c'est l'affichage d'avant.
+  // `DATE_FORMATS.length` : aucun palier ne tient, la météo reste seule.
+  const firstFit = tierH.findIndex((h) => h < dateLineH * 1.5);
+  const dateTier =
+    !dateLineH || tierH.some((h) => !h) ? 0 : firstFit < 0 ? DATE_FORMATS.length : firstFit;
   const [editing, setEditing] = useState<string | null>(null);
   const [undo, setUndo] = useState<Alarm | null>(null);
   const undoTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -300,9 +315,10 @@ export function Bedside({
           onLayout={(e) => setRestH(e.nativeEvent.layout.height)}>
           {/* La météo sur la ligne de la date, jamais sur une ligne à elle :
               l'heure est dimensionnée sur la hauteur de ce bloc, et une ligne de
-              plus lui coûtait un cinquième de sa taille. Quand la date longue et
-              la météo ne tiennent pas ensemble, c'est la date qui raccourcit
-              (« JEU. 29 OCT. ») : coupée par la fin, la ligne perdait le ciel. */}
+              plus lui coûtait un cinquième de sa taille. Quand la date et la
+              météo ne tiennent pas ensemble, c'est la date qui raccourcit
+              (« JEU. 29 OCT. », puis « 29/10 ») : coupée par la fin, la ligne
+              perdait le ciel. */}
           <Text
             style={s.date}
             maxFontSizeMultiplier={1}
@@ -311,20 +327,29 @@ export function Bedside({
             accessibilityLabel={
               dateLabel(now) + (weather ? ', ' + weather.replace('°', ' degrés').replace(' · ', ', ') : '')
             }>
-            {(longDateFits ? dateLabel(now) : shortDateLabel(now)).toUpperCase()}
-            {weatherText}
+            {dateTier < DATE_FORMATS.length
+              ? DATE_FORMATS[dateTier](now).toUpperCase() + weatherText
+              : weather
+                ? weatherText.slice(' · '.length)
+                : numericDateLabel(now)}
           </Text>
-          {/* La ligne longue, invisible et hors du flux (elle ne compte pas dans
-              `restH`), sans limite de lignes : sa hauteur dit si elle tiendrait. */}
-          <Text
-            style={[s.date, s.measure]}
-            maxFontSizeMultiplier={1}
-            onLayout={(e) => setLongDateH(e.nativeEvent.layout.height)}
-            accessibilityElementsHidden
-            importantForAccessibility="no-hide-descendants">
-            {dateLabel(now).toUpperCase()}
-            {weatherText}
-          </Text>
+          {/* Chaque palier, invisible et hors du flux (il ne compte pas dans
+              `restH`), sans limite de lignes : sa hauteur dit s'il tiendrait. */}
+          {DATE_FORMATS.map((format, i) => (
+            <Text
+              key={i}
+              style={[s.date, s.measure]}
+              maxFontSizeMultiplier={1}
+              onLayout={(e) => {
+                const h = e.nativeEvent.layout.height;
+                setTierH((prev) => (prev[i] === h ? prev : prev.map((v, j) => (j === i ? h : v))));
+              }}
+              accessibilityElementsHidden
+              importantForAccessibility="no-hide-descendants">
+              {format(now).toUpperCase()}
+              {weatherText}
+            </Text>
+          ))}
           <Text style={s.next} maxFontSizeMultiplier={1}>
             {lib.next ? '⏰ ' + whenLabel(lib.next.at) : 'AUCUN RÉVEIL ARMÉ'}
           </Text>
