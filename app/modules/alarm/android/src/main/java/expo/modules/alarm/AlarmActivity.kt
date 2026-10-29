@@ -118,6 +118,21 @@ class AlarmActivity : Activity() {
       },
     )
 
+    // La météo mise en cache par l'application ; rien du tout quand il n'y en
+    // a pas, plutôt qu'une ligne vide qui décale les boutons.
+    AlarmVoice.weather(this)?.let { summary ->
+      root.addView(
+        TextView(this).apply {
+          text = summary
+          setTextColor(palette.base)
+          textSize = 18f
+          typeface = mono
+          gravity = Gravity.CENTER
+          setPadding(0, 0, 0, 40)
+        },
+      )
+    }
+
     root.addView(
       button("ARRÊTER", palette) {
         send(AlarmService.ACTION_STOP)

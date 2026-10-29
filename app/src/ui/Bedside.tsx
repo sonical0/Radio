@@ -18,12 +18,15 @@ import {
   WEEK_ORDER,
   describeDays,
   setKeepAwake,
+  setWindowBrightness,
+  speak,
   type Alarm,
 } from '../../modules/alarm';
 import type { Station } from '../model/station';
 import type { StreamState } from '../player/usePlayback';
 import { KEY_BEDSIDE_DIM, readString } from '../store/storage';
 import { newAlarm, withStation, type AlarmLibrary } from '../store/useAlarms';
+import { useWeather } from '../store/useWeather';
 import { FONT_BODY, FONT_DISPLAY, useTheme, type Palette } from './theme';
 
 const DAY_NAMES = ['dimanche', 'lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi'];
@@ -45,6 +48,15 @@ const CLOCK_LINE = 0.8;
 /** Au bout d'une minute sans contact, l'écran s'assombrit : c'est une table de nuit. */
 const DIM_AFTER_MS = 60 * 1000;
 
+/**
+ * La luminosité de la fenêtre une fois l'écran assombri. Pas 0 : pour Android,
+ * 0 vaut `BRIGHTNESS_OVERRIDE_OFF`, et certains écrans coupent alors le
+ * rétroéclairage — plus d'heure du tout. 0,05 tombe au bas de la plage qu'offre
+ * le curseur du système, assez pour lire l'heure dans le noir sans éclairer la
+ * chambre ; le voile ou les opacités de HEURE LISIBLE font le reste.
+ */
+const NIGHT_BRIGHTNESS = 0.05;
+
 /** Le temps laissé pour rattraper une suppression. */
 const UNDO_MS = 8000;
 
@@ -54,6 +66,18 @@ function two(n: number): string {
 
 function dateLabel(d: Date): string {
   return DAY_NAMES[d.getDay()] + ' ' + d.getDate() + ' ' + MONTHS[d.getMonth()];
+}
+
+/**
+ * L'heure telle qu'on la dit : « Il est 7 heures 5. », « Il est minuit. »,
+ * « Il est midi 30. ». Les minutes sans zéro devant : la synthèse vocale lit
+ * « 05 » comme « zéro cinq » sur certains moteurs.
+ */
+function spokenTime(d: Date): string {
+  const h = d.getHours();
+  const m = d.getMinutes();
+  const hour = h === 0 ? 'minuit' : h === 12 ? 'midi' : h + (h === 1 ? ' heure' : ' heures');
+  return 'Il est ' + hour + (m ? ' ' + m : '') + '.';
 }
 
 function whenLabel(at: Date): string {
@@ -124,6 +148,8 @@ export function Bedside({
   useEffect(() => {
     void readString(KEY_BEDSIDE_DIM).then((v) => setKeepClock(v === 'clock'));
   }, []);
+  // Rien quand aucune ville n'est réglée ou que le réseau manque : voir useWeather.
+  const weather = useWeather();
   const [editing, setEditing] = useState<string | null>(null);
   const [undo, setUndo] = useState<Alarm | null>(null);
   const undoTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -152,6 +178,25 @@ export function Bedside({
     if (dimTimer.current) clearTimeout(dimTimer.current);
     dimTimer.current = setTimeout(() => setDimmed(true), DIM_AFTER_MS);
   }, []);
+
+  // Le voile et les opacités assombrissent les pixels, pas l'écran : un écran
+  // LCD reste rétroéclairé derrière et éclaire la chambre. On baisse donc aussi
+  // la luminosité de la fenêtre — de la fenêtre seulement, le réglage du
+  // système n'est pas touché. Le nettoyage rend la main au système quand
+  // `dimmed` repasse à faux (`wake`, au moindre contact) comme au démontage
+  // (retour au portrait) : sans lui, l'appli resterait sombre en portrait.
+  useEffect(() => {
+    if (!dimmed) return;
+    setWindowBrightness(NIGHT_BRIGHTNESS);
+    return () => setWindowBrightness(null);
+  }, [dimmed]);
+
+  // L'appui long dit l'heure : on la demande les yeux fermés, sans chercher
+  // ses lunettes. Il réveille aussi l'écran, comme n'importe quel contact.
+  const sayTime = useCallback(() => {
+    wake();
+    speak(spokenTime(new Date()));
+  }, [wake]);
 
   useEffect(() => {
     wake();
@@ -191,7 +236,10 @@ export function Bedside({
   }, [lib, undo]);
 
   return (
-    <Pressable style={s.screen} onPress={wake} accessibilityLabel="Horloge de chevet">
+    // `onTouchStart` en plus de `onPress` : il remonte aussi des boutons de la
+    // liste, qui gardent leur appui pour eux. Sans lui, régler un réveil sous le
+    // voile le faisait dans le noir, la luminosité restant basse.
+    <Pressable style={s.screen} onPress={wake} onTouchStart={wake} accessibilityLabel="Horloge de chevet">
       {/* Défilante en dernier recours : si même une horloge réduite au minimum
           ne laisse pas la place aux boutons, on doit pouvoir aller les chercher. */}
       <ScrollView
@@ -212,13 +260,37 @@ export function Bedside({
             const w = e.nativeEvent.layout.width / clockSize;
             if (w > 0.5 && Math.abs(w - emWidth) > 0.01) setEmWidth(w);
           }}
-          accessibilityLabel={'Il est ' + two(now.getHours()) + ' heures ' + two(now.getMinutes())}>
+          // Les gestes sur le texte même, sans Pressable autour : une boîte de
+          // plus fausserait la mesure de `emWidth`. Le texte devient la cible du
+          // toucher, il doit donc relayer l'appui court que l'écran entier
+          // recevait jusque-là.
+          onPress={wake}
+          onLongPress={sayTime}
+          accessibilityLabel={spokenTime(now)}
+          accessibilityHint="Appui long pour entendre l'heure"
+          accessibilityActions={[{ name: 'longpress', label: "Dire l'heure" }]}
+          onAccessibilityAction={(e) => {
+            if (e.nativeEvent.actionName === 'longpress') sayTime();
+          }}>
           {two(now.getHours())}:{two(now.getMinutes())}
         </Text>
         <View
           style={dimmed && keepClock && s.dimRest}
           onLayout={(e) => setRestH(e.nativeEvent.layout.height)}>
-          <Text style={s.date} maxFontSizeMultiplier={1}>{dateLabel(now).toUpperCase()}</Text>
+          {/* La météo sur la ligne de la date, jamais sur une ligne à elle :
+              l'heure est dimensionnée sur la hauteur de ce bloc, et une ligne de
+              plus lui coûtait un cinquième de sa taille. Une seule ligne, coupée
+              par la fin : c'est la météo qui cède, pas la date. */}
+          <Text
+            style={s.date}
+            maxFontSizeMultiplier={1}
+            numberOfLines={1}
+            accessibilityLabel={
+              dateLabel(now) + (weather ? ', ' + weather.replace('°', ' degrés').replace(' · ', ', ') : '')
+            }>
+            {dateLabel(now).toUpperCase()}
+            {weather ? ' · ' + weather.replace(' · ', ' ').toUpperCase() : ''}
+          </Text>
           <Text style={s.next} maxFontSizeMultiplier={1}>
             {lib.next ? '⏰ ' + whenLabel(lib.next.at) : 'AUCUN RÉVEIL ARMÉ'}
           </Text>
@@ -294,6 +366,7 @@ export function Bedside({
               onOpen={() => setEditing(editing === alarm.id ? null : alarm.id)}
               onSave={lib.save}
               onToggle={() => lib.toggle(alarm.id)}
+              onSkip={() => lib.toggleSkip(alarm.id)}
               onRemove={() => remove(alarm)}
             />
           ))}
@@ -321,7 +394,8 @@ export function Bedside({
       </View>
 
       {/* Un voile plutôt qu'une baisse de luminosité système : réversible au
-          moindre contact, et sans rien changer aux réglages du téléphone. */}
+          moindre contact, et sans rien changer aux réglages du téléphone. La
+          luminosité de la fenêtre baisse avec lui (voir l'effet sur `dimmed`). */}
       {dimmed && !keepClock ? <View style={s.veil} pointerEvents="none" /> : null}
     </Pressable>
   );
@@ -334,6 +408,7 @@ function AlarmRow({
   onOpen,
   onSave,
   onToggle,
+  onSkip,
   onRemove,
 }: {
   alarm: Alarm;
@@ -342,10 +417,15 @@ function AlarmRow({
   onOpen: () => void;
   onSave: (a: Alarm) => void;
   onToggle: () => void;
+  onSkip: () => void;
   onRemove: () => void;
 }) {
   const { p, t } = useTheme();
   const s = useMemo(() => makeStyles(p), [p]);
+  // Un saut ne compte que sur un réveil allumé : éteint, il ne sonne pas de
+  // toute façon, et rallumer efface le saut (voir `toggle` dans useAlarms).
+  const skipped = alarm.enabled && alarm.skipNext === true;
+  const lit = alarm.enabled && !skipped;
   const [hh, setHh] = useState(two(alarm.hour));
   const [mm, setMm] = useState(two(alarm.minute));
 
@@ -371,25 +451,50 @@ function AlarmRow({
   );
 
   return (
-    <View style={[s.row, { borderColor: alarm.enabled ? p.base : p.border }]}>
+    <View style={[s.row, { borderColor: lit ? p.base : p.border }]}>
       <Pressable onPress={onOpen} style={s.rowHead} accessibilityRole="button">
-        <Text style={[s.rowTime, { color: alarm.enabled ? p.base : p.dim }]}>
+        <Text style={[s.rowTime, { color: lit ? p.base : p.dim }]}>
           {two(alarm.hour)}:{two(alarm.minute)}
         </Text>
         <View style={s.rowText}>
-          <Text style={s.rowDays}>{describeDays(alarm.days)}</Text>
+          {/* Le saut dit en toutes lettres, pas seulement par une couleur plus
+              terne : la nuit, un vert atténué ressemble à un vert éteint. */}
+          <Text style={s.rowDays}>
+            {skipped ? 'SAUTÉ UNE FOIS · ' : ''}
+            {describeDays(alarm.days)}
+          </Text>
           <Text style={s.rowStation} numberOfLines={1}>{alarm.title}</Text>
         </View>
       </Pressable>
 
-      <Pressable
-        onPress={onToggle}
-        accessibilityRole="switch"
-        accessibilityState={{ checked: alarm.enabled }}
-        accessibilityLabel={alarm.enabled ? 'Désactiver ce réveil' : 'Activer ce réveil'}
-        style={t.btn}>
-        <Text style={[t.btnText, !alarm.enabled && t.btnOff]}>{alarm.enabled ? 'ON' : 'OFF'}</Text>
-      </Pressable>
+      {/* ON/OFF et le saut côte à côte : la colonne des réveils n'est pas
+          mesurée, mais une ligne de plus par réveil en laisserait moins à l'écran. */}
+      <View style={s.rowControls}>
+        <Pressable
+          onPress={onToggle}
+          accessibilityRole="switch"
+          accessibilityState={{ checked: alarm.enabled }}
+          accessibilityLabel={alarm.enabled ? 'Désactiver ce réveil' : 'Activer ce réveil'}
+          style={[t.btn, s.rowBtn]}>
+          <Text style={[t.btnText, !alarm.enabled && t.btnOff]}>{alarm.enabled ? 'ON' : 'OFF'}</Text>
+        </Pressable>
+
+        {/* Sauter demain sans éteindre le réveil, et donc sans avoir à penser
+            à le rallumer. Sur un réveil unique, sauter revient à l'éteindre. */}
+        {alarm.enabled ? (
+          <Pressable
+            onPress={onSkip}
+            accessibilityRole="button"
+            accessibilityLabel={
+              skipped
+                ? 'Reprendre : la prochaine sonnerie de ce réveil est sautée'
+                : 'Sauter la prochaine sonnerie de ce réveil'
+            }
+            style={[t.btn, s.rowBtn]}>
+            <Text style={t.btnText}>{skipped ? 'REPRENDRE' : 'SAUTER'}</Text>
+          </Pressable>
+        ) : null}
+      </View>
 
       {open ? (
         <View style={s.editor}>
@@ -505,6 +610,9 @@ const makeStyles = (p: Palette) =>
     rowText: { flex: 1 },
     rowDays: { color: p.dim, fontFamily: FONT_DISPLAY, fontSize: 15, letterSpacing: 2 },
     rowStation: { color: p.dim, fontFamily: FONT_BODY, fontSize: 11 },
+    rowControls: { flexDirection: 'row', gap: 8, marginTop: 6 },
+    // 44 dp : la cible minimale, visée dans le noir et à moitié endormi.
+    rowBtn: { flex: 1, minHeight: 44, justifyContent: 'center', alignItems: 'center' },
 
     editor: { marginTop: 8, gap: 6 },
     // `wrap` : agrandi, OK et ✕ sortaient de la colonne à droite.

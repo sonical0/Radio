@@ -35,6 +35,9 @@ private const val RAMP_STEP_MS = 500L
 /** On ne part pas de zéro : inaudible pendant dix secondes ne réveille personne. */
 private const val RAMP_FROM = 0.1f
 
+/** Le volume de la radio pendant l'annonce de l'heure, relatif au volume courant. */
+private const val ANNOUNCE_DUCK = 0.25f
+
 /**
  * La sonnerie.
  *
@@ -83,6 +86,10 @@ class AlarmService : Service() {
   private var rampStartedAt = 0L
   private var rampMs = 0L
 
+  /** Baisse du son pendant l'annonce de l'heure : 1 = pas de baisse. */
+  private var duck = 1f
+  private var announced = false
+
   private val autoStopRunnable = Runnable {
     Log.i(TAG, "dix minutes sans action : arrêt de cette sonnerie")
     stopEverything(closeSession = !AlarmSession.canSnooze(this))
@@ -101,15 +108,40 @@ class AlarmService : Service() {
    */
   private val rampRunnable = object : Runnable {
     override fun run() {
-      val exo = player ?: return
-      val elapsed = System.currentTimeMillis() - rampStartedAt
-      if (elapsed >= rampMs) {
-        exo.volume = target
-        return
-      }
-      val progress = elapsed.toFloat() / rampMs.toFloat()
-      exo.volume = target * (RAMP_FROM + (1f - RAMP_FROM) * progress)
-      handler.postDelayed(this, RAMP_STEP_MS)
+      if (player == null) return
+      applyVolume()
+      if (System.currentTimeMillis() - rampStartedAt < rampMs) handler.postDelayed(this, RAMP_STEP_MS)
+    }
+  }
+
+  /** Où en est la montée, de RAMP_FROM à 1. */
+  private fun rampFactor(): Float {
+    if (rampMs <= 0L) return 1f
+    val elapsed = System.currentTimeMillis() - rampStartedAt
+    if (elapsed >= rampMs) return 1f
+    val progress = elapsed.toFloat() / rampMs.toFloat()
+    return RAMP_FROM + (1f - RAMP_FROM) * progress
+  }
+
+  /** Le seul endroit qui règle le volume en cours de sonnerie : montée × gain × baisse. */
+  private fun applyVolume() {
+    player?.volume = target * rampFactor() * duck
+    ringtone?.setVolume(duck, duck)
+  }
+
+  /**
+   * L'heure dite une fois le son parti, radio ou sonnerie de repli. Le son
+   * baisse pendant la phrase au lieu de se couper : se réveiller sur un
+   * silence fait croire que le réveil s'est arrêté.
+   */
+  private fun announceOnce() {
+    if (announced || !AlarmVoice.announceEnabled(this)) return
+    announced = true
+    duck = ANNOUNCE_DUCK
+    applyVolume()
+    AlarmVoice.announce(this) {
+      duck = 1f
+      applyVolume()
     }
   }
 
@@ -207,6 +239,7 @@ class AlarmService : Service() {
             // sinon dix secondes de réseau lent mangeraient la montée.
             rampStartedAt = System.currentTimeMillis()
             if (rampMs > 0L) handler.post(rampRunnable)
+            announceOnce()
           }
         }
 
@@ -247,7 +280,7 @@ class AlarmService : Service() {
         isLooping = true
         prepare()
         start()
-      }
+      }.also { handler.post { announceOnce() } }
     } catch (e: Throwable) {
       // Il ne reste plus rien à tenter : le dire, plutôt que de tomber.
       Log.e(TAG, "sonnerie système indisponible : " + e)
@@ -342,6 +375,8 @@ class AlarmService : Service() {
     handler.removeCallbacks(autoStopRunnable)
     handler.removeCallbacks(fallbackRunnable)
     handler.removeCallbacks(rampRunnable)
+    // Couper la phrase en cours : ARRÊTER doit faire taire la voix aussi.
+    if (announced) AlarmVoice.shutdown()
     releasePlayer()
     try {
       ringtone?.stop()

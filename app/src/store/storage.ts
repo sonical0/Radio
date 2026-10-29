@@ -31,6 +31,10 @@ export const KEY_LISTEN_STATS = 'listenStats';
 /** Tri des résultats d'annuaire, et pays épinglés du parcours. Mêmes clés que le site. */
 export const KEY_RB_ORDER = 'rbOrder';
 export const KEY_RB_PINNED = 'rbPinnedCountries';
+/** La ville de la météo, telle que tapée ; vide = pas de météo. */
+export const KEY_WEATHER_CITY = 'weatherCity';
+/** Annoncer l'heure à voix haute au réveil : `1` ou absent. Le natif en tient sa copie. */
+export const KEY_ANNOUNCE_TIME = 'announceTime';
 
 /**
  * Toute lecture peut échouer (stockage plein, mode privé, données corrompues

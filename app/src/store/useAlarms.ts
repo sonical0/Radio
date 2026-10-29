@@ -2,15 +2,17 @@
 //
 // Le natif en tient sa propre copie (il doit savoir réarmer au redémarrage,
 // quand personne n'a monté le runtime). Cette copie se pousse entière à chaque
-// modification — jamais d'écriture dans l'autre sens, sauf l'extinction d'une
-// alarme sans récurrence, que le natif fait après l'avoir fait sonner et qu'on
-// relit au retour au premier plan.
+// modification. Le natif n'écrit que deux choses lui-même, toujours vers le
+// bas : l'extinction d'une alarme sans récurrence après sa sonnerie, et la
+// consommation d'un saut. On les relit au chargement et au retour au premier
+// plan, avant toute nouvelle poussée qui les annulerait.
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { AppState } from 'react-native';
 
 import {
   RAMP_SECONDS_DEFAULT,
+  nativeAlarms,
   nextAlarm,
   pushAlarms,
   type Alarm,
@@ -28,6 +30,8 @@ export type AlarmLibrary = {
   save: (alarm: Alarm) => void;
   remove: (id: string) => void;
   toggle: (id: string) => void;
+  /** Saute la prochaine sonnerie (ou annule le saut). Sur un réveil unique, l'éteint. */
+  toggleSkip: (id: string) => void;
   refresh: () => void;
 };
 
@@ -53,6 +57,27 @@ export function withStation(alarm: Alarm, station: Station): Alarm {
   return { ...alarm, stationUrl: station.url, title: station.name, gain: station.gain };
 }
 
+/**
+ * Reprend de la copie native ce qu'elle a éteint seule. Un champ ne fait que
+ * descendre : vrai côté JS et faux côté natif donne faux, jamais l'inverse.
+ * Rend la même liste quand rien ne change, pour éviter une écriture inutile.
+ */
+function reconcile(list: Alarm[], native: Alarm[] | null): Alarm[] {
+  if (!native || native.length === 0) return list;
+  const byId = new Map(native.map((a) => [a.id, a]));
+  let changed = false;
+  const out = list.map((a) => {
+    const n = byId.get(a.id);
+    if (!n) return a;
+    const enabled = a.enabled && n.enabled !== false;
+    const skipNext = !!a.skipNext && !!n.skipNext;
+    if (enabled === a.enabled && skipNext === !!a.skipNext) return a;
+    changed = true;
+    return { ...a, enabled, skipNext };
+  });
+  return changed ? out : list;
+}
+
 export function useAlarms(): AlarmLibrary {
   const [alarms, setAlarms] = useState<Alarm[]>([]);
   const [loading, setLoading] = useState(true);
@@ -64,8 +89,10 @@ export function useAlarms(): AlarmLibrary {
   useEffect(() => {
     alive.current = true;
     void (async () => {
-      const stored = await readJson<Alarm[]>(KEY_ALARMS, []);
+      const read = await readJson<Alarm[]>(KEY_ALARMS, []);
       if (!alive.current) return;
+      const stored = reconcile(read, nativeAlarms());
+      if (stored !== read) void writeJson(KEY_ALARMS, stored);
       setAlarms(stored);
       setLoading(false);
       // Repousser au démarrage : une réinstallation efface les
@@ -80,10 +107,16 @@ export function useAlarms(): AlarmLibrary {
   }, [refresh]);
 
   // Une alarme qui a sonné pendant que l'appli était en arrière-plan a pu être
-  // éteinte côté natif : relire en revenant.
+  // éteinte côté natif, un saut a pu être consommé : relire en revenant.
   useEffect(() => {
     const sub = AppState.addEventListener('change', (s) => {
-      if (s === 'active') refresh();
+      if (s !== 'active') return;
+      setAlarms((prev) => {
+        const next = reconcile(prev, nativeAlarms());
+        if (next !== prev) void writeJson(KEY_ALARMS, next);
+        return next;
+      });
+      refresh();
     });
     return () => sub.remove();
   }, [refresh]);
@@ -113,9 +146,23 @@ export function useAlarms(): AlarmLibrary {
 
   const toggle = useCallback(
     (id: string) =>
-      commit(alarms.map((a) => (a.id === id ? { ...a, enabled: !a.enabled } : a))),
+      // Rallumer un réveil ne doit pas ressusciter un saut d'avant.
+      commit(alarms.map((a) => (a.id === id ? { ...a, enabled: !a.enabled, skipNext: false } : a))),
     [alarms, commit],
   );
 
-  return { alarms, loading, next, save, remove, toggle, refresh };
+  const toggleSkip = useCallback(
+    (id: string) =>
+      commit(
+        alarms.map((a) => {
+          if (a.id !== id) return a;
+          // Un réveil unique n'a pas de « suivante » : le sauter, c'est l'éteindre.
+          if (a.days.length === 0) return { ...a, enabled: false, skipNext: false };
+          return { ...a, skipNext: !a.skipNext };
+        }),
+      ),
+    [alarms, commit],
+  );
+
+  return { alarms, loading, next, save, remove, toggle, toggleSkip, refresh };
 }

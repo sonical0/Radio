@@ -3,6 +3,7 @@ import { Platform } from 'react-native';
 
 type AlarmNative = {
   setAlarms(json: string): void;
+  alarms(): string;
   cancelAll(): void;
   next(): number;
   nextId(): string;
@@ -60,6 +61,20 @@ export function alarmAvailable(): boolean {
  */
 export function pushAlarms(alarms: Alarm[]): void {
   native?.setAlarms(JSON.stringify(alarms));
+}
+
+/**
+ * La copie du natif, relue pour y reprendre ce qu'il change seul : un réveil
+ * unique éteint après avoir sonné, un saut consommé. `null` hors Android.
+ */
+export function nativeAlarms(): Alarm[] | null {
+  if (!native) return null;
+  try {
+    const list: unknown = JSON.parse(native.alarms());
+    return Array.isArray(list) ? (list as Alarm[]) : null;
+  } catch {
+    return null;
+  }
 }
 
 export function cancelAll(): void {

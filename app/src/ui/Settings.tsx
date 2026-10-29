@@ -3,7 +3,7 @@ import Slider from '@react-native-community/slider';
 import { Linking, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { CURRENT_VERSION, type Release } from '../net/updates';
-import { KEY_BEDSIDE_DIM, readString, writeString } from '../store/storage';
+import { KEY_BEDSIDE_DIM, KEY_WEATHER_CITY, readString, writeString } from '../store/storage';
 import {
   CUSTOM_PALETTE_ID,
   FONT_BODY,
@@ -67,10 +67,20 @@ export function Settings({
   const [code, setCode] = useState(customColor);
   const [codeErr, setCodeErr] = useState(false);
   const [bedsideDim, setBedsideDim] = useState<'veil' | 'clock'>('veil');
+  const [city, setCity] = useState('');
   useEffect(() => {
     if (!visible) return;
     void readString(KEY_BEDSIDE_DIM).then((v) => setBedsideDim(v === 'clock' ? 'clock' : 'veil'));
+    void readString(KEY_WEATHER_CITY).then((v) => setCity(v ?? ''));
   }, [visible]);
+
+  // Comme le code couleur : la ville s'écrit à la validation, pas à chaque
+  // frappe, sinon la météo chercherait « Pa » puis « Par ».
+  const submitCity = () => {
+    const v = city.trim();
+    setCity(v);
+    void writeString(KEY_WEATHER_CITY, v);
+  };
   useEffect(() => {
     if (!visible) return;
     const v = hslOf(customColor, customHue);
@@ -223,6 +233,21 @@ export function Settings({
                 </Pressable>
               );
             })}
+
+            <Text style={s.label}>MÉTÉO</Text>
+            {/* Vide : pas de météo, et aucune requête. */}
+            <TextInput
+              style={t.input}
+              value={city}
+              onChangeText={setCity}
+              onSubmitEditing={submitCity}
+              onEndEditing={submitCity}
+              autoCorrect={false}
+              placeholder="Ville (vide = pas de météo)"
+              placeholderTextColor={p.dim}
+              returnKeyType="done"
+              accessibilityLabel="Ville de la météo"
+            />
 
             <Text style={s.label}>VERSION</Text>
             {/* La vérification se fait d'elle-même une fois par jour ; ce bouton

@@ -25,8 +25,18 @@ class AlarmModule : Module() {
 
     /** La liste complète, en JSON : `[{ id, hour, minute, days, stationUrl, title, enabled }]`. */
     Function("setAlarms") { json: String ->
-      AlarmStore.saveJson(context, json)
+      AlarmStore.saveFromJs(context, json)
       AlarmScheduler.rescheduleAll(context)
+    }
+
+    /**
+     * La liste telle que le natif la tient : les deux écritures qu'il fait
+     * seul — un réveil unique éteint après sa sonnerie, un saut consommé —
+     * doivent revenir au JS, sinon sa prochaine poussée les annulerait.
+     */
+    Function("alarms") {
+      AlarmStore.consumeSkips(context)
+      AlarmStore.rawJson(context)
     }
 
     Function("cancelAll") {

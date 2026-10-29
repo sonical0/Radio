@@ -21,6 +21,10 @@ data class AlarmSpec(
   val rampSeconds: Int,
   /** Le gain de la station, mesuré côté JS : on ne réveille pas plus fort qu'en écoute. */
   val gain: Double,
+  /** La prochaine occurrence est sautée, une seule fois. */
+  val skipNext: Boolean = false,
+  /** L'occurrence sautée, fixée par le natif quand le saut est posé. 0 = aucune. */
+  val skipAt: Long = 0L,
 )
 
 /**
@@ -42,6 +46,7 @@ object AlarmStore {
   private const val KEY_ALARMS = "alarms"
   private const val KEY_PENDING_ID = "pendingId"
   private const val KEY_PENDING_AT = "pendingAt"
+  private const val KEY_SKIP_AT = "skipAt"
 
   private fun prefs(context: Context) =
     context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
@@ -83,7 +88,81 @@ object AlarmStore {
       enabled = o.optBoolean("enabled", true),
       rampSeconds = o.optInt("rampSeconds", 30),
       gain = o.optDouble("gain", 1.0),
+      skipNext = o.optBoolean("skipNext", false),
+      skipAt = o.optLong(KEY_SKIP_AT, 0L),
     )
+  }
+
+  /** La liste telle que le natif la tient, sauts consommés compris : le JS la relit. */
+  fun rawJson(context: Context): String = prefs(context).getString(KEY_ALARMS, null) ?: "[]"
+
+  /**
+   * L'écriture venue du JS, qui ne connaît que `skipNext`. Le natif y attache
+   * l'occurrence sautée, `skipAt`, pour savoir quand le saut est consommé —
+   * sans elle, une liste repoussée telle quelle sauterait une occurrence de
+   * plus à chaque fois.
+   *
+   * Un saut déjà posé garde son `skipAt` tant qu'il reste une occurrence de
+   * l'horaire : changer l'heure d'un réveil sauté reporte le saut sur la
+   * nouvelle heure. Sur un réveil unique, sauter revient à l'éteindre.
+   */
+  fun saveFromJs(context: Context, json: String, now: Long = System.currentTimeMillis()) {
+    val previous = alarms(context).associateBy { it.id }
+    val array = try {
+      JSONArray(json)
+    } catch (e: Throwable) {
+      Log.w(TAG, "liste reçue illisible : " + e)
+      return
+    }
+    for (i in 0 until array.length()) {
+      val o = array.optJSONObject(i) ?: continue
+      o.remove(KEY_SKIP_AT)
+      val spec = parse(o) ?: continue
+      if (!spec.skipNext) continue
+      if (spec.days.isEmpty()) {
+        o.put("enabled", false)
+        o.put("skipNext", false)
+        continue
+      }
+      val kept = previous[spec.id]?.takeIf { it.skipNext }?.skipAt ?: 0L
+      val skipAt = if (kept > 0L && AlarmScheduler.isOccurrence(spec, kept)) {
+        kept
+      } else {
+        AlarmScheduler.nextOccurrence(spec.copy(skipNext = false), now) ?: 0L
+      }
+      if (skipAt in 1L..now) {
+        // Déjà passé : le saut a servi.
+        o.put("skipNext", false)
+      } else if (skipAt > 0L) {
+        o.put(KEY_SKIP_AT, skipAt)
+      }
+    }
+    saveJson(context, array.toString())
+  }
+
+  /**
+   * Retire les sauts dont l'occurrence est passée. Appelé à chaque recalcul et
+   * avant que le JS relise la liste : le saut repasse à faux tout seul, même si
+   * le réveil sauté n'était pas le prochain armé.
+   */
+  fun consumeSkips(context: Context, now: Long = System.currentTimeMillis()) {
+    val raw = prefs(context).getString(KEY_ALARMS, null) ?: return
+    try {
+      val array = JSONArray(raw)
+      var changed = false
+      for (i in 0 until array.length()) {
+        val o = array.optJSONObject(i) ?: continue
+        val at = o.optLong(KEY_SKIP_AT, 0L)
+        if (at in 1L..now) {
+          o.put("skipNext", false)
+          o.remove(KEY_SKIP_AT)
+          changed = true
+        }
+      }
+      if (changed) saveJson(context, array.toString())
+    } catch (e: Throwable) {
+      Log.w(TAG, "impossible de consommer les sauts : " + e)
+    }
   }
 
   /** Éteint une alarme sans récurrence après qu'elle a sonné. */

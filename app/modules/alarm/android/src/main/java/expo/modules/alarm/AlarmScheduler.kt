@@ -35,6 +35,7 @@ object AlarmScheduler {
    */
   fun rescheduleAll(context: Context, from: Long = System.currentTimeMillis()) {
     val manager = context.getSystemService(AlarmManager::class.java) ?: return
+    AlarmStore.consumeSkips(context, from)
 
     var soonest: Pair<AlarmSpec, Long>? = null
     for (spec in AlarmStore.alarms(context)) {
@@ -83,6 +84,19 @@ object AlarmScheduler {
    * l'heure d'hiver, ce qu'un simple « +24 h » ne donnerait pas.
    */
   fun nextOccurrence(spec: AlarmSpec, from: Long): Long? {
+    // Un saut en cours repousse le point de départ au-delà de l'occurrence
+    // sautée ; un saut sans occurrence fixée (réveil unique) n'arme rien.
+    if (spec.skipNext) {
+      if (spec.skipAt <= 0L) return null
+      return occurrenceAfter(spec, maxOf(from, spec.skipAt))
+    }
+    return occurrenceAfter(spec, from)
+  }
+
+  /** Vrai si `at` tombe exactement sur une occurrence de l'horaire, saut ignoré. */
+  fun isOccurrence(spec: AlarmSpec, at: Long): Boolean = occurrenceAfter(spec, at - 1) == at
+
+  private fun occurrenceAfter(spec: AlarmSpec, from: Long): Long? {
     val cal = Calendar.getInstance().apply {
       timeInMillis = from
       set(Calendar.HOUR_OF_DAY, spec.hour)
