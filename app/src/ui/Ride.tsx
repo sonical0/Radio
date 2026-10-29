@@ -34,17 +34,24 @@ const TRANSPORT_H = 80;
  */
 const NAV_LINE = 26;
 const NAV_TEXT_H = 4 + 2 * NAV_LINE;
-/** L'heure en petit à droite de la distance, et sa hauteur de ligne. */
-const SMALL_CLOCK = 32;
-const SMALL_CLOCK_LINE = Math.round(SMALL_CLOCK * CLOCK_LINE);
-/** La ligne de `s.weather`, qu'on reprend pour la température sous la petite heure. */
-const WEATHER_LINE = 26;
 /**
- * La distance se dimensionne pour six caractères au moins (« 1,2 km ») :
- * VT323 est à chasse fixe, et sans ce plancher la distance grossirait en
- * passant de « 300 m » à « 50 m », puis rétrécirait au kilomètre suivant.
+ * L'heure et l'heure d'arrivée, sur une rangée sous la distance. 48 et non
+ * plus 32 : à 32, sur le vrai téléphone, on ne les lisait plus d'un coup d'œil
+ * au guidon. Même corps pour les deux, c'est la même sorte d'information.
  */
-const NAV_MIN_CHARS = 6;
+const TIMES = 48;
+const TIMES_LINE = Math.round(TIMES * CLOCK_LINE);
+/** La rangée des heures, marge comprise : retranchée d'avance comme la manœuvre. */
+const TIMES_ROW_H = 6 + TIMES_LINE;
+/** L'écart entre l'heure, l'arrivée et la température dans leur rangée. */
+const TIMES_GAP = 20;
+/**
+ * La distance se dimensionne pour cinq caractères au moins (« 230 m ») :
+ * VT323 est à chasse fixe, et sans ce plancher elle grossirait en passant de
+ * « 300 m » à « 50 m ». Six (« 1,2 km ») la gardait petite tout le trajet
+ * pour un seul changement d'unité ; elle ne rétrécit plus qu'à ce moment-là.
+ */
+const NAV_MIN_CHARS = 5;
 
 function two(n: number): string {
   return String(n).padStart(2, '0');
@@ -174,17 +181,7 @@ export function Ride({
             d'autre ne change : sans étape, la rangée ci-dessous est celle de
             toujours, avec ses styles. */}
         {stepView ? (
-          <NavHeader
-            view={stepView}
-            now={now}
-            weather={weather}
-            column={column}
-            restH={restH}
-            width={width}
-            height={height}
-            s={s}
-            tint={p.base}
-          />
+          <NavHeader view={stepView} now={now} weather={weather} s={s} tint={p.base} />
         ) : (
           <View style={s.clockRow}>
             {/* Taille déjà calculée sur l'écran : la police du système ne la
@@ -350,130 +347,117 @@ export function Ride({
 
 /**
  * L'étape de navigation, à la place de la rangée de l'heure : la flèche et la
- * distance en très gros, l'heure en petit à droite, la manœuvre dessous.
+ * distance en très gros, l'heure et l'arrivée dessous, la manœuvre en bas.
  *
- * La distance se dimensionne comme l'heure : sur la colonne mesurée, moins le
- * bloc du dessous (`restH`) et la ligne de manœuvre, dont la hauteur est fixe
- * (`NAV_TEXT_H`). C'est en général la largeur qui décide.
+ * Elle prend toute la hauteur que le bloc des boutons laisse (`flex: 1`), et
+ * c'est cette boîte, mesurée, qui dimensionne la distance : en 1.8.0, la
+ * taille était déduite de la colonne et laissait une bande vide en haut et en
+ * bas. La rangée des heures et la manœuvre ont des hauteurs fixes, retranchées
+ * d'avance ; la distance prend le reste, ou la largeur si elle décide avant.
  */
 function NavHeader({
   view,
   now,
   weather,
-  column,
-  restH,
-  width,
-  height,
   s,
   tint,
 }: {
   view: StepView;
   now: Date;
   weather: string | null;
-  column: { w: number; h: number };
-  restH: number;
-  width: number;
-  height: number;
   s: ReturnType<typeof makeStyles>;
   tint: string;
 }) {
   const clockText = two(now.getHours()) + ':' + two(now.getMinutes());
-  // Sans distance ni reste du trajet, l'heure garde sa place en gros, et la
-  // petite heure n'a plus lieu d'être.
+  // Sans distance ni reste du trajet, l'heure garde sa place en gros, et ne
+  // se répète pas dans la rangée du dessous.
   const big = view.distance ?? clockText;
   const small = view.distance != null;
-  // La colonne de droite : la petite heure, l'arrivée dessous, puis la
-  // température s'il reste de la place.
-  const side = small || view.arrival != null;
-  // Largeur d'un caractère en corps, mesurée sur le texte affiché comme
-  // `emWidth` pour l'heure : la police est à chasse fixe, un seul chiffre suffit.
-  const [charEm, setCharEm] = useState(0.36);
-  // Largeur de la colonne de droite (petite heure, arrivée, température), mesurée.
-  const [sideW, setSideW] = useState(60);
+  const times = small || view.arrival != null;
+  const [box, setBox] = useState({ w: 0, h: 0 });
+  // Largeur d'un caractère en corps, mesurée sur la distance affichée : la
+  // police est à chasse fixe, elle vaut pour les heures aussi.
+  const [charEm, setCharEm] = useState(0.4);
 
   const size = useMemo(() => {
-    const sideSpace = side ? sideW + 12 : 0;
+    if (!box.w || !box.h) return 48;
     const arrow = view.icon ? 8 : 0;
-    const avail = (column.w || width * 0.55 - 40) - sideSpace - arrow;
     const chars = Math.max(big.length, NAV_MIN_CHARS);
     // La flèche est carrée, de la hauteur de ligne de la distance.
-    const byWidth = avail / (chars * charEm * 1.04 + (view.icon ? CLOCK_LINE : 0));
-    const byHeight =
-      column.h && restH ? (column.h - restH - NAV_TEXT_H) / CLOCK_LINE : height * 0.25;
+    const byWidth = (box.w - arrow) / (chars * charEm * 1.04 + (view.icon ? CLOCK_LINE : 0));
+    const byHeight = (box.h - (times ? TIMES_ROW_H : 0) - NAV_TEXT_H) / CLOCK_LINE;
     return Math.max(32, Math.floor(Math.min(byWidth, byHeight)));
-  }, [big.length, charEm, column, height, restH, side, sideW, view.icon, width]);
+  }, [big.length, box, charEm, times, view.icon]);
   const line = Math.round(size * CLOCK_LINE);
-  // La température en dernier, seulement si elle tient dans la hauteur de la
-  // distance avec ce qui la précède : la météo s'efface, pas l'arrivée.
-  const sideH = (small ? SMALL_CLOCK_LINE : 0) + (view.arrival ? WEATHER_LINE : 0);
-  const temp = side && weather && line >= sideH + WEATHER_LINE ? weather.split(' · ')[0] : null;
+
+  // La température en dernier, seulement si elle tient encore sur la rangée :
+  // la météo s'efface, jamais l'heure ni l'arrivée.
+  const tempText = weather ? weather.split(' · ')[0] : null;
+  const timesW = (texts: string[]) =>
+    texts.reduce((w, t) => w + t.length * charEm * TIMES, 0) + (texts.length - 1) * TIMES_GAP;
+  const shown = [small ? clockText : '', view.arrival ? '→ ' + view.arrival : ''].filter(Boolean);
+  const temp =
+    times && tempText && box.w && timesW([...shown, tempText]) <= box.w ? tempText : null;
 
   return (
-    <View>
-      <View style={s.navRow}>
-        <View style={s.navStep}>
-          {view.icon ? (
-            <Image
-              source={{ uri: view.icon }}
-              style={{ width: line, height: line, tintColor: tint }}
-              resizeMode="contain"
-              accessible={false}
-              importantForAccessibility="no"
-            />
-          ) : null}
-          <Text
-            style={[s.navDistance, { fontSize: size, lineHeight: line }]}
-            numberOfLines={1}
-            allowFontScaling={false}
-            onLayout={(e) => {
-              const w = e.nativeEvent.layout.width / size / big.length;
-              if (w > 0.15 && Math.abs(w - charEm) > 0.005) setCharEm(w);
-            }}
-            // La phrase entière au toucher ; elle n'est pas annoncée d'elle-même,
-            // la distance change trop souvent pour qu'on la répète à chaque fois.
-            accessibilityLabel={
-              small ? view.label : 'Il est ' + now.getHours() + ' heures ' + now.getMinutes()
-            }>
-            {big}
-          </Text>
-        </View>
-        {side ? (
-          <View
-            style={s.navSide}
-            onLayout={(e) => {
-              const w = Math.ceil(e.nativeEvent.layout.width);
-              if (w !== sideW) setSideW(w);
-            }}>
-            {small ? (
-              <Text
-                style={s.navSmallClock}
-                numberOfLines={1}
-                maxFontSizeMultiplier={1}
-                accessibilityLabel={'Il est ' + now.getHours() + ' heures ' + now.getMinutes()}>
-                {clockText}
-              </Text>
-            ) : null}
-            {view.arrival ? (
-              <Text
-                style={s.navArrival}
-                numberOfLines={1}
-                maxFontSizeMultiplier={1}
-                accessibilityLabel={'Arrivée à ' + view.arrival}>
-                {'→ ' + view.arrival}
-              </Text>
-            ) : null}
-            {temp ? (
-              <Text
-                style={s.weather}
-                numberOfLines={1}
-                maxFontSizeMultiplier={1}
-                accessibilityLabel={temp.replace('°', ' degrés')}>
-                {temp.toUpperCase()}
-              </Text>
-            ) : null}
-          </View>
+    <View style={s.navBox} onLayout={(e) => setBox({ w: e.nativeEvent.layout.width, h: e.nativeEvent.layout.height })}>
+      <View style={s.navStep}>
+        {view.icon ? (
+          <Image
+            source={{ uri: view.icon }}
+            style={{ width: line, height: line, tintColor: tint }}
+            resizeMode="contain"
+            accessible={false}
+            importantForAccessibility="no"
+          />
         ) : null}
+        <Text
+          style={[s.navDistance, { fontSize: size, lineHeight: line }]}
+          numberOfLines={1}
+          allowFontScaling={false}
+          onLayout={(e) => {
+            const w = e.nativeEvent.layout.width / size / big.length;
+            if (w > 0.15 && Math.abs(w - charEm) > 0.005) setCharEm(w);
+          }}
+          // La phrase entière au toucher ; elle n'est pas annoncée d'elle-même,
+          // la distance change trop souvent pour qu'on la répète à chaque fois.
+          accessibilityLabel={
+            small ? view.label : 'Il est ' + now.getHours() + ' heures ' + now.getMinutes()
+          }>
+          {big}
+        </Text>
       </View>
+      {times ? (
+        <View style={s.navTimes}>
+          {small ? (
+            <Text
+              style={s.navTime}
+              numberOfLines={1}
+              allowFontScaling={false}
+              accessibilityLabel={'Il est ' + now.getHours() + ' heures ' + now.getMinutes()}>
+              {clockText}
+            </Text>
+          ) : null}
+          {view.arrival ? (
+            <Text
+              style={s.navTime}
+              numberOfLines={1}
+              allowFontScaling={false}
+              accessibilityLabel={'Arrivée à ' + view.arrival}>
+              {'→ ' + view.arrival}
+            </Text>
+          ) : null}
+          {temp ? (
+            <Text
+              style={[s.navTime, s.navTemp]}
+              numberOfLines={1}
+              allowFontScaling={false}
+              accessibilityLabel={temp.replace('°', ' degrés')}>
+              {temp.toUpperCase()}
+            </Text>
+          ) : null}
+        </View>
+      ) : null}
       {/* Hauteur fixe de deux lignes, comptée d'avance dans la taille de la
           distance. Seule la manœuvre est annoncée d'elle-même, sans couper la
           parole : une fois par étape, pas à chaque mètre parcouru. */}
@@ -504,18 +488,16 @@ function NavHeader({
  * (≈ 360 dp de colonne, moins la météo). Si la mesure se trompe, l'heure
  * rétrécit, et la colonne défile en dernier recours.
  *
- * En navigation, la ligne de manœuvre (4 + 2 × 26 = 56) se retranche en plus :
- * il reste 159 − 56 = 103 dp à la distance, soit un corps de 128 au plus.
- * La largeur décide encore avant : ≈ 360 dp de colonne, moins la petite heure
- * (≈ 60 + 12 d'écart) et 8 sous la flèche, laissent ≈ 280 dp pour six
- * caractères à ≈ 0,36 cadratin plus la flèche carrée de 0,8 : un corps de
- * ≈ 92, une ligne de ≈ 74. Total de la colonne : 74 + 56 + 146 = 276 ≤ 305.
- * À droite, la petite heure (26) puis l'arrivée « → 17:04 » (26) tiennent
- * dans ces 74 ; la température ne s'y ajoute que s'il reste 26 de plus, ce
- * qui n'arrive qu'en grand écran. La grosse valeur est en général le reste
- * du trajet (« 1,2 km ») : Maps ne donne pas la distance du virage. En portrait empilé (≈ 305 dp de large, ≈ 385 de
- * haut pour la colonne), la distance descend à un corps de ≈ 74 : 59 + 56 +
- * 146 = 261 ≤ 385.
+ * En navigation, l'étape prend la boîte que les boutons laissent, mesurée :
+ * 305 − 146 = 159 dp. La rangée des heures (6 + 38 = 44) et la manœuvre
+ * (4 + 2 × 26 = 56) s'en retranchent : 59 dp de ligne, un corps de ≈ 73 pour
+ * la distance, que la largeur (≈ 360 dp, cinq caractères à ≈ 0,4 cadratin
+ * plus la flèche de 0,8 : ≈ 125) ne limite pas. Total : 159 ≤ 159, la colonne
+ * est pleine. Sur le téléphone de l'utilisateur (2400 × 1080 à densité 420,
+ * ≈ 411 dp de haut), la boîte fait ≈ 241 dp et c'est la largeur (≈ 490 dp)
+ * qui décide : un corps de ≈ 165 ; le surplus de hauteur se répartit entre
+ * les rangées (`space-between`) au lieu de rester en bandes vides. En portrait
+ * empilé, même calcul sur la boîte mesurée.
  *
  * Colonne de droite : trois rangées de favoris à 72 + deux écarts de 8 = 232,
  * puis 8 et le bouton CHEVET à 48 = 288 ≤ 305. La grille prend `flex: 1` et
@@ -579,21 +561,20 @@ const makeStyles = (p: Palette) =>
 
     // En navigation seulement (NavHeader) : aucun des styles ci-dessus n'est
     // repris ni modifié, l'écran sans étape reste celui d'avant.
-    navRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-    navStep: { flexDirection: 'row', alignItems: 'center', gap: 8, flexShrink: 0 },
-    // Poussée à droite : la distance garde sa place à gauche, sous l'œil.
-    navSide: { marginLeft: 'auto', alignItems: 'flex-end' },
+    // Toute la hauteur que laisse le bloc des boutons : `flex: 1` (base 0) la
+    // donne quel que soit le contenu, et c'est elle qu'on mesure.
+    navBox: { flex: 1, justifyContent: 'space-between' },
+    navStep: { flexDirection: 'row', alignItems: 'center', gap: 8 },
     navDistance: { color: p.base, fontFamily: FONT_DISPLAY, flexShrink: 0, includeFontPadding: false },
-    navSmallClock: {
+    navTimes: { flexDirection: 'row', alignItems: 'center', gap: TIMES_GAP, marginTop: 6, height: TIMES_LINE },
+    navTime: {
       color: p.base,
       fontFamily: FONT_DISPLAY,
-      fontSize: SMALL_CLOCK,
-      lineHeight: SMALL_CLOCK_LINE,
+      fontSize: TIMES,
+      lineHeight: TIMES_LINE,
       includeFontPadding: false,
     },
-    // Comme la température qu'elle remplace, mais dans la couleur de l'heure :
-    // c'est une heure, et on la cherche autant qu'elle.
-    navArrival: { color: p.base, fontFamily: FONT_DISPLAY, fontSize: 24, lineHeight: WEATHER_LINE, letterSpacing: 2 },
+    navTemp: { color: p.dim },
     navText: { height: NAV_TEXT_H, paddingTop: 4 },
     navManeuver: {
       color: p.bright,
