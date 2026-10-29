@@ -220,7 +220,11 @@ export function Bedside({
               accessibilityState={{ disabled: !station, busy: connecting }}
               accessibilityLabel={playing ? 'Mettre en pause' : 'Lancer la radio'}
               style={[t.btn, s.play, { borderColor: station ? p.base : p.border }]}>
-              <Text style={[t.btnText, s.playText, !station && t.btnOff]} maxFontSizeMultiplier={1.3}>
+              <Text
+                style={[t.btnText, s.playText, !station && t.btnOff]}
+                maxFontSizeMultiplier={1.3}
+                numberOfLines={1}
+                adjustsFontSizeToFit>
                 {/* Les mêmes glyphes que l'écran portrait : ⏸ sortait en emoji
                     de couleur, seul élément non Pip-Boy de l'écran. */}
                 {!station
@@ -445,14 +449,14 @@ const makeStyles = (p: Palette) =>
     next: { color: p.base, fontFamily: FONT_DISPLAY, fontSize: 26, letterSpacing: 2, marginTop: 16 },
     station: { color: p.dim, fontFamily: FONT_BODY, fontSize: 13, marginTop: 4 },
     track: { color: p.base, fontFamily: FONT_BODY, fontSize: 15, marginTop: 2, opacity: 0.9 },
-    // Les trois boutons de transport sur une ligne. `wrap` parce que la
-    // colonne de gauche n'est pas large : « ▶ AUCUNE STATION » et ses deux
-    // flèches dépassent sur un écran étroit, et un bouton coupé serait pire
-    // qu'un bouton passé à la ligne.
-    transport: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 12, marginTop: 18 },
+    // Les trois boutons de transport sur une ligne, toujours. Ils passaient à
+    // la ligne quand la place manquait (écran étroit, affichage agrandi) : la
+    // deuxième rangée volait de la hauteur à l'horloge, puis sortait de
+    // l'écran. C'est désormais le libellé du milieu qui rétrécit.
+    transport: { flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 18 },
     // Large : c'est un bouton qu'on vise à moitié réveillé, de travers, dans
-    // le noir.
-    play: { paddingVertical: 12, paddingHorizontal: 22 },
+    // le noir. `flexShrink` : le seul des trois qui cède de la largeur.
+    play: { paddingVertical: 12, paddingHorizontal: 22, flexShrink: 1 },
     playText: { fontSize: 26, letterSpacing: 2, lineHeight: 30 },
     // Même hauteur de cible que la lecture, moins de largeur : deux glyphes
     // au lieu d'un mot.
