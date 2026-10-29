@@ -95,15 +95,17 @@ export function Bedside({
   const [restH, setRestH] = useState(0);
   // L'horloge remplit sa colonne au lieu d'une taille fixe : c'est le seul
   // contenu de l'écran qu'on doit pouvoir lire d'un lit, à deux mètres et
-  // sans lunettes. « 07:00 » fait cinq caractères d'une police à chasse fixe,
-  // 2,63 largeurs de cadratin mesurées sur l'émulateur ; 2,75 laisse une marge.
-  // La taille calculée est appliquée telle quelle : adjustsFontSizeToFit la
-  // rétrécissait encore de moitié sur Android, alors que la place y était.
+  // sans lunettes. La largeur de « 07:00 » en cadratins n'est pas devinée :
+  // elle est mesurée sur le texte affiché (`emWidth`), parce que cette police
+  // pixel a des glyphes bien plus petits que leur corps — une estimation de
+  // 2,6 cadratins laissait l'heure à 60 % de la largeur disponible.
+  const [emWidth, setEmWidth] = useState(1.8);
   const clockSize = useMemo(() => {
-    const byWidth = column.w ? column.w / 2.75 : (width * 0.52 - 40) / 2.75;
+    const avail = column.w || width * 0.52 - 40;
+    const byWidth = avail / (emWidth * 1.04);
     const byHeight = column.h && restH ? (column.h - restH) / 1.04 : height * 0.5;
     return Math.max(36, Math.floor(Math.min(byWidth, byHeight)));
-  }, [column, height, restH, width]);
+  }, [column, emWidth, height, restH, width]);
   const [now, setNow] = useState(() => new Date());
   const [dimmed, setDimmed] = useState(false);
   // Réglé dans les paramètres. Relu à chaque passage en paysage : les
@@ -196,6 +198,10 @@ export function Bedside({
           ]}
           numberOfLines={1}
           allowFontScaling={false}
+          onLayout={(e) => {
+            const w = e.nativeEvent.layout.width / clockSize;
+            if (w > 0.5 && Math.abs(w - emWidth) > 0.01) setEmWidth(w);
+          }}
           accessibilityLabel={'Il est ' + two(now.getHours()) + ' heures ' + two(now.getMinutes())}>
           {two(now.getHours())}:{two(now.getMinutes())}
         </Text>
@@ -461,7 +467,9 @@ const makeStyles = (p: Palette) =>
     leftContent: { flexGrow: 1, justifyContent: 'center' },
     // La taille vient du composant, calculée sur l'écran ; ce qui reste ici
     // ne dépend pas de la largeur.
-    clock: { color: p.base, fontFamily: FONT_DISPLAY },
+    // `flex-start` : la boîte prend la largeur du texte, pas celle de la
+    // colonne, sinon la mesure de `emWidth` ne mesurerait que la colonne.
+    clock: { color: p.base, fontFamily: FONT_DISPLAY, alignSelf: 'flex-start' },
     date: { color: p.dim, fontFamily: FONT_DISPLAY, fontSize: 24, letterSpacing: 3 },
     next: { color: p.base, fontFamily: FONT_DISPLAY, fontSize: 26, letterSpacing: 2, marginTop: 16 },
     station: { color: p.dim, fontFamily: FONT_BODY, fontSize: 13, marginTop: 4 },
